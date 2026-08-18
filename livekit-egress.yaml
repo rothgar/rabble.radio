@@ -1,0 +1,18 @@
+# livekit-egress.yaml
+#
+# Configuration for the LiveKit Egress sidecar. It is mounted by the
+# `livekit-egress` container in docker-compose.yml. Values mirror the dev
+# credentials baked into the LiveKit and MinIO containers.
+redis:
+  address: redis:6379
+api_key: devkey
+api_secret: devsecret0123456789abcdef0123456789abcdef
+ws_url: ws://livekit:7880
+log_level: info
+s3:
+  endpoint: http://minio:9000
+  region: us-east-1
+  bucket: rabble-recordings
+  access_key: minio
+  secret: minio-secret
+  force_path_style: true

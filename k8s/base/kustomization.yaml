@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bluesky-spaces
+commonLabels:
+  app.kubernetes.io/part-of: bluesky-spaces
+  app.kubernetes.io/managed-by: kustomize
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - app-rbac.yaml
+  - app.yaml
+  - migration-job.yaml
+  # NOTE: k8s/livekit.yaml was previously referenced as `../livekit.yaml`
+  # here, but kustomize's resource accumulator refuses paths that escape
+  # the kustomization root. LiveKit is now applied separately by
+  # scripts/dev-cluster.sh after the base manifests land.

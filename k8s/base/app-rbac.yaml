@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabble-app-sa
+  namespace: bluesky-spaces
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rabble-app-job-reader
+  namespace: bluesky-spaces
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rabble-app-job-reader
+  namespace: bluesky-spaces
+subjects:
+  - kind: ServiceAccount
+    name: rabble-app-sa
+    namespace: bluesky-spaces
+roleRef:
+  kind: Role
+  name: rabble-app-job-reader
+  apiGroup: rbac.authorization.k8s.io

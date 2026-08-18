@@ -1,0 +1,142 @@
+# k8s/livekit.yaml
+#
+# LiveKit SFU deployment for the Bluesky Spaces MVP.
+#
+# Dev mode:
+#   The container is started with `--dev`, which makes LiveKit accept any
+#   API key/secret and binds to a single TCP signalling port (7880) plus an
+#   ICE candidate on 7881 (TCP) and 7882 (UDP). `--dev` is **NOT** safe for
+#   production: it disables authentication and pins keys to devkey/devsecret.
+#   It is fine for local kind and CI, but should not be used outside that.
+#
+# Production notes (see docs/KUBERNETES.md):
+#   - Replace `--dev` with an explicit `config.yaml` mounted from a
+#     Secret / ConfigMap that defines `api_key`, `api_secret`, the UDP
+#     ICE port range, TURN (TLS) credentials, and (optionally) a Redis
+#     signalling store.
+#   - The 50000-50100 UDP port range below must be reachable from browsers.
+#     In kind this is mapped via `extraPortMappings` in k8s/kind-config.yaml;
+#     on a managed cluster (EKS/GKE/AKS) use a `Service.type=LoadBalancer`
+#     with `spec.allocateLoadBalancerNodePorts` for the UDP range, or front
+#     the SFU with a `NodePort` / `hostPort` mapping per UDP port.
+#   - For production NAT traversal behind strict corporate / mobile
+#     networks you will also need a TURN server (coturn) with TLS, ideally
+#     reachable on 443 to share a port with the Ingress.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-config
+  namespace: bluesky-spaces
+data:
+  # Dev-only credentials. Replace with a real Secret in production.
+  LIVEKIT_KEYS: "devkey: devsecret0123456789abcdef0123456789abcdef"
+  # Bind on all interfaces so the ClusterIP Service can reach the pod.
+  LIVEKIT_BIND_ADDRESSES: "0.0.0.0:7880"
+  # UDP ICE port range. Production deployments should set this explicitly
+  # and open the same range at the network layer. Commented out here so
+  # `--dev` can pick its own single port; uncomment for prod:
+  # LIVEKIT_UDP_PORT_RANGE: "50000-50100"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  namespace: bluesky-spaces
+  labels:
+    app: livekit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      # Disable automatic service env vars (e.g. LIVEKIT_PORT=tcp://...)
+      # which crash the LiveKit server because it tries to parse them as
+      # command-line flags.
+      enableServiceLinks: false
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            # Dev mode: skip API key/signature verification, single
+            # signalling port. Safe for local kind; NOT for production.
+            - "--dev"
+            - "--bind"
+            - "0.0.0.0"
+          envFrom:
+            - configMapRef:
+                name: livekit-config
+          ports:
+            - name: http
+              containerPort: 7880
+              # HTTP/WS signalling. Used by the Next.js server to mint
+              # access tokens and by browsers to negotiate.
+            - name: tcp
+              containerPort: 7881
+              # TCP ICE candidate. Helpful when UDP is blocked.
+            - name: udp
+              containerPort: 7882
+              protocol: UDP
+              # UDP ICE candidate. In production you typically expose a
+              # whole range (e.g. 50000-50100) and rely on the network
+              # layer to route it to the pod. Single port is fine for
+              # `--dev`.
+          readinessProbe:
+            tcpSocket:
+              port: 7880
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 7880
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          # Resource limits / requests.
+          #
+          # LiveKit is CPU-sensitive during fan-out to many subscribers;
+          # memory depends heavily on subscriber count and codec. The
+          # defaults below are sized for an MVP handful-of-participants
+          # audio room in kind. Tune upward for production (suggested
+          # baseline for prod: 500m-2000m CPU, 512Mi-2Gi memory, with a
+          # HPA on CPU).
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+  namespace: bluesky-spaces
+  labels:
+    app: livekit
+spec:
+  type: ClusterIP
+  selector:
+    app: livekit
+  ports:
+    - name: http
+      port: 7880
+      targetPort: 7880
+    - name: tcp
+      port: 7881
+      targetPort: 7881
+    # In production expose the full UDP ICE range here too:
+    #   - name: udp-range
+    #     port: 50000-50100
+    #     targetPort: 50000-50100
+    #     protocol: UDP
+    - name: udp
+      port: 7882
+      targetPort: 7882
+      protocol: UDP

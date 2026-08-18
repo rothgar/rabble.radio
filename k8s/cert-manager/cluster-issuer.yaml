@@ -1,0 +1,39 @@
+# k8s/cert-manager/cluster-issuer.yaml
+#
+# Let's Encrypt **staging** ClusterIssuer for the rabble cluster.
+#
+# Staging is used first to avoid hitting the production Let's Encrypt
+# rate limits while we verify DNS-01 works. Once a successful cert is
+# obtained from staging, duplicate the issuer (pointing at
+# https://acme-v02.api.letsencrypt.org/directory) and switch the
+# Certificate's issuerRef.name to the production issuer.
+#
+# Solver: DNS-01 with Cloudflare. The zone jgarr.net is hosted on
+# Cloudflare, and a Cloudflare API token with Zone:Read and DNS:Edit
+# permissions for jgarr.net is stored in the
+# cloudflare-api-token-secret Secret (created separately, not in git).
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  labels:
+    app.kubernetes.io/name: rabble
+    app.kubernetes.io/part-of: rabble
+spec:
+  acme:
+    # Let's Encrypt STAGING - certificates from this server do NOT trust
+    # browsers but will not hit production rate limits.
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@rabble.town
+    # Reuse the same ACME account across renewals so we don't re-register
+    # every time. The secret is created by cert-manager on first use.
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            email: admin@rabble.town
+            apiTokenSecretRef:
+              name: cloudflare-api-token-secret
+              key: api-token

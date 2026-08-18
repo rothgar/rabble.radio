@@ -1,0 +1,33 @@
+# k8s/cert-manager/certificate.yaml
+#
+# Certificate for rabble.jgarr.net, issued by the Let's Encrypt staging
+# ClusterIssuer. The resulting cert is stored in the `rabble-tls`
+# Secret in the bluesky-spaces namespace and referenced by k8s/ingress.yaml
+# via spec.tls[].secretName.
+#
+# HTTP-01 challenge requirements:
+#   1. The DNS A record for rabble.jgarr.net must point at 10.1.1.19
+#      (already in place per spec).
+#   2. The host's router must forward public TCP port 80 to 10.1.1.19:80.
+#      If that port forward is missing the challenge will time out and
+#      the Certificate will remain Ready=False - that is expected and
+#      documented.
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rabble-tls
+  namespace: bluesky-spaces
+  labels:
+    app.kubernetes.io/name: rabble
+    app.kubernetes.io/part-of: rabble
+spec:
+  secretName: rabble-tls
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - rabble.jgarr.net
+  duration: 2160h    # 90 days (Let's Encrypt max)
+  renewBefore: 720h  # renew ~30 days before expiry

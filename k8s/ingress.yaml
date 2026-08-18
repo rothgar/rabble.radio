@@ -1,0 +1,55 @@
+# k8s/ingress.yaml
+#
+# NGINX Ingress resource that routes the local hostname `rabble.town`
+# to the `rabble-app` Service in the `bluesky-spaces` namespace.
+# Designed for a local kind cluster.
+#
+# kind note: the NGINX Ingress controller for kind listens on host port
+# 80/443 (see k8s/kind-config.yaml extraPortMappings). For convenience when
+# you cannot map privileged ports (e.g. on CI runners), kind also exposes
+# port 8080 mapped to the NodePort 30080 of the app Service (see
+# k8s/base/app.yaml). The Ingress annotations below use
+# `nginx.ingress.kubernetes.io/proxy-body-size` and the standard
+# `proxy-read-timeout` so LiveKit websocket upgrades do not get timed out by
+# the controller.
+#
+# IngressClass:
+#   - The kind-friendly NGINX controller installs with IngressClass name
+#     `nginx`. We pin to it explicitly with `kubernetes.io/ingress.class:
+#     nginx` for portability.
+#
+# Apply with:
+#   kubectl apply -f k8s/ingress.yaml
+# (or include it from a kustomization if you want it under overlay control).
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rabble
+  namespace: bluesky-spaces
+  labels:
+    app.kubernetes.io/name: rabble
+    app.kubernetes.io/part-of: rabble
+  annotations:
+    # Pin to the kind-friendly NGINX controller.
+    kubernetes.io/ingress.class: nginx
+    # LiveKit signalling uses websockets. These two annotations keep the
+    # upstream connection open across the long-lived WS session.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Allow reasonably large avatar / banner image uploads in the host-only
+    # post carousel.
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: rabble.town
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rabble-app
+                port:
+                  number: 80

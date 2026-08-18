@@ -1,0 +1,116 @@
+// Prisma schema for Bluesky Spaces MVP
+// Chunk 1: minimal User model only.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  did         String   @unique
+  handle      String
+  displayName String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hostedSpaces Space[]
+
+  @@index([handle])
+}
+
+model Space {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  description String?
+  hostId      String
+  isLive      Boolean   @default(false)
+  /// Scheduled start time. Null means "now/immediate" (already-active space).
+  scheduledAt DateTime?
+  /// When an unscheduled empty space should be considered expired. Null for
+  /// scheduled spaces until after the scheduled time passes.
+  expiresAt   DateTime?
+  /// One of "scheduled", "active", "live", "ended", "expired". Becomes the
+  /// source of truth over time; `isLive` is kept updated for backwards
+  /// compatibility.
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  host        User         @relation(fields: [hostId], references: [did], onDelete: Cascade)
+  posts       SpacePost[]
+  recordings  Recording[]
+
+  @@index([hostId])
+  @@index([isLive])
+  @@index([createdAt])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([expiresAt])
+}
+
+/// Per-session recording row. Created when the host goes live and an
+/// `EgressInfo` is returned from LiveKit. `expiresAt` is set 30 days out so
+/// the cleanup sweep can identify old rows deterministically.
+model Recording {
+  id          String    @id @default(cuid())
+  spaceId     String
+  /// LiveKit Egress ID. Unique because one Egress maps to one recording.
+  egressId    String    @unique
+  /// One of "starting", "available", "failed", "expired".
+  status      String    @default("starting")
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  expiresAt   DateTime
+  s3Key       String
+  s3Bucket    String
+  contentType String    @default("audio/mpeg")
+  sizeBytes   Int?
+  downloadUrl String?
+  hostDid     String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId])
+  @@index([expiresAt])
+  @@index([status])
+}
+
+model SpacePost {
+  id        String   @id @default(cuid())
+  spaceId   String
+  atUri     String
+  cid       String
+  indexedAt DateTime
+  authorDid String
+  embed     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, atUri])
+  @@index([spaceId])
+  @@index([createdAt])
+}
+
+/// Persisted ATProto OAuth session data. The key is the user's DID. This
+/// allows the app to restore the OAuth session across server restarts and
+/// (eventually) across multiple replicas.
+model OAuthSession {
+  id        String   @id @default(cuid())
+  did       String   @unique
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([did])
+}

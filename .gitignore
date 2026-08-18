@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js build output
+.next/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+secrets/
+private-key.pem
+jwks.json
+
+# Runtime
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing / coverage
+coverage/
+.nyc_output/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Kimchi local docs/ferments (keep project docs, ignore runtime artifacts)
+.kimchi/ferments/
+.kimchi/runtime.json
+
+# Temporary uploads / local data (if mounted locally)
+*.tmp
+uploads/

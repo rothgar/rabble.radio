@@ -1,0 +1,59 @@
+{
+  "name": "rabble",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rabble — live audio spaces for Bluesky",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "gen:jwks": "tsx scripts/gen-jwks.ts"
+  },
+  "dependencies": {
+    "@atproto/api": "^0.20.41",
+    "@atproto/oauth-client-node": "^0.5.3",
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@aws-sdk/s3-request-presigner": "^3.1111.0",
+    "@livekit/components-react": "^2.9.24",
+    "@prisma/client": "5.22.0",
+    "iron-session": "^8.0.4",
+    "jose": "^6.2.9",
+    "livekit-client": "^2.21.0",
+    "livekit-server-sdk": "^2.17.0",
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@prisma/nextjs-monorepo-workaround-plugin": "5.22.0",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
+    "@types/node": "22.10.5",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "@vitejs/plugin-react": "4.3.4",
+    "autoprefixer": "10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.23",
+    "happy-dom": "16.5.3",
+    "postcss": "8.4.49",
+    "prisma": "5.22.0",
+    "tailwindcss": "3.4.17",
+    "tsx": "^4.23.12",
+    "typescript": "5.7.3",
+    "vitest": "2.1.8"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

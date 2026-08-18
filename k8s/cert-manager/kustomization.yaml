@@ -1,0 +1,17 @@
+# k8s/cert-manager/kustomization.yaml
+#
+# Kustomize entrypoint for cert-manager resources.
+#
+# Apply with:
+#   kubectl apply -k k8s/cert-manager
+#
+# The ClusterIssuer is cluster-scoped so it is not pinned to a namespace
+# here. The Certificate lives in bluesky-spaces and is referenced by
+# the Ingress via spec.tls[].secretName=rabble-tls.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster-issuer.yaml
+  - cluster-issuer-production.yaml
+  - certificate.yaml

@@ -1,0 +1,183 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rabble-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bluesky
+      POSTGRES_PASSWORD: bluesky
+      POSTGRES_DB: bluesky_spaces
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bluesky -d bluesky_spaces"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Cap postgres so new infra (MinIO/Redis/Egress) doesn't push the VM
+    # over its 7.7 GiB ceiling.
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  redis:
+    # LiveKit Egress needs Redis for room-level coordination. Tiny footprint
+    # with the same persistence guarantees as a tmpfs is fine here.
+    image: redis:7-alpine
+    container_name: rabble-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  minio:
+    # S3-compatible object store for recordings. The bucket is auto-created
+    # on first write; the console on :9001 is local-only and not exposed
+    # publicly.
+    image: minio/minio:latest
+    container_name: rabble-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio-secret
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API (loopback only)
+      - "127.0.0.1:9001:9001"   # Console (loopback only)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  livekit:
+    image: livekit/livekit-server:v1.8
+    container_name: rabble-livekit
+    restart: unless-stopped
+    command:
+      - "--bind"
+      - "0.0.0.0"
+      - "--udp-port"
+      - "7882"
+      - "--keys"
+      - "devkey: devsecret0123456789abcdef0123456789abcdef"
+      - "--node-ip"
+      - "0.0.0.0"
+      - "--dev"
+      - "--redis-host"
+      - "redis:6379"
+    ports:
+      # LiveKit's signaling (TCP/7880) must be reachable from browsers on
+      # the public internet, so we do NOT bind it to loopback. exe.dev's
+      # reverse proxy forwards wss://rabble.exe.xyz:7880 straight through
+      # to this container. UDP/7882 (RTC media) is already published on
+      # all interfaces.
+      - "7880:7880"
+      - "7882:7882/udp"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  livekit-egress:
+    # LiveKit's media-recording service. Pulls room audio from LiveKit and
+    # pushes the encoded file to MinIO. Memory is capped aggressively so the
+    # VM stays under its 7.7 GiB ceiling; if recording fails due to OOM we
+    # fall back to TrackEgress on a single track instead of composite.
+    image: livekit/egress:latest
+    container_name: rabble-livekit-egress
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./livekit-egress.yaml:/etc/livekit-egress.yaml:ro
+    entrypoint: ["/tini", "--"]
+    command: ["egress", "--config", "/etc/livekit-egress.yaml"]
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  migrate:
+    image: rabble:local
+    container_name: rabble-migrate
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://bluesky:bluesky@postgres:5432/bluesky_spaces?schema=public
+      # Prisma migrate runs as the image's non-root user but npx needs a
+      # writable home directory for its npm cache. /tmp is safe and always
+      # writable inside the container.
+      HOME: /tmp
+    command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
+    volumes:
+      - ./prisma/migrations:/app/prisma/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    image: rabble:local
+    container_name: rabble-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # JWKS_PRIVATE_KEY is multiline, so it lives in secrets/private-key.pem
+      # and is exported in the shell before `docker compose up`. Map it explicitly
+      # because docker compose does not pass through unreferenced shell vars.
+      JWKS_PRIVATE_KEY: ${JWKS_PRIVATE_KEY}
+      DATABASE_URL: postgresql://bluesky:bluesky@postgres:5432/bluesky_spaces?schema=public
+      LIVEKIT_URL: ws://livekit:7880
+      # Public LiveKit URL exposed to browser clients. Defaults to the
+      # rabble.exe.xyz domain over WSS on port 7880 (the port the host
+      # exposes via docker-compose). Override here if you terminate TLS
+      # on a separate subdomain (e.g. wss://livekit.rabble.exe.xyz).
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rabble.exe.xyz:7880}
+      # Recording infrastructure — pointing at the in-network service names
+      # so the app container can reach MinIO/Egress via Docker DNS.
+      RECORDING_BUCKET: rabble-recordings
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minio
+      S3_SECRET_KEY: minio-secret
+      S3_REGION: us-east-1
+      EGRESS_WS_URL: ws://livekit-egress:7880
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      livekit:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

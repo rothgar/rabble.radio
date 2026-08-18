@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabble-app-env
+  namespace: bluesky-spaces
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  HOSTNAME: 0.0.0.0
+  NEXT_PUBLIC_APP_URL: http://rabble.town
+  # Switches src/lib/auth.ts from the local loopback OAuth flow to the hosted
+  # private_key_jwt flow. The JWKS + client metadata routes are only served
+  # when this is set.
+  PUBLIC_URL: https://rabble.jgarr.net
+  # Logo published in the OAuth client metadata. Optional; omit if no logo.
+  LOGO_URL: https://rabble.jgarr.net/logo.png
+  # Trailing dots on internal hostnames prevent the host's DNS search domains
+  # (e.g. .jgarr.net) from being appended and resolving to public IPs.
+  DATABASE_URL: postgresql://bluesky:bluesky@postgres.bluesky-spaces.svc.cluster.local.:5432/bluesky_spaces?schema=public
+  LIVEKIT_URL: ws://livekit.bluesky-spaces.svc.cluster.local.:7880
+  LIVEKIT_API_KEY: devkey
+  LIVEKIT_API_SECRET: devsecret0123456789abcdef0123456789abcdef
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabble-app
+  namespace: bluesky-spaces
+  labels:
+    app: rabble-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabble-app
+  template:
+    metadata:
+      labels:
+        app: rabble-app
+    spec:
+      serviceAccountName: rabble-app-sa
+      # Override the pod's DNS search domains. kind/Docker inherits the host's
+      # search list (e.g. .jgarr.net), which can make external names like
+      # custom-domain handles resolve to the wrong IP. dnsPolicy: None plus
+      # dnsConfig replaces the default search list instead of appending to it.
+      dnsPolicy: None
+      dnsConfig:
+        searches:
+          - bluesky-spaces.svc.cluster.local
+          - svc.cluster.local
+          - cluster.local
+      containers:
+        - name: rabble
+          image: rabble:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: rabble-app-env
+            - secretRef:
+                name: rabble-app-secrets
+                optional: false
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabble-app
+  namespace: bluesky-spaces
+spec:
+  type: NodePort
+  selector:
+    app: rabble-app
+  ports:
+    - port: 80
+      targetPort: 3000
+      nodePort: 30080

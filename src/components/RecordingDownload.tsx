@@ -30,6 +30,11 @@ interface PublicRecording {
 interface RecordingDownloadProps {
   spaceId: string;
   initial: PublicRecording | null;
+  /**
+   * When true, render a smaller card suitable for the redesigned
+   * sidebar. Default (false) keeps the original full-width treatment.
+   */
+  compact?: boolean;
 }
 
 function formatBytes(bytes: number | null): string {
@@ -50,6 +55,7 @@ function formatDate(value: string | null): string {
 export function RecordingDownload({
   spaceId,
   initial,
+  compact = false,
 }: RecordingDownloadProps): ReactElement | null {
   const [recording, setRecording] = useState<PublicRecording | null>(initial);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,11 +119,16 @@ export function RecordingDownload({
 
   if (!recording) return null;
 
+  const containerClass = compact
+    ? 'flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text)]'
+    : 'flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900 p-4 text-sm text-slate-200';
+
   return (
     <section
-      className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900 p-4 text-sm text-slate-200"
+      className={containerClass}
       data-testid="recording-download"
       data-status={recording.status}
+      data-compact={compact ? 'true' : 'false'}
     >
       <header className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Recording</h3>

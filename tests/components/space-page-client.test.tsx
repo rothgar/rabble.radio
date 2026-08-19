@@ -2,28 +2,10 @@
 //
 // Exercises the auto-join handoff: when CreateSpaceForm stores a join
 // payload in sessionStorage under `rabble_join_<spaceId>`, mounting
-// SpacePageClient should consume it and render SpaceRoom directly,
-// removing the slot on success or invalidation.
+// SpacePageClient should consume it and render SpaceRoom directly.
 
-// Heavy children are stubbed so we exercise only SpacePageClient's own
-// behaviour (join-button vs SpaceRoom branch) without mounting LiveKit
-// or any network code beyond a no-op fetch.
 vi.mock('@/components/SpaceRoom', () => ({
   SpaceRoom: () => <div data-testid="space-room">SpaceRoom</div>,
-}));
-vi.mock('@/components/StageControls', () => ({
-  StageControls: () => <div data-testid="stage-controls">StageControls</div>,
-}));
-vi.mock('@/components/LiveBannerButton', () => ({
-  LiveBannerButton: () => (
-    <div data-testid="live-banner-button">LiveBannerButton</div>
-  ),
-}));
-vi.mock('@/components/AddPostForm', () => ({
-  AddPostForm: () => <div data-testid="add-post-form">AddPostForm</div>,
-}));
-vi.mock('@/components/PostCarousel', () => ({
-  PostCarousel: () => <div data-testid="post-carousel">PostCarousel</div>,
 }));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -38,17 +20,18 @@ function baseProps() {
     isAuthenticated: true,
     isHost: true,
     isLive: true,
-    status: 'live',
+    status: 'live' as const,
     scheduledAt: null,
+    title: 'Test Space',
+    host: { handle: 'host.bsky.social' },
+    shareableUrl: 'https://rabble.example/space/sp-auto-join',
+    recording: null,
   };
 }
 
 beforeEach(() => {
   sessionStorage.clear();
   vi.clearAllMocks();
-  // The posts refresh fetches /api/spaces/<id>/posts on mount. Return an
-  // empty list so the effect doesn't keep the component in a loading
-  // state during assertions.
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -98,7 +81,6 @@ describe('<SpacePageClient /> auto-join handoff', () => {
   });
 
   it('removes an invalid stored token and falls back to the join button', async () => {
-    // Missing identity: fails the non-empty string validation.
     const invalid = {
       token: 'jwt-token',
       wsUrl: 'wss://livekit.example.com',
@@ -122,8 +104,6 @@ describe('<SpacePageClient /> auto-join handoff', () => {
   });
 
   it('removes malformed JSON from sessionStorage and falls back to the join button', async () => {
-    // Bonus coverage for the JSON.parse catch branch: if the slot was
-    // written by an older build or a third party, we still clean up.
     sessionStorage.setItem(`rabble_join_${SPACE_ID}`, '{not json');
 
     render(<SpacePageClient {...baseProps()} />);

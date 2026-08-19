@@ -2,8 +2,8 @@
 
 // src/components/AddPostForm.tsx
 //
-// Host-only form to share a Bluesky post into the space. Submits the URL to
-// /api/spaces/[id]/posts and reports success/error.
+// Host-only inline compose row in the sidebar. Text input + "Share to
+// room" button.
 
 import { useCallback, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -71,16 +71,9 @@ export function AddPostForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-lg border border-slate-800 bg-slate-900 p-4"
+      className="flex flex-col gap-2"
       data-testid="add-post-form"
     >
-      <h3 className="mb-2 text-sm font-semibold text-slate-100">
-        Share a Bluesky post
-      </h3>
-      <p className="mb-3 text-xs text-slate-400">
-        Paste a bsky.app or atproto.com post URL. Listeners will see it in the
-        carousel below.
-      </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="url"
@@ -88,24 +81,24 @@ export function AddPostForm({
           required
           value={postUrl}
           onChange={(e) => setPostUrl(e.target.value)}
-          placeholder="https://bsky.app/profile/handle/post/3l...rkey"
-          className="flex-1 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
+          placeholder="Paste a Bluesky post URL"
+          className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-neutral-600)] focus:border-[var(--color-accent)] focus:outline-none"
           data-testid="add-post-input"
           aria-label="Bluesky post URL"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+          className="shrink-0 rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-900)] transition-colors hover:bg-[var(--color-accent-400)] disabled:opacity-50"
           data-testid="add-post-submit"
         >
-          {busy ? 'Sharing…' : 'Share'}
+          {busy ? 'Sharing…' : 'Share to room'}
         </button>
       </div>
       {error ? (
         <p
           role="alert"
-          className="mt-2 rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
+          className="rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
           data-testid="add-post-error"
         >
           {error}
@@ -114,7 +107,7 @@ export function AddPostForm({
       {success ? (
         <p
           role="status"
-          className="mt-2 rounded-md border border-emerald-700 bg-emerald-900/30 px-2 py-1 text-xs text-emerald-200"
+          className="rounded-md border border-emerald-700 bg-emerald-900/30 px-2 py-1 text-xs text-emerald-200"
           data-testid="add-post-success"
         >
           {success}

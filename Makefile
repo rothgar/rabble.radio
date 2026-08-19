@@ -98,6 +98,7 @@ sync: ## Sync source, tests, and Prisma files to the remote host
 	rsync -avz --delete -e "$(SSH)" $(RSYNC_EXCLUDES) public/ $(REMOTE_HOST):$(REMOTE_DIR)/public/
 	rsync -avz --delete -e "$(SSH)" $(RSYNC_EXCLUDES) scripts/ $(REMOTE_HOST):$(REMOTE_DIR)/scripts/
 	rsync -avz --delete docker-compose.yml $(REMOTE_HOST):$(REMOTE_DIR)/docker-compose.yml
+	rsync -avz --delete Caddyfile $(REMOTE_HOST):$(REMOTE_DIR)/Caddyfile
 	rsync -avz --delete Dockerfile $(REMOTE_HOST):$(REMOTE_DIR)/Dockerfile
 	rsync -avz --delete .dockerignore $(REMOTE_HOST):$(REMOTE_DIR)/.dockerignore
 	rsync -avz --delete tsconfig.json $(REMOTE_HOST):$(REMOTE_DIR)/tsconfig.json

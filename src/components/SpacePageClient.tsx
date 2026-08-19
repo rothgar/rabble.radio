@@ -2,22 +2,17 @@
 
 // src/components/SpacePageClient.tsx
 //
-// Client-side join flow for the space detail page. Renders a "Join Space"
-// button that POSTs to /api/spaces/[id]/join and, on success, mounts the
-// LiveKit room with the returned token. While the room is mounted the join
-// button is replaced by the in-room UI, including stage controls, the
-// live banner toggle, the host-only post sharing form, and the post
-// carousel for everyone.
+// Client-side join flow for the space detail page. Fetches posts, exposes
+// a "Join Space" button that POSTs to /api/spaces/[id]/join and, on
+// success, mounts SpaceRoom with the redesigned Nocturne layout. The
+// joined-state layout is owned entirely by SpaceRoom — this component
+// just forwards the metadata it needs.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { SpaceRoom, type SpaceRole } from '@/components/SpaceRoom';
-import { StageControls } from '@/components/StageControls';
-import { LiveBannerButton } from '@/components/LiveBannerButton';
-import { AddPostForm } from '@/components/AddPostForm';
-import { DeleteSpaceButton } from '@/components/DeleteSpaceButton';
-import { PostCarousel } from '@/components/PostCarousel';
 import type { PublicSpacePost } from '@/lib/posts';
+import type { PublicRecording } from '@/components/RoomSidebar';
 
 export interface SpacePageClientProps {
   spaceId: string;
@@ -26,6 +21,14 @@ export interface SpacePageClientProps {
   isLive: boolean;
   status?: string;
   scheduledAt?: string | null;
+  title: string;
+  host: {
+    handle: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+  };
+  shareableUrl: string;
+  recording: PublicRecording | null;
 }
 
 interface JoinResponse {
@@ -51,6 +54,10 @@ export function SpacePageClient({
   isLive,
   status,
   scheduledAt,
+  title,
+  host,
+  shareableUrl,
+  recording,
 }: SpacePageClientProps): ReactElement {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,8 +92,8 @@ export function SpacePageClient({
     void refreshPosts();
   }, [refreshPosts]);
 
-  // Auto-join handoff: when the user just created a space with
-  // "Start now", the create form stored a join payload under
+  // Auto-join handoff: when the user just created a space with "Start
+  // now", the create form stored a join payload under
   // `rabble_join_<spaceId>` and navigated here. Consume it on mount so
   // the host lands directly in the room without clicking Join.
   useEffect(() => {
@@ -95,8 +102,6 @@ export function SpacePageClient({
     if (!raw) {
       return;
     }
-    // Always clear the slot so a reload doesn't try to reuse a consumed
-    // payload. If parsing/validation fails we still fall back cleanly.
     sessionStorage.removeItem(key);
     try {
       const parsed = JSON.parse(raw) as unknown;
@@ -121,7 +126,6 @@ export function SpacePageClient({
     } catch {
       // Malformed JSON: fall through to the manual join button.
     }
-    // Intentionally empty: this handoff must run exactly once per mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -253,151 +257,93 @@ export function SpacePageClient({
     }
   }, [isHost, joining, spaceId]);
 
-  const stageSlot = useMemo(() => {
-    if (!joined) return null;
-    // For the host, force stage role to 'host' regardless of the joined
-    // response shape, so the StageManager / host controls always render.
-    const stageRole: 'host' | 'speaker' | 'audience' =
-      isHost || joined.role === 'host' ? 'host' : 'audience';
-    // Prefer the friendly displayName over the raw DID for the StageControls
-    // header so the host never sees a `did:plc:...` value.
-    const friendlyStageName =
-      joined.displayName ?? (joined.handle ? `@${joined.handle}` : joined.identity);
-    return (
-      <StageControls
-        spaceId={spaceId}
-        identity={joined.identity}
-        displayName={friendlyStageName}
-        role={stageRole}
-        onTokenRefresh={(next) => {
-          setJoined({
-            token: next.token,
-            wsUrl: next.wsUrl,
-            role: next.role === 'audience' ? 'audience' : 'host',
-            roomName: next.roomName,
-            identity: next.identity,
-            handle: joined.handle,
-            displayName: joined.displayName ?? null,
-            avatarUrl: joined.avatarUrl ?? null,
-          });
-        }}
-      />
-    );
-  }, [isHost, joined, spaceId]);
-
-  const sidebar = (
-    <aside
-      className="flex flex-col gap-4"
-      data-testid="space-sidebar"
-    >
-      {isHost ? (
-        <LiveBannerButton
-          spaceId={spaceId}
-          isLive={live}
-          onChange={(next) => setLive(next.isLive)}
-        />
-      ) : null}
-      {isHost ? (
-        <AddPostForm
-          spaceId={spaceId}
-          onAdded={() => {
-            void refreshPosts();
-          }}
-        />
-      ) : null}
-      {isHost ? <DeleteSpaceButton spaceId={spaceId} /> : null}
-      {postsError ? (
-        <p
-          role="alert"
-          className="rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-xs text-red-200"
-        >
-          {postsError}
-        </p>
-      ) : null}
-      <div data-testid="post-carousel-wrapper">
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">
-          Shared posts
-        </h3>
-        <PostCarousel posts={posts} />
-      </div>
-    </aside>
-  );
-
   if (joined) {
     return (
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="md:col-span-2">
-          <SpaceRoom
-            token={joined.token}
-            wsUrl={joined.wsUrl}
-            role={joined.role}
-            identity={joined.identity}
-            displayName={joined.displayName ?? joined.handle}
-            handle={joined.handle}
-            avatarUrl={joined.avatarUrl ?? null}
-            isHost={isHost}
-            hostActions={hostActions}
-            onLeave={handleLeave}
-            stageSlot={stageSlot}
-          />
-        </div>
-        <div>{sidebar}</div>
-      </div>
+      <SpaceRoom
+        token={joined.token}
+        wsUrl={joined.wsUrl}
+        role={joined.role}
+        identity={joined.identity}
+        displayName={joined.displayName ?? joined.handle}
+        handle={joined.handle}
+        avatarUrl={joined.avatarUrl ?? null}
+        isHost={isHost}
+        hostActions={hostActions}
+        onLeave={handleLeave}
+        title={title}
+        host={host}
+        shareableUrl={shareableUrl}
+        posts={posts}
+        postsError={postsError}
+        onPostAdded={() => {
+          void refreshPosts();
+        }}
+        isLive={live}
+        onLiveChange={setLive}
+        spaceId={spaceId}
+        recording={recording}
+      />
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="grid gap-6 md:grid-cols-3">
-        <section className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300 md:col-span-2">
-          <p className="mb-3">Sign in with Bluesky to join this space.</p>
-          <a
-            href="/api/auth/bluesky"
-            className="inline-block rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-          >
-            Sign in
-          </a>
-        </section>
-        <div>{sidebar}</div>
-      </div>
+      <section
+        className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text)]"
+        data-testid="space-unauthenticated"
+      >
+        <p className="mb-3">Sign in with Bluesky to join this space.</p>
+        <a
+          href="/api/auth/bluesky"
+          className="inline-block rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]"
+        >
+          Sign in
+        </a>
+      </section>
     );
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-3">
-      <section className="rounded-lg border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
-        <div className="flex flex-col gap-3">
-          <p>
-            {isHost
-              ? 'You are the host. Joining will connect you as a speaker.'
-              : 'Joining will connect you as audience (listen-only).'}
+    <section
+      className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)]"
+      data-testid="space-join-card"
+    >
+      <div className="flex flex-col gap-3">
+        <p>
+          {isHost
+            ? 'You are the host. Joining will connect you as a speaker.'
+            : 'Joining will connect you as audience (listen-only).'}
+        </p>
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-200"
+            data-testid="join-error"
+          >
+            {error}
           </p>
-          {error ? (
-            <p
-              role="alert"
-              className="rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-200"
-              data-testid="join-error"
-            >
-              {error}
-            </p>
-          ) : null}
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                void onJoin();
-              }}
-              disabled={joining}
-              className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-              data-testid="join-button"
-            >
-              {joining ? 'Joining…' : 'Join Space'}
-            </button>
-          </div>
+        ) : null}
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              void onJoin();
+            }}
+            disabled={joining}
+            className="rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)] disabled:opacity-50"
+            data-testid="join-button"
+          >
+            {joining ? 'Joining…' : 'Join Space'}
+          </button>
         </div>
-      </section>
-      <div>{sidebar}</div>
-    </div>
+        {status ? (
+          <p className="text-xs text-[var(--color-neutral-500)]">
+            Status: {status}
+            {scheduledAt ? ` · ${new Date(scheduledAt).toLocaleString()}` : ''}
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

@@ -26,7 +26,6 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { SpacePageClient } from '@/components/SpacePageClient';
 import { ShareButtons } from '@/components/ShareButtons';
-import { RecordingDownload } from '@/components/RecordingDownload';
 import type { PublicSpace, PublicUser } from '@/types';
 
 /**
@@ -408,11 +407,15 @@ export default function SpacePage(): ReactElement {
         isLive={view.isLive}
         status={view.status}
         scheduledAt={view.scheduledAt}
+        title={view.title}
+        host={{
+          handle: view.host.handle,
+          displayName: view.host.displayName ?? null,
+          avatarUrl: view.host.avatarUrl ?? null,
+        }}
+        shareableUrl={view.shareableUrl}
+        recording={state.recording}
       />
-
-      {isHost ? (
-        <RecordingDownload spaceId={view.id} initial={state.recording} />
-      ) : null}
     </main>
   );
 }

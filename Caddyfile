@@ -1,0 +1,17 @@
+# Caddy reverse proxy for rabble.exe.xyz
+#
+# exe.dev forwards HTTPS (port 443) to the host's port 3000. We bind Caddy
+# there and fan out:
+#   - /rtc/*        -> livekit:7880 (path-preserving, so the LiveKit
+#                      SDK can keep its `/rtc/v1/...` signaling path)
+#   - everything else -> app:3000 (the Next.js server)
+#
+# Caddy transparently upgrades WebSocket connections on both backends
+# (it inspects the Upgrade/Connection headers and switches the upstream
+# proxy to HTTP/1.1 with the upgrade headers preserved). No extra
+# configuration is required.
+
+:3000 {
+	reverse_proxy /rtc/* livekit:7880
+	reverse_proxy app:3000
+}

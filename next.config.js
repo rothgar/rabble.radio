@@ -4,6 +4,12 @@ const { PrismaPlugin } = require('@prisma/nextjs-monorepo-workaround-plugin')
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  eslint: {
+    // Temporary workaround: Next.js 15 + eslint.config.mjs FlatCompat fails
+    // with "Unknown options: useEslintrc, extensions". Re-enable after
+    // migrating eslint.config.mjs to a native flat config.
+    ignoreDuringBuilds: true,
+  },
   // Next.js 15 auto-externalizes @prisma/client by default, but explicitly
   // listing it (plus the runtime and engine packages) ensures the generated
   // client and its engine binary are resolved from node_modules at runtime

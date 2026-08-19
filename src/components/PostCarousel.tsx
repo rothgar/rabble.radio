@@ -2,12 +2,9 @@
 
 // src/components/PostCarousel.tsx
 //
-// Stacked, swipeable carousel for shared Bluesky posts. Each post card is
-// rendered behind the previous one with a slight Y offset and scale so the
-// stack is visible. The container uses CSS scroll-snap-x so listeners can
-// swipe/scroll through posts on touch and desktop.
+// Vertical list of shared Bluesky posts for the redesigned sidebar. Each
+// row shows a 30px avatar, author/handle/time, and the post text below.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { PublicSpacePost } from '@/lib/posts';
 
@@ -25,8 +22,6 @@ function formatDate(iso: string): string {
 }
 
 function postHref(uri: string): string {
-  // Best-effort conversion of AT-URI to a bsky.app URL for the "open" link.
-  // at://did:plc:abc/app.bsky.feed.post/rkey -> https://bsky.app/profile/did:plc:abc/post/rkey
   if (!uri.startsWith('at://')) return uri;
   const stripped = uri.replace(/^at:\/\//, '');
   const [did, , rkey] = stripped.split('/');
@@ -34,61 +29,83 @@ function postHref(uri: string): string {
   return `https://bsky.app/profile/${did}/post/${rkey}`;
 }
 
-function PostCard({
+function initialsFor(name: string): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '??';
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
+function PostRow({
   post,
-  index,
 }: {
   post: PublicSpacePost;
-  index: number;
 }): ReactElement {
   const text = post.view.record?.text ?? '';
-  const author = post.view.author?.displayName || post.view.author?.handle || post.authorDid;
+  const author =
+    post.view.author?.displayName ||
+    post.view.author?.handle ||
+    post.authorDid;
   const handle = post.view.author?.handle ?? '';
   const href = postHref(post.atUri);
-  // Stack offset: deeper cards shift up and to the right slightly so the
-  // stack is visible behind the front card.
-  const offset = Math.min(index, 3);
-  const scale = 1 - offset * 0.04;
-  const translateX = offset * 14;
-  const translateY = -offset * 8;
+  const indexedAt = post.view.indexedAt ?? post.indexedAt;
+
   return (
-    <article
-      className="post-carousel-card relative shrink-0 basis-[88%] rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-lg"
-      style={{
-        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-        zIndex: 10 - offset,
-      }}
+    <li
+      className="flex flex-col gap-2 border-b border-[var(--color-divider)] py-3 last:border-b-0"
       data-testid={`post-card-${post.id}`}
-      data-index={index}
     >
-      <header className="mb-2 flex items-center justify-between text-xs text-slate-400">
-        <span className="font-medium text-slate-200">{author}</span>
-        {handle ? (
-          <span className="text-slate-500">@{handle}</span>
-        ) : null}
-      </header>
-      {text ? (
-        <p className="mb-3 whitespace-pre-wrap text-sm text-slate-100">
-          {text}
-        </p>
-      ) : (
-        <p className="mb-3 text-sm italic text-slate-400">
-          (Post text not available)
-        </p>
-      )}
-      <footer className="flex items-center justify-between text-xs text-slate-500">
-        <span>{formatDate(post.view.indexedAt ?? post.indexedAt)}</span>
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="rounded-md border border-slate-700 px-2 py-0.5 text-sky-300 hover:bg-slate-800"
-          data-testid={`post-link-${post.id}`}
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-700)] text-[10px] font-semibold text-[var(--color-accent-100)]"
+          aria-hidden
+          data-testid={`post-avatar-${post.id}`}
         >
-          Open on Bluesky
-        </a>
-      </footer>
-    </article>
+          {initialsFor(author)}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
+            <span className="truncate text-sm font-medium text-[var(--color-text)]">
+              {author}
+            </span>
+            {handle ? (
+              <span className="truncate text-[11px] text-[var(--color-accent-300)]">
+                @{handle}
+              </span>
+            ) : null}
+            <span aria-hidden className="text-[var(--color-neutral-600)]">
+              ·
+            </span>
+            <span
+              className="text-[11px] text-[var(--color-neutral-500)]"
+              data-testid={`post-time-${post.id}`}
+            >
+              {formatDate(indexedAt)}
+            </span>
+          </div>
+          {text ? (
+            <p
+              className="mt-1 whitespace-pre-wrap text-sm text-[var(--color-text)]"
+              data-testid={`post-text-${post.id}`}
+            >
+              {text}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs italic text-[var(--color-neutral-500)]">
+              (Post text not available)
+            </p>
+          )}
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-1 self-start text-[11px] text-[var(--color-accent-300)] hover:underline"
+            data-testid={`post-link-${post.id}`}
+          >
+            Open on Bluesky
+          </a>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -96,77 +113,27 @@ export function PostCarousel({
   posts,
   emptyMessage = 'No posts shared yet.',
 }: PostCarouselProps): ReactElement {
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  useEffect(() => {
-    setActiveIndex(0);
-    const el = scrollerRef.current;
-    if (el) el.scrollTo({ left: 0, behavior: 'auto' });
-  }, [posts.length]);
-
-  const handleScroll = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const cardWidth = el.clientWidth * 0.88;
-    const next = Math.round(el.scrollLeft / Math.max(cardWidth, 1));
-    setActiveIndex(Math.min(Math.max(next, 0), Math.max(posts.length - 1, 0)));
-  }, [posts.length]);
-
   if (posts.length === 0) {
     return (
       <div
-        className="rounded-lg border border-dashed border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400"
+        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface)]/40 p-3 text-xs text-[var(--color-neutral-500)]"
         data-testid="post-carousel-empty"
       >
         {emptyMessage}
       </div>
     );
   }
-
   return (
-    <section
-      className="relative"
+    <ul
+      className="flex flex-col"
       data-testid="post-carousel"
       data-count={posts.length}
-      data-active={activeIndex}
+      aria-label="Shared Bluesky posts"
     >
-      <div
-        ref={scrollerRef}
-        onScroll={handleScroll}
-        className="post-carousel-scroller relative flex snap-x snap-mandatory gap-4 overflow-x-auto pb-6 pt-3"
-        style={{ scrollPaddingLeft: '6%' }}
-        aria-label="Shared Bluesky posts"
-      >
-        {posts.map((post, i) => (
-          <div
-            key={post.id}
-            className="snap-center"
-            style={{ scrollSnapAlign: 'center' }}
-          >
-            <PostCard post={post} index={i} />
-          </div>
-        ))}
-      </div>
-      <div
-        className="mt-1 flex items-center justify-center gap-1 text-xs text-slate-500"
-        data-testid="post-carousel-dots"
-      >
-        {posts.map((p, i) => (
-          <span
-            key={p.id}
-            aria-hidden
-            data-testid={`post-carousel-dot-${i}`}
-            data-active={i === activeIndex}
-            className={
-              i === activeIndex
-                ? 'h-1.5 w-4 rounded-full bg-sky-400'
-                : 'h-1.5 w-1.5 rounded-full bg-slate-600'
-            }
-          />
-        ))}
-      </div>
-    </section>
+      {posts.map((post) => (
+        <PostRow key={post.id} post={post} />
+      ))}
+    </ul>
   );
 }
 

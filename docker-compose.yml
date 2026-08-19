@@ -84,13 +84,12 @@ services:
       - "--dev"
       - "--redis-host"
       - "redis:6379"
+    # LiveKit's signaling port (7880) is NOT bound to the host anymore.
+    # exe.dev refuses WebSocket upgrades to wss://rabble.exe.xyz:7880, so
+    # we route the browser's signaling traffic through Caddy on the
+    # public port (3000) under the /rtc/* path. UDP/7882 (RTC media) is
+    # still published on all interfaces because Caddy only proxies TCP.
     ports:
-      # LiveKit's signaling (TCP/7880) must be reachable from browsers on
-      # the public internet, so we do NOT bind it to loopback. exe.dev's
-      # reverse proxy forwards wss://rabble.exe.xyz:7880 straight through
-      # to this container. UDP/7882 (RTC media) is already published on
-      # all interfaces.
-      - "7880:7880"
       - "7882:7882/udp"
     depends_on:
       postgres:
@@ -156,11 +155,13 @@ services:
       JWKS_PRIVATE_KEY: ${JWKS_PRIVATE_KEY}
       DATABASE_URL: postgresql://bluesky:bluesky@postgres:5432/bluesky_spaces?schema=public
       LIVEKIT_URL: ws://livekit:7880
-      # Public LiveKit URL exposed to browser clients. Defaults to the
-      # rabble.exe.xyz domain over WSS on port 7880 (the port the host
-      # exposes via docker-compose). Override here if you terminate TLS
-      # on a separate subdomain (e.g. wss://livekit.rabble.exe.xyz).
-      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rabble.exe.xyz:7880}
+      # Public LiveKit URL exposed to browser clients. Caddy proxies
+      # /rtc/* on port 3000 to the LiveKit container, so the browser
+      # connects to wss://rabble.exe.xyz (no port) and the LiveKit SDK
+      # appends /rtc/v1/... to that base URL. Override here if you
+      # terminate TLS on a separate subdomain (e.g.
+      # wss://livekit.rabble.exe.xyz) or run with a different proxy.
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rabble.exe.xyz}
       # Recording infrastructure — pointing at the in-network service names
       # so the app container can reach MinIO/Egress via Docker DNS.
       RECORDING_BUCKET: rabble-recordings
@@ -169,11 +170,36 @@ services:
       S3_SECRET_KEY: minio-secret
       S3_REGION: us-east-1
       EGRESS_WS_URL: ws://livekit-egress:7880
+    # App is bound to the loopback on host port 3001 so Caddy can own
+    # the public port 3000 (which exe.dev forwards 443 to). The
+    # in-network hostname `app:3000` is what Caddy reverse-proxies to.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
+      livekit:
+        condition: service_started
+
+  caddy:
+    # Single public ingress. exe.dev forwards HTTPS/443 to the host's
+    # port 3000, which Caddy binds. It then splits traffic by path:
+    #   /rtc/* -> livekit:7880  (LiveKit signaling, WebSocket)
+    #   *      -> app:3000      (Next.js)
+    # Caddy's reverse_proxy transparently upgrades WebSocket connections
+    # on both backends so we don't need extra directives.
+    image: caddy:2-alpine
+    container_name: rabble-caddy
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      app:
+        condition: service_started
       livekit:
         condition: service_started
 
@@ -181,3 +207,5 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+  caddy-data:
+  caddy-config:

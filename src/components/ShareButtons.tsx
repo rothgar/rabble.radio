@@ -1,12 +1,8 @@
 'use client';
 
-// src/components/ShareButtons.tsx
-//
-// Opens the Bluesky compose intent with a prefilled message linking to the
-// current space. Mounted from the space detail page so the surrounding URL
-// block can stay a server component.
-
+import { useState } from 'react';
 import type { ReactElement } from 'react';
+import { LinkSimple, ShareNetwork } from '@phosphor-icons/react';
 
 export interface ShareButtonsProps {
   shareableUrl: string;
@@ -17,9 +13,21 @@ export function ShareButtons({
   shareableUrl,
   title,
 }: ShareButtonsProps): ReactElement {
+  const [copied, setCopied] = useState(false);
+
   const bskyHref = `https://bsky.app/intent/compose?text=${encodeURIComponent(
     `Join my space on Rabble: ${title}\n${shareableUrl}`
   )}`;
+
+  const onCopy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(shareableUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Best-effort: clipboard may not be available in all environments.
+    }
+  };
 
   return (
     <div
@@ -33,10 +41,23 @@ export function ShareButtons({
         href={bskyHref}
         target="_blank"
         rel="noreferrer noopener"
-        className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-900)] transition-colors hover:bg-[var(--color-accent-400)]"
       >
-        Post to Bluesky
+        <ShareNetwork size={14} weight="bold" />
+        Share
       </a>
+      <button
+        type="button"
+        onClick={() => {
+          void onCopy();
+        }}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent-800)]"
+        data-testid="share-copy-button"
+        data-share-url={shareableUrl}
+      >
+        <LinkSimple size={14} weight="bold" />
+        {copied ? 'Copied!' : 'Copy link'}
+      </button>
     </div>
   );
 }

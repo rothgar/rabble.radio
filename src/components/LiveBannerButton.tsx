@@ -1,10 +1,5 @@
 'use client';
 
-// src/components/LiveBannerButton.tsx
-//
-// Host-only toggle that flips the space's `isLive` flag and publishes (or
-// deletes) the host's app.bsky.actor.status/self record via the live API.
-
 import { useCallback, useState } from 'react';
 import type { ReactElement } from 'react';
 
@@ -59,42 +54,46 @@ export function LiveBannerButton({
 
   return (
     <div
-      className="rounded-lg border border-slate-800 bg-slate-900 p-4"
+      className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4"
       data-testid="live-banner"
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-100">
-            Live banner
-          </h3>
-          <p className="text-xs text-slate-400">
-            {live
-              ? 'Visible to others on Bluesky via your profile status.'
-              : 'Going live writes your profile status with a link to this space.'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            void handleToggle();
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden
+          className="h-2 w-2 rounded-full"
+          style={{
+            backgroundColor: live ? '#f87171' : '#94a3b8',
+            animation: live ? 'pulse-live 1.6s ease-in-out infinite' : undefined,
           }}
-          disabled={busy}
-          className={
-            'shrink-0 whitespace-nowrap ' +
-            (live
-              ? 'rounded-md border border-red-700 bg-red-900/40 px-3 py-1.5 text-xs font-medium text-red-100 hover:bg-red-900/60 disabled:opacity-50'
-              : 'rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50')
-          }
-          data-testid="live-banner-toggle"
-          aria-pressed={live}
+        />
+        <span
+          className="text-xs font-medium uppercase tracking-wide text-[var(--color-neutral-400)]"
+          data-testid="live-banner-status"
         >
-          {busy ? 'Working…' : live ? 'End Live' : 'Go Live'}
-        </button>
+          {live ? 'Broadcasting live' : 'Not broadcasting'}
+        </span>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          void handleToggle();
+        }}
+        disabled={busy}
+        className={
+          'w-full rounded-[var(--radius-md)] px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ' +
+          (live
+            ? 'border border-amber-700/60 bg-amber-900/40 text-amber-100 hover:bg-amber-900/60'
+            : 'bg-[var(--color-accent)] text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]')
+        }
+        data-testid="live-banner-toggle"
+        aria-pressed={live}
+      >
+        {busy ? 'Working…' : live ? 'Pause broadcast' : 'Resume broadcast'}
+      </button>
       {error ? (
         <p
           role="alert"
-          className="mt-2 rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
+          className="rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
           data-testid="live-banner-error"
         >
           {error}

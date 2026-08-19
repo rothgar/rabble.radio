@@ -2,22 +2,49 @@
 
 // src/components/SpaceRoom.tsx
 //
-// LiveKit room wrapper. Receives the token + wsUrl from the join API and
-// connects an audio-only room. Renders the participant grid + local mic
-// controls.
+// LiveKit room wrapper for the redesigned Nocturne live-room. Renders the
+// full viewport shell (nav bar, two-column content, sticky bottom bar) via
+// NocturneShell, with RoomHeader / speaker grid / audience section /
+// RoomSidebar / BottomControlBar nested inside.
+//
+// Stage membership is determined by `participant.permissions.canPublish`.
+// The local participant mirrors onto the stage grid when role is host or
+// the local track has publish rights.
+//
+// Floating emoji reactions are spawned from the local user's avatar
+// (speaker card if on stage, audience "YOU" bubble otherwise) via
+// getBoundingClientRect().
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
   LiveKitRoom,
   useLocalParticipant,
   useParticipants,
 } from '@livekit/components-react';
+import type { Participant } from 'livekit-client';
 import { Room } from 'livekit-client';
-import { AudioParticipant, type AudioParticipantTileData } from '@/components/AudioParticipant';
-import { LocalAudioControls } from '@/components/LocalAudioControls';
+import { NocturneShell } from '@/components/NocturneShell';
+import { RoomHeader } from '@/components/RoomHeader';
+import { SpeakerCard } from '@/components/SpeakerCard';
+import { AudienceBubbles, type AudienceMember } from '@/components/AudienceBubbles';
+import { AudienceRows } from '@/components/AudienceRows';
+import { RoomSidebar, type PublicRecording } from '@/components/RoomSidebar';
+import { BottomControlBar } from '@/components/BottomControlBar';
+import { FloatingReaction } from '@/components/FloatingReaction';
+import { StageInviteToast } from '@/components/StageInviteToast';
+import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
+import type { PublicSpacePost } from '@/lib/posts';
 
 export type SpaceRole = 'host' | 'audience';
+export type BottomRole = 'host' | 'speaker' | 'audience';
 
 export interface SpaceRoomProps {
   token: string;
@@ -25,22 +52,9 @@ export interface SpaceRoomProps {
   role: SpaceRole;
   identity: string;
   displayName?: string;
-  onLeave?: () => void;
-  /**
-   * Optional element rendered inside LiveKitRoom (so children can use
-   * useRoomContext). Used by SpacePageClient to mount StageManager,
-   * AudienceList and StageRequestToast.
-   */
-  stageSlot?: ReactNode;
-  /**
-   * When true, this user is the host of the space. The participant grid
-   * exposes per-tile host action menus (mute, kick, block, invite).
-   */
+  handle?: string;
+  avatarUrl?: string | null;
   isHost?: boolean;
-  /**
-   * Optional callbacks wired from the parent so host actions can fan out
-   * to the stage endpoint. See HostActionMenu for the contract.
-   */
   hostActions?: {
     onInvite?: (identity: string) => Promise<void> | void;
     onMuteToggle?: (
@@ -51,44 +65,44 @@ export interface SpaceRoomProps {
     onRemoveFromSpace?: (identity: string) => Promise<void> | void;
     onBlock?: (identity: string) => Promise<void> | void;
   };
+  onLeave?: () => void;
   /**
-   * Optional Bluesky handle for the local user (without the "@"). When
-   * provided the host/audience header uses it as a friendly fallback so
-   * we never surface a raw `did:plc:...` string while the /api/users
-   * request is in flight.
+   * Reserved slot for any extra children that need access to LiveKit
+   * context. Currently unused by the redesigned layout but kept for
+   * future host controls that want to live inside LiveKitRoom.
    */
-  handle?: string;
-  /**
-   * Optional avatar URL for the local user. Stored alongside the resolved
-   * profiles so future tile enhancements can use it without an extra
-   * round-trip.
-   */
-  avatarUrl?: string | null;
+  stageSlot?: ReactNode;
+  /** Title shown in the room header. */
+  title: string;
+  /** Host metadata shown in the header. */
+  host: {
+    handle: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+  };
+  /** Public shareable URL for the room. */
+  shareableUrl: string;
+  posts: PublicSpacePost[];
+  postsError: string | null;
+  onPostAdded: () => void;
+  isLive: boolean;
+  onLiveChange: (next: boolean) => void;
+  spaceId: string;
+  recording?: PublicRecording | null;
 }
 
-interface RoomGridProps {
-  identity: string;
-  displayName?: string;
-  isHost: boolean;
-  hostActions: SpaceRoomProps['hostActions'];
-  /**
-   * Pre-resolved profiles keyed by DID. The outer SpaceRoom fetches
-   * these once and shares them so the host tile and the participant
-   * grid render consistent labels.
-   */
-  profiles: Record<string, AudioParticipantTileData>;
+/**
+ * Lightweight profile metadata shared between the speaker grid and the
+ * audience bubbles/rows.
+ */
+export interface AudioParticipantTileData {
+  handle?: string;
+  avatarUrl?: string | null;
+  displayName?: string | null;
 }
 
 export type ResolvedProfileMap = Record<string, AudioParticipantTileData>;
 
-/**
- * Fetch user profile metadata for any DIDs we don't already have cached.
- * The endpoint is `/api/users?identities=...` which mirrors the
- * `AudioParticipantTileData` shape (handle, avatarUrl, displayName).
- *
- * Identities that fail to resolve simply stay out of the map; callers
- * fall back to the LiveKit-provided `name` and the raw identity.
- */
 function useResolvedProfiles(identities: string[]): ResolvedProfileMap {
   const [profiles, setProfiles] = useState<ResolvedProfileMap>({});
 
@@ -141,112 +155,32 @@ function useResolvedProfiles(identities: string[]): ResolvedProfileMap {
   return profiles;
 }
 
-/**
- * Pick a human-friendly label for a DID. Prefers an explicit display name,
- * then the resolved handle (always prefixed with `@`), and finally falls
- * back to the raw identity. Crucially this function refuses to surface
- * `did:plc:` strings as a label when a better option is available.
- */
-export function friendlyLabelFor(
-  identity: string,
-  profile: AudioParticipantTileData | undefined,
-  fallbackName?: string
-): string {
-  const display = profile?.displayName?.trim() || fallbackName?.trim();
-  if (display && !display.startsWith('did:')) return display;
-  const handle = profile?.handle?.trim();
-  if (handle && !handle.startsWith('did:')) return `@${handle}`;
-  // Last resort: don't leak the raw DID. If we genuinely have no profile
-  // we return a stable placeholder.
-  return identity.startsWith('did:') ? 'You' : identity;
+interface FloatingReactionState {
+  id: string;
+  emoji: string;
+  x: number;
+  y: number;
 }
 
 /**
- * Resolve the currently-displayed stage role for a participant. Speakers
- * are participants who publish their microphone (publish perms enabled).
- * Audience are participants without publish rights. The host's local
- * participant always reports as a speaker.
+ * Determine whether a LiveKit participant has publish rights (i.e. is a
+ * speaker on stage). The LiveKit participant exposes
+ * `permissions.canPublish`; when the permission metadata is unavailable
+ * we fall back to the microphone state as a best-effort signal.
  */
-function resolveParticipantMode(
-  identity: string,
-  isLocal: boolean,
-  canPublish: boolean
-): 'speaker' | 'audience' {
-  if (isLocal) return 'speaker';
-  return canPublish ? 'speaker' : 'audience';
-}
-
-function RoomGrid({
-  identity,
-  displayName,
-  isHost,
-  hostActions,
-  profiles,
-}: RoomGridProps): ReactElement {
-  const participants = useParticipants();
-  const { localParticipant } = useLocalParticipant();
-
-  const onLocalMuteToggle = useCallback(async () => {
-    if (!localParticipant) return;
-    try {
-      const next = !localParticipant.isMicrophoneEnabled;
-      await localParticipant.setMicrophoneEnabled(next);
-    } catch {
-      // Best-effort: the LocalAudioControls button remains available.
-    }
-  }, [localParticipant]);
-
-  return (
-    <div
-      className="grid gap-3 sm:grid-cols-2"
-      data-testid="participants-grid"
-    >
-      {participants.length === 0 ? (
-        <p className="col-span-full text-sm text-slate-400">
-          Waiting for others to join…
-        </p>
-      ) : null}
-      {participants.map((p) => {
-        const isLocal = p.identity === identity;
-        const isMuted = !p.isMicrophoneEnabled;
-        const isSpeaking = p.isSpeaking;
-        const profile = profiles[p.identity];
-        const mode = resolveParticipantMode(p.identity, isLocal, !isMuted);
-        // Prefer resolved handle / displayName from the users endpoint,
-        // fall back to the LiveKit-provided name / identity.
-        const resolvedHandle = profile?.handle ?? p.identity;
-        const resolvedName =
-          profile?.displayName ?? (isLocal ? displayName : undefined) ?? p.name ?? resolvedHandle;
-        return (
-          <AudioParticipant
-            key={p.identity}
-            identity={p.identity}
-            did={p.identity}
-            name={resolvedName}
-            handle={profile?.handle}
-            avatarUrl={profile?.avatarUrl ?? null}
-            isMuted={isMuted}
-            isSpeaking={isSpeaking}
-            isLocal={isLocal}
-            isHost={isHost}
-            mode={mode}
-            onInvite={hostActions?.onInvite ? () => hostActions.onInvite!(p.identity) : undefined}
-            onMuteToggle={hostActions?.onMuteToggle ? () => hostActions.onMuteToggle!(p.identity, isMuted) : undefined}
-            onRemoveFromStage={hostActions?.onRemoveFromStage ? () => hostActions.onRemoveFromStage!(p.identity) : undefined}
-            onRemoveFromSpace={hostActions?.onRemoveFromSpace ? () => hostActions.onRemoveFromSpace!(p.identity) : undefined}
-            onBlock={hostActions?.onBlock ? () => hostActions.onBlock!(p.identity) : undefined}
-            onLocalMuteToggle={isLocal ? () => void onLocalMuteToggle() : undefined}
-          />
-        );
-      })}
-    </div>
-  );
+function canPublishFor(p: Participant | undefined | null): boolean {
+  if (!p) return false;
+  const perms = (p as { permissions?: { canPublish?: boolean } }).permissions;
+  if (perms && typeof perms.canPublish === 'boolean') {
+    return perms.canPublish;
+  }
+  return Boolean((p as { isMicrophoneEnabled?: boolean }).isMicrophoneEnabled);
 }
 
 /**
  * HostAutoUnmute: when the role is 'host', enable the local microphone
  * exactly once after the room connects so the host appears as a live
- * speaker rather than a muted presence on the stage.
+ * speaker.
  */
 function HostAutoUnmute({ role }: { role: SpaceRole }): null {
   const { localParticipant } = useLocalParticipant();
@@ -258,13 +192,403 @@ function HostAutoUnmute({ role }: { role: SpaceRole }): null {
     if (!localParticipant) return;
     enabledRef.current = true;
     void localParticipant.setMicrophoneEnabled(true).catch(() => {
-      // If enabling fails (permission denied, no device, etc.) the user
-      // can still toggle manually via LocalAudioControls.
       enabledRef.current = false;
     });
   }, [localParticipant, role]);
 
   return null;
+}
+
+/**
+ * Inner content rendered inside `LiveKitRoom`. Has access to room
+ * context hooks and renders the redesigned grid + bottom bar.
+ */
+interface InnerProps {
+  identity: string;
+  displayName?: string;
+  isHost: boolean;
+  hostActions: SpaceRoomProps['hostActions'];
+  mergedProfiles: ResolvedProfileMap;
+  handleLeave: () => void;
+  role: SpaceRole;
+  title: string;
+  host: SpaceRoomProps['host'];
+  shareableUrl: string;
+  posts: PublicSpacePost[];
+  postsError: string | null;
+  onPostAdded: () => void;
+  isLive: boolean;
+  onLiveChange: (next: boolean) => void;
+  spaceId: string;
+  recording: PublicRecording | null;
+  handRaised: boolean;
+  toggleHand: () => void;
+  onReact: (emoji: string) => void;
+  floatingReactions: FloatingReactionState[];
+  removeFloatingReaction: (id: string) => void;
+  pendingInvite: { hostName?: string } | null;
+  inviteBusy: boolean;
+  onAcceptInvite: () => void;
+  onDeclineInvite: () => void;
+  stageSlot?: ReactNode;
+  stageControlsProps: StageControlsProps;
+}
+
+function Inner({
+  identity,
+  displayName,
+  isHost,
+  hostActions,
+  mergedProfiles,
+  handleLeave,
+  role,
+  title,
+  host,
+  shareableUrl,
+  posts,
+  postsError,
+  onPostAdded,
+  isLive,
+  onLiveChange,
+  spaceId,
+  recording,
+  handRaised,
+  toggleHand,
+  onReact,
+  floatingReactions,
+  removeFloatingReaction,
+  pendingInvite,
+  inviteBusy,
+  onAcceptInvite,
+  onDeclineInvite,
+  stageSlot,
+  stageControlsProps,
+}: InnerProps): ReactElement {
+  const participants = useParticipants();
+  const { localParticipant } = useLocalParticipant();
+  const localAvatarRef = useRef<HTMLDivElement | null>(null);
+  const [micOn, setMicOn] = useState<boolean>(
+    Boolean(localParticipant?.isMicrophoneEnabled)
+  );
+  const [invitedSet, setInvitedSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setMicOn(Boolean(localParticipant?.isMicrophoneEnabled));
+  }, [localParticipant?.isMicrophoneEnabled]);
+
+  const onMicToggle = useCallback(async () => {
+    if (!localParticipant) return;
+    try {
+      const next = !localParticipant.isMicrophoneEnabled;
+      await localParticipant.setMicrophoneEnabled(next);
+      setMicOn(next);
+    } catch {
+      /* swallow */
+    }
+  }, [localParticipant]);
+
+  const onStepDown = useCallback(() => {
+    if (!localParticipant) return;
+    void localParticipant.setMicrophoneEnabled(false).catch(() => {});
+  }, [localParticipant]);
+
+  // Partition participants into speakers / audience using permissions.
+  const speakers: Participant[] = [];
+  const audience: Participant[] = [];
+  for (const p of participants) {
+    if (canPublishFor(p)) speakers.push(p);
+    else audience.push(p);
+  }
+
+  const localIdentityKey = localParticipant?.identity || identity;
+  const localOnStage =
+    isHost || role === 'host' || canPublishFor(localParticipant);
+  if (
+    localOnStage &&
+    localParticipant &&
+    !speakers.some((p) => p.identity === localIdentityKey)
+  ) {
+    speakers.unshift(localParticipant);
+  }
+
+  const bottomRole: BottomRole = useMemo(() => {
+    if (isHost) return 'host';
+    if (localOnStage) return 'speaker';
+    return 'audience';
+  }, [isHost, localOnStage]);
+
+  const resolveIdentity = useCallback(
+    (p: Participant): string => p.identity || identity,
+    [identity]
+  );
+
+  const localResolved = mergedProfiles[identity];
+  const localHandle = localResolved?.handle;
+  const localAvatar = localResolved?.avatarUrl ?? null;
+  const localName =
+    localResolved?.displayName ??
+    displayName ??
+    (localHandle ? `@${localHandle}` : 'You');
+
+  const displayFor = useCallback(
+    (p: Participant): string => {
+      const id = resolveIdentity(p);
+      const isLocal = id === localIdentityKey;
+      const profile = mergedProfiles[id];
+      const fallback = isLocal
+        ? displayName ?? undefined
+        : (p as { name?: string }).name ?? undefined;
+      const display = profile?.displayName?.trim() || fallback?.trim();
+      if (display && !display.startsWith('did:')) return display;
+      if (profile?.handle && !profile.handle.startsWith('did:')) {
+        return `@${profile.handle}`;
+      }
+      if (isLocal && localHandle) return `@${localHandle}`;
+      return id.startsWith('did:') ? 'Listener' : id;
+    },
+    [displayName, identity, localHandle, localIdentityKey, mergedProfiles, resolveIdentity]
+  );
+
+  const handleFor = useCallback(
+    (p: Participant): string | undefined => {
+      const id = resolveIdentity(p);
+      return mergedProfiles[id]?.handle;
+    },
+    [identity, mergedProfiles, resolveIdentity]
+  );
+
+  const avatarFor = useCallback(
+    (p: Participant): string | null | undefined => {
+      const id = resolveIdentity(p);
+      return mergedProfiles[id]?.avatarUrl ?? null;
+    },
+    [identity, mergedProfiles, resolveIdentity]
+  );
+
+  const isLocalParticipant = useCallback(
+    (p: Participant): boolean => resolveIdentity(p) === localIdentityKey,
+    [localIdentityKey, resolveIdentity]
+  );
+
+  const listenerCount = audience.length + speakers.length;
+
+  const navAvatar = (
+    <div className="flex items-center gap-2" data-testid="nav-avatar">
+      <div
+        ref={localAvatarRef}
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-700)] ring-1 ring-[var(--color-neutral-800)]"
+        data-testid="nav-avatar-tile"
+        data-local-avatar="true"
+      >
+        {localAvatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={localAvatar}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-[10px] font-semibold text-[var(--color-accent-100)]">
+            YOU
+          </span>
+        )}
+      </div>
+      <span className="hidden text-sm text-[var(--color-neutral-300)] sm:inline">
+        {localName}
+      </span>
+    </div>
+  );
+
+  const onStageSection = (
+    <section
+      className="flex flex-col gap-3"
+      data-testid="on-stage-section"
+    >
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
+        On stage
+      </h2>
+      {speakers.length === 0 ? (
+        <p
+          className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface)]/40 p-4 text-sm text-[var(--color-neutral-500)]"
+          data-testid="on-stage-empty"
+        >
+          No speakers yet.
+        </p>
+      ) : (
+        <div
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          data-testid="speakers-grid"
+        >
+          {speakers.map((p) => {
+            const id = resolveIdentity(p);
+            const isLocal = isLocalParticipant(p);
+            return (
+              <SpeakerCard
+                key={id}
+                identity={id}
+                name={displayFor(p)}
+                handle={handleFor(p)}
+                avatarUrl={avatarFor(p)}
+                isHost={isHost && isLocal}
+                isHostCard={isHost && !isLocal}
+                isLocal={isLocal}
+                isMuted={!p.isMicrophoneEnabled}
+                isSpeaking={p.isSpeaking}
+                avatarRef={isLocal ? localAvatarRef : undefined}
+                onMuteToggle={
+                  hostActions?.onMuteToggle
+                    ? () =>
+                        hostActions.onMuteToggle!(
+                          id,
+                          !p.isMicrophoneEnabled
+                        )
+                    : undefined
+                }
+                onRemoveFromStage={
+                  hostActions?.onRemoveFromStage
+                    ? () => hostActions.onRemoveFromStage!(id)
+                    : undefined
+                }
+                onBlock={
+                  hostActions?.onBlock
+                    ? () => hostActions.onBlock!(id)
+                    : undefined
+                }
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+
+  const audienceSection = isHost ? (
+    <section
+      className="flex flex-col gap-3"
+      data-testid="audience-section"
+      data-view="rows"
+    >
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
+        Listening · {audience.length}
+      </h2>
+      <AudienceRows
+        audience={audience.map<AudienceMember>((p) => ({
+          identity: resolveIdentity(p),
+          name: displayFor(p),
+          handle: handleFor(p),
+          avatarUrl: avatarFor(p) ?? null,
+        }))}
+        invitedSet={invitedSet}
+        onInvite={async (target) => {
+          setInvitedSet((prev) => {
+            if (prev.has(target)) return prev;
+            const next = new Set(prev);
+            next.add(target);
+            return next;
+          });
+          try {
+            await hostActions?.onInvite?.(target);
+          } catch {
+            setInvitedSet((prev) => {
+              const next = new Set(prev);
+              next.delete(target);
+              return next;
+            });
+          }
+        }}
+      />
+    </section>
+  ) : (
+    <section
+      className="flex flex-col gap-3"
+      data-testid="audience-section"
+      data-view="bubbles"
+    >
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
+        Listening · {audience.length + 1}
+      </h2>
+      <AudienceBubbles
+        localIdentity={localIdentityKey}
+        localName={localName}
+        localHandle={localHandle}
+        localAvatarUrl={localAvatar ?? null}
+        localAvatarRef={localAvatarRef}
+        audience={audience.map<AudienceMember>((p) => ({
+          identity: resolveIdentity(p),
+          name: displayFor(p),
+          handle: handleFor(p),
+          avatarUrl: avatarFor(p) ?? null,
+        }))}
+      />
+    </section>
+  );
+
+  return (
+    <>
+      <HostAutoUnmute role={role} />
+      <StageControls {...stageControlsProps} />
+      {stageSlot}
+      <NocturneShell
+        navAvatar={navAvatar}
+        header={
+          <RoomHeader
+            title={title}
+            host={host}
+            listenerCount={listenerCount}
+            shareableUrl={shareableUrl}
+          />
+        }
+        main={
+          <div className="flex flex-col gap-6">
+            {pendingInvite ? (
+              <StageInviteToast
+                hostName={pendingInvite.hostName}
+                busy={inviteBusy}
+                onAccept={onAcceptInvite}
+                onDecline={onDeclineInvite}
+              />
+            ) : null}
+            {onStageSection}
+            {audienceSection}
+          </div>
+        }
+        sidebar={
+          <RoomSidebar
+            spaceId={spaceId}
+            isHost={isHost}
+            isLive={isLive}
+            onLiveChange={onLiveChange}
+            posts={posts}
+            postsError={postsError}
+            onPostAdded={onPostAdded}
+            recording={recording}
+          />
+        }
+        bottomBar={
+          <BottomControlBar
+            role={bottomRole}
+            micOn={micOn}
+            onMicToggle={onMicToggle}
+            onLeave={handleLeave}
+            onStepDown={onStepDown}
+            onReact={onReact}
+            handRaised={handRaised}
+            onToggleHand={toggleHand}
+          />
+        }
+      />
+      {floatingReactions.map((r) => (
+        <FloatingReaction
+          key={r.id}
+          id={r.id}
+          emoji={r.emoji}
+          x={r.x}
+          y={r.y}
+          onDone={removeFloatingReaction}
+        />
+      ))}
+    </>
+  );
 }
 
 export function SpaceRoom({
@@ -279,41 +603,63 @@ export function SpaceRoom({
   stageSlot,
   isHost = false,
   hostActions,
+  title,
+  host,
+  shareableUrl,
+  posts,
+  postsError,
+  onPostAdded,
+  isLive,
+  onLiveChange,
+  spaceId,
+  recording,
 }: SpaceRoomProps): ReactElement {
   const roomOptions = useMemo(
     () => ({
-      // Audio-only: don't publish camera / screenshare.
       adaptiveStream: true,
       dynacast: true,
     }),
     []
   );
 
-  // Build a Room instance once so the same room is reused between renders.
   const room = useMemo(() => new Room(roomOptions), [roomOptions]);
+  const reactionId = useId();
 
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [handRaised, setHandRaised] = useState(false);
+  const [floatingReactions, setFloatingReactions] = useState<
+    FloatingReactionState[]
+  >([]);
+  const [pendingInvite, setPendingInvite] = useState<{
+    hostName?: string;
+  } | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+
+  const toggleHand = useCallback(() => setHandRaised((v) => !v), []);
 
   const handleConnected = useCallback(() => {
     setConnectionError(null);
   }, []);
 
-  // NOTE: do NOT automatically leave on disconnect. Transient disconnects
-  // (e.g. mobile network blips, server restart) should be handled by
-  // LiveKit's own reconnection logic. `onLeave` is now reserved for an
-  // explicit user action via LocalAudioControls.
   const handleDisconnected = useCallback(() => {
-    // Intentionally a no-op: SpacePageClient owns the "leave" decision.
+    // Intentionally a no-op: parent owns the leave decision.
   }, []);
 
   const handleError = useCallback((err: Error) => {
     setConnectionError(err?.message ?? 'Connection error.');
-    // Log to console for diagnostics; do not unmount the room.
     // eslint-disable-next-line no-console
     console.error('[SpaceRoom] LiveKit error:', err);
   }, []);
 
-  // Surface connection state changes in console for future diagnostics.
+  const handleLeave = useCallback(() => {
+    try {
+      room.disconnect();
+    } catch {
+      /* swallow */
+    }
+    onLeave?.();
+  }, [onLeave, room]);
+
   useEffect(() => {
     const logState = (state: string): void => {
       // eslint-disable-next-line no-console
@@ -336,18 +682,8 @@ export function SpaceRoom({
     };
   }, [room]);
 
-  const handleLeave = useCallback(() => {
-    try {
-      room.disconnect();
-    } catch {
-      /* swallow */
-    }
-    onLeave?.();
-  }, [onLeave, room]);
-
   // Pre-seed the profile map with the locally-known handle so the host
-  // header can render a friendly label immediately, without waiting for
-  // the /api/users round-trip.
+  // header can render a friendly label immediately.
   const seededProfiles = useMemo<ResolvedProfileMap>(() => {
     if (!handle && !avatarUrl && !displayName) return {};
     return {
@@ -361,16 +697,8 @@ export function SpaceRoom({
 
   const profiles = useResolvedProfiles([identity]);
 
-  // Merge order matters: seededProfiles (which carry the fresh handle /
-  // avatarUrl from the join/start-now response) must win over whatever
-  // /api/users returns for the local DID. Otherwise a stale or missing
-  // row in the DB would clobber the avatarUrl we just received.
   const mergedProfiles = useMemo<ResolvedProfileMap>(() => {
     const next: ResolvedProfileMap = { ...profiles, ...seededProfiles };
-    // Defence in depth: if the seed has an avatarUrl but the merged map
-    // somehow ended up with a null/empty value for the local identity,
-    // restore it. Also verify the seed is keyed by `identity` so the
-    // RoomGrid lookup (`profiles[p.identity]`) hits.
     const seeded = seededProfiles[identity];
     if (seeded) {
       const current = next[identity] ?? {};
@@ -386,48 +714,83 @@ export function SpaceRoom({
     return next;
   }, [identity, profiles, seededProfiles]);
 
-  const localProfile = mergedProfiles[identity];
-  const identityLabel = friendlyLabelFor(
-    identity,
-    localProfile,
-    handle ? `@${handle}` : displayName
+  const removeFloatingReaction = useCallback((id: string) => {
+    setFloatingReactions((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const handleReact = useCallback(
+    (emoji: string) => {
+      const el = document.querySelector<HTMLElement>('[data-local-avatar="true"]');
+      let x = window.innerWidth / 2;
+      let y = window.innerHeight / 2;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        x = rect.left + rect.width / 2;
+        y = rect.top;
+      }
+      const id = `${reactionId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 7)}`;
+      setFloatingReactions((prev) => [...prev, { id, emoji, x, y }]);
+    },
+    [reactionId]
   );
 
-  // Diagnostic: log the seeded and merged profile maps so we can confirm
-  // whether the avatarUrl from the join/start-now response is reaching
-  // the participant grid. This is a temporary debug aid.
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('[SpaceRoom] profiles', {
+  // StageControls renders no visible DOM but bridges useSpaceState to the
+  // parent via callbacks. The pending-invite toast is owned by StageControls
+  // (rendered via React portal to document.body) so SpaceRoom itself stays
+  // free of accept/decline logic.
+  const stageControlsProps: StageControlsProps = useMemo(
+    () => ({
+      spaceId,
       identity,
-      seededProfiles,
-      mergedProfiles,
-    });
-  }, [identity, mergedProfiles, seededProfiles]);
+      displayName: displayName ?? (handle ? `@${handle}` : identity),
+      role: isHost || role === 'host' ? 'host' : 'audience',
+      onTokenRefresh: () => {
+        // No-op at the SpaceRoom level. The parent (SpacePageClient) owns
+        // the join token; if promotion requires a token rotation it
+        // should re-issue the token via its own pipeline.
+      },
+      onInvitePending: (hostName) => {
+        setPendingInvite((prev) => prev ?? { hostName });
+      },
+      onInviteResolved: () => {
+        setPendingInvite(null);
+        setInviteBusy(false);
+      },
+    }),
+    [displayName, handle, identity, isHost, role, spaceId]
+  );
+
+  const handleAcceptInvite = useCallback(async () => {
+    setInviteBusy(true);
+    const bus = getStageControlsBus();
+    if (bus) await bus.accept();
+    setPendingInvite(null);
+    setInviteBusy(false);
+  }, []);
+
+  const handleDeclineInvite = useCallback(async () => {
+    const bus = getStageControlsBus();
+    if (bus) await bus.decline();
+    setPendingInvite(null);
+    setInviteBusy(false);
+  }, []);
 
   return (
     <div
-      className="flex flex-col gap-4 rounded-lg border border-slate-800 bg-slate-900 p-4"
+      className="flex flex-col"
       data-testid="space-room"
       data-role={role}
     >
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-slate-400">
-          {role === 'host' ? 'You are the host' : 'You are in the audience'}
-        </h2>
-        <span className="text-xs text-slate-500" data-testid="identity-label">
-          {identityLabel}
-        </span>
-      </div>
-
       {connectionError ? (
-        <p
+        <div
           role="alert"
-          className="rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-xs text-red-200"
+          className="mx-auto my-3 max-w-md rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-xs text-red-200"
           data-testid="space-room-error"
         >
           {connectionError}
-        </p>
+        </div>
       ) : null}
 
       <LiveKitRoom
@@ -435,33 +798,44 @@ export function SpaceRoom({
         token={token}
         serverUrl={wsUrl}
         connect={true}
-        audio={role === 'host'}
+        audio={true}
         video={false}
         onConnected={handleConnected}
         onDisconnected={handleDisconnected}
         onError={handleError}
         data-lk-theme="default"
       >
-        <HostAutoUnmute role={role} />
-        <RoomGrid
+        <Inner
           identity={identity}
           displayName={displayName}
           isHost={isHost}
           hostActions={hostActions}
-          profiles={mergedProfiles}
+          mergedProfiles={mergedProfiles}
+          handleLeave={handleLeave}
+          role={role}
+          title={title}
+          host={host}
+          shareableUrl={shareableUrl}
+          posts={posts}
+          postsError={postsError}
+          onPostAdded={onPostAdded}
+          isLive={isLive}
+          onLiveChange={onLiveChange}
+          spaceId={spaceId}
+          recording={recording ?? null}
+          handRaised={handRaised}
+          toggleHand={toggleHand}
+          onReact={handleReact}
+          floatingReactions={floatingReactions}
+          removeFloatingReaction={removeFloatingReaction}
+          pendingInvite={pendingInvite}
+          inviteBusy={inviteBusy}
+          onAcceptInvite={handleAcceptInvite}
+          onDeclineInvite={handleDeclineInvite}
+          stageSlot={stageSlot}
+          stageControlsProps={stageControlsProps}
         />
-        <div className="mt-4">
-          <LocalAudioControls
-            onLeave={handleLeave}
-          />
-        </div>
-        {stageSlot ? (
-          <div className="mt-4 flex flex-col gap-3" data-testid="stage-slot">
-            {stageSlot}
-          </div>
-        ) : null}
       </LiveKitRoom>
-
     </div>
   );
 }

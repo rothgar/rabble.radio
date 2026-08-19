@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="nocturne/styles.css">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+body{margin:0}
+@keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes float-up{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-60px);opacity:0}}
+a{color:var(--color-accent)}
+a:hover{color:var(--color-accent-400)}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text)">
+
+  <div class="nav" style="border-bottom:1px solid var(--color-divider)">
+    <span class="nav-brand" style="display:flex;align-items:center;gap:8px">
+      <i class="ph-bold ph-broadcast" style="color:var(--color-accent);font-size:20px"></i>Rabble Radio
+    </span>
+    <div style="width:36px;height:36px;border-radius:50%;background:var(--color-accent-700);color:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex:none;margin-left:auto">YOU</div>
+  </div>
+
+  <div style="flex:1;padding:var(--space-6) var(--space-6) var(--space-8);display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,320px);gap:var(--space-6);max-width:1180px;width:100%;margin:0 auto;align-items:start">
+
+    <main style="display:flex;flex-direction:column;gap:var(--space-6);min-width:0">
+
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-3)">
+          <span class="tag tag-accent" style="display:inline-flex;align-items:center;gap:6px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--color-accent-100);display:inline-block;animation:pulse-live 1.6s ease-in-out infinite"></span>LIVE
+          </span>
+          <span class="tag tag-neutral">Books &amp; Reading</span>
+        </div>
+        <h1 style="margin-bottom:8px">Banned Books We Love</h1>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--color-accent-700);color:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex:none">MC</div>
+            <span class="text-muted" style="font-size:14px">Hosted by <a href="#">@maria.bsky.social</a></span>
+          </div>
+          <span class="text-muted" style="font-size:13px">· {{ listenerCount }} listening</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:var(--space-4)">
+          <button class="btn btn-secondary"><i class="ph ph-share-network"></i>Share</button>
+          <button class="btn btn-ghost"><i class="ph ph-link-simple"></i>Copy link</button>
+        </div>
+      </div>
+
+      <sc-if value="{{ showInviteToast }}" hint-placeholder-val="{{ false }}">
+        <div class="card elev-md" style="border:1px solid var(--color-accent-700);flex-direction:row;align-items:center;gap:12px">
+          <i class="ph-bold ph-hand-waving" style="font-size:22px;color:var(--color-accent);flex:none"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500">Maria invited you to speak</div>
+            <div class="text-muted" style="font-size:12px">Accept to join the stage with your mic.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex:none">
+            <button class="btn btn-secondary" onClick="{{ declineInvite }}">Decline</button>
+            <button class="btn btn-primary" onClick="{{ acceptInvite }}">Accept</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <section>
+        <h6 style="opacity:.6;margin-bottom:var(--space-3)">On stage</h6>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--space-3)">
+          <sc-for list="{{ speakers }}" as="sp" hint-placeholder-count="3">
+            <div class="card elev-sm" style="padding:14px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <sc-if value="{{ sp.hasHandle }}" hint-placeholder-val="{{ true }}">
+                  <a href="https://bsky.app/profile/{{ sp.handle }}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;text-decoration:none;color:inherit" style-hover="opacity:0.82">
+                    <div style="position:relative;flex:none">
+                      <div ref="{{ sp.avatarRef }}" style="width:56px;height:56px;border-radius:50%;background:var(--color-accent-700);color:var(--color-accent-100);box-shadow:{{ sp.ring }};display:flex;align-items:center;justify-content:center;font-weight:500;font-size:16px">{{ sp.initials }}</div>
+                      <sc-if value="{{ sp.muted }}" hint-placeholder-val="{{ false }}">
+                        <span style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--color-neutral-700);border:2px solid var(--color-surface);display:flex;align-items:center;justify-content:center;color:var(--color-neutral-200);font-size:11px">
+                          <i class="ph-fill ph-microphone-slash"></i>
+                        </span>
+                      </sc-if>
+                    </div>
+                    <div style="min-width:0;flex:1">
+                      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                        <span style="font-size:14px;font-weight:500">{{ sp.name }}</span>
+                        <sc-if value="{{ sp.isHost }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent-2">Host</span></sc-if>
+                      </div>
+                      <div style="font-size:12px;color:var(--color-accent-300)">@{{ sp.handle }}</div>
+                    </div>
+                  </a>
+                </sc-if>
+                <sc-if value="{{ sp.noHandle }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+                    <div style="position:relative;flex:none">
+                      <div ref="{{ sp.avatarRef }}" style="width:56px;height:56px;border-radius:50%;background:var(--color-accent-700);color:var(--color-accent-100);box-shadow:{{ sp.ring }};display:flex;align-items:center;justify-content:center;font-weight:500;font-size:16px">{{ sp.initials }}</div>
+                      <sc-if value="{{ sp.muted }}" hint-placeholder-val="{{ false }}">
+                        <span style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--color-neutral-700);border:2px solid var(--color-surface);display:flex;align-items:center;justify-content:center;color:var(--color-neutral-200);font-size:11px">
+                          <i class="ph-fill ph-microphone-slash"></i>
+                        </span>
+                      </sc-if>
+                    </div>
+                    <div style="min-width:0;flex:1">
+                      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                        <span style="font-size:14px;font-weight:500">{{ sp.name }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ sp.canManage }}" hint-placeholder-val="{{ false }}">
+                  <button class="btn btn-icon btn-ghost" onClick="{{ sp.toggleMenu }}" aria-label="Manage speaker"><i class="ph ph-dots-three-vertical"></i></button>
+                </sc-if>
+              </div>
+              <sc-if value="{{ sp.showMenu }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-divider)">
+                  <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onClick="{{ sp.toggleMute }}"><i class="ph {{ sp.muteIcon }}"></i>{{ sp.muteLabel }}</button>
+                  <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onClick="{{ sp.removeFromStage }}"><i class="ph ph-user-minus"></i>Remove from stage</button>
+                  <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onClick="{{ sp.block }}"><i class="ph ph-prohibit"></i>Block</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section>
+        <h6 style="opacity:.6;margin-bottom:var(--space-3)">Listening · {{ listenerCount }}</h6>
+
+        <sc-if value="{{ isListener }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-wrap:wrap;gap:12px">
+            <div ref="{{ meAvatarRef }}" title="You" style="width:52px;height:52px;border-radius:50%;background:var(--color-accent-700);color:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex:none">YOU</div>
+            <sc-for list="{{ audience }}" as="au" hint-placeholder-count="8">
+              <a href="https://bsky.app/profile/{{ au.handle }}" target="_blank" rel="noopener noreferrer" title="{{ au.name }} (@{{ au.handle }})" aria-label="View {{ au.name }}'s profile" style="width:52px;height:52px;border-radius:50%;background:var(--color-neutral-800);color:var(--color-neutral-200);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;flex:none;text-decoration:none;cursor:pointer" style-hover="background:var(--color-neutral-700);box-shadow:0 0 0 2px var(--color-accent-600)">{{ au.initials }}</a>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isHost }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+            <sc-for list="{{ audience }}" as="au" hint-placeholder-count="8">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-md);background:var(--color-surface);min-width:0">
+                <a href="https://bsky.app/profile/{{ au.handle }}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;text-decoration:none;color:inherit" style-hover="opacity:0.82">
+                  <div style="width:36px;height:36px;border-radius:50%;background:var(--color-neutral-800);color:var(--color-neutral-200);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex:none">{{ au.initials }}</div>
+                  <div style="min-width:0;flex:1">
+                    <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ au.name }}</div>
+                    <div style="font-size:11px;color:var(--color-accent-300)">@{{ au.handle }}</div>
+                  </div>
+                </a>
+                <sc-if value="{{ au.invited }}" hint-placeholder-val="{{ false }}"><span class="tag tag-outline" style="flex:none">Invited</span></sc-if>
+                <sc-if value="{{ au.notInvited }}" hint-placeholder-val="{{ true }}">
+                  <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;flex:none" onClick="{{ au.invite }}"><i class="ph ph-plus"></i>Invite</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </section>
+    </main>
+
+    <aside style="display:flex;flex-direction:column;gap:var(--space-4)">
+      <sc-if value="{{ isHost }}" hint-placeholder-val="{{ false }}">
+        <div class="card elev-sm">
+          <div class="card-kicker">Space controls</div>
+          <div style="display:flex;align-items:center;gap:8px;margin:2px 0 10px">
+            <span style="width:8px;height:8px;border-radius:50%;background:{{ liveDotColor }};display:inline-block;flex:none"></span>
+            <span style="font-size:13px">{{ liveStatusLabel }}</span>
+          </div>
+          <button class="btn btn-secondary btn-block" onClick="{{ toggleLiveStatus }}"><i class="ph {{ liveToggleIcon }}"></i>{{ liveToggleLabel }}</button>
+          <button class="btn btn-secondary btn-block" onClick="{{ openConfirmEnd }}"><i class="ph ph-stop-circle"></i>End space</button>
+        </div>
+      </sc-if>
+
+      <div class="card elev-sm">
+        <div class="card-kicker" style="display:flex;align-items:center;gap:6px"><i class="ph ph-chat-circle-text"></i>Pinned from Bluesky</div>
+        <sc-if value="{{ isHost }}" hint-placeholder-val="{{ false }}">
+          <div class="field" style="margin-top:8px">
+            <input class="input" type="text" placeholder="Paste a Bluesky post URL to share..."/>
+          </div>
+          <button class="btn btn-secondary btn-block"><i class="ph ph-push-pin"></i>Share to room</button>
+        </sc-if>
+        <sc-for list="{{ posts }}" as="post" hint-placeholder-count="2">
+          <div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--color-divider)">
+            <div style="width:30px;height:30px;border-radius:50%;background:var(--color-accent-700);color:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex:none">{{ post.initials }}</div>
+            <div style="min-width:0;flex:1">
+              <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+                <span style="font-size:13px;font-weight:500">{{ post.author }}</span>
+                <span class="text-muted" style="font-size:11px">@{{ post.handle }} · {{ post.time }}</span>
+              </div>
+              <p style="font-size:13px;margin:4px 0 0;opacity:.9">{{ post.text }}</p>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+  </div>
+
+  <div style="position:sticky;bottom:0;background:color-mix(in srgb, var(--color-bg) 90%, transparent);backdrop-filter:blur(8px);border-top:1px solid var(--color-divider);padding:var(--space-4) var(--space-6);display:flex;align-items:center;justify-content:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:4px;padding-right:14px;margin-right:6px;border-right:1px solid var(--color-divider)">
+      <sc-for list="{{ reactionOptions }}" as="opt" hint-placeholder-count="5">
+        <button class="btn btn-icon btn-ghost" style="font-size:18px" onClick="{{ opt.send }}" aria-label="React with {{ opt.emoji }}">{{ opt.emoji }}</button>
+      </sc-for>
+    </div>
+    <sc-if value="{{ showHostControls }}" hint-placeholder-val="{{ false }}">
+      <button class="btn btn-primary" onClick="{{ toggleMic }}"><i class="ph {{ micIcon }}"></i>{{ micLabel }}</button>
+      <button class="btn btn-secondary"><i class="ph ph-sign-out"></i>Leave</button>
+    </sc-if>
+    <sc-if value="{{ showPromotedControls }}" hint-placeholder-val="{{ false }}">
+      <button class="btn btn-primary" onClick="{{ toggleMic }}"><i class="ph {{ micIcon }}"></i>{{ micLabel }}</button>
+      <button class="btn btn-secondary" onClick="{{ stepDown }}"><i class="ph ph-arrow-down"></i>Step down</button>
+      <button class="btn btn-secondary"><i class="ph ph-sign-out"></i>Leave</button>
+    </sc-if>
+    <sc-if value="{{ showWaitingControls }}" hint-placeholder-val="{{ true }}">
+      <button class="btn btn-primary" style="min-width:190px" onClick="{{ toggleHandRaised }}"><i class="ph ph-hand-palm"></i>{{ handLabel }}</button>
+      <button class="btn btn-secondary"><i class="ph ph-sign-out"></i>Leave</button>
+    </sc-if>
+  </div>
+</div>
+
+<div style="position:fixed;inset:0;pointer-events:none;z-index:60">
+  <sc-for list="{{ floatingReactions }}" as="fr" hint-placeholder-count="0">
+    <span style="position:fixed;left:{{ fr.x }}px;top:{{ fr.y }}px;transform:translate(-50%,-50%)">
+      <span style="display:inline-block;font-size:22px;animation:float-up 1.6s ease-out forwards">{{ fr.emoji }}</span>
+    </span>
+  </sc-for>
+</div>
+
+<sc-if value="{{ confirmEndOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop">
+    <div class="dialog">
+      <div class="dialog-title">End this space?</div>
+      <div class="dialog-body">Everyone listening will be disconnected. Any recording in progress will stop and be saved for playback.</div>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" onClick="{{ closeConfirmEnd }}">Cancel</button>
+        <button class="btn btn-primary" onClick="{{ confirmEnd }}">End space</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;viewMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;listener&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;listener&quot;,&quot;host&quot;],&quot;section&quot;:&quot;Preview&quot;},&quot;pendingInvite&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Preview&quot;}}">
+function initials(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '??';
+  return trimmed.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+}
+
+class Component extends DCLogic {
+  meAvatarRef = React.createRef();
+  state = {
+    viewMode: this.props.viewMode === 'host' ? 'host' : 'listener',
+    micOn: true,
+    handRaised: false,
+    promoted: false,
+    inviteToastOpen: this.props.pendingInvite ?? true,
+    openMenuId: null,
+    confirmEndOpen: false,
+    liveStatus: 'live',
+    floatingReactions: [],
+    speakers: [
+      { id: 'host', name: 'Maria Chen', handle: 'maria.bsky.social', isHost: true, speaking: true, muted: false },
+      { id: 'jordan', name: 'Jordan Lee', handle: 'jordanlee.bsky.social', isHost: false, speaking: false, muted: false },
+      { id: 'sam', name: 'Sam Okafor', handle: 'samokafor.bsky.social', isHost: false, speaking: false, muted: true },
+    ],
+    audience: [
+      { id: 'a1', name: 'Priya Nair', handle: 'priyanair.bsky.social', invited: false },
+      { id: 'a2', name: 'Tomás Rivera', handle: 'tomas.bsky.social', invited: false },
+      { id: 'a3', name: 'Ellie Osei', handle: 'ellie.bsky.social', invited: false },
+      { id: 'a4', name: 'Kenji Watanabe', handle: 'kenji.bsky.social', invited: false },
+      { id: 'a5', name: 'Nadia Farouk', handle: 'nadia.bsky.social', invited: false },
+      { id: 'a6', name: 'Owen Clarke', handle: 'owenc.bsky.social', invited: false },
+      { id: 'a7', name: 'Ines Vidal', handle: 'inesv.bsky.social', invited: false },
+      { id: 'a8', name: 'Marcus Webb', handle: 'marcusw.bsky.social', invited: false },
+      { id: 'a9', name: 'Sofia Marin', handle: 'sofiamarin.bsky.social', invited: false },
+      { id: 'a10', name: 'Deshawn Price', handle: 'deshawn.bsky.social', invited: false },
+      { id: 'a11', name: 'Liu Wen', handle: 'liuwen.bsky.social', invited: false },
+      { id: 'a12', name: 'Amara Nwosu', handle: 'amaran.bsky.social', invited: false },
+      { id: 'a13', name: 'Felix Bauer', handle: 'felixb.bsky.social', invited: false },
+      { id: 'a14', name: 'Rina Sato', handle: 'rinasato.bsky.social', invited: false },
+      { id: 'a15', name: 'Grace Kim', handle: 'gracekim.bsky.social', invited: false },
+      { id: 'a16', name: 'Theo Novak', handle: 'theon.bsky.social', invited: false },
+      { id: 'a17', name: 'Layla Haddad', handle: 'laylah.bsky.social', invited: false },
+      { id: 'a18', name: 'Marcus Boyd', handle: 'marcusb.bsky.social', invited: false },
+      { id: 'a19', name: 'Junko Abe', handle: 'junkoabe.bsky.social', invited: false },
+      { id: 'a20', name: 'Pedro Alves', handle: 'pedroa.bsky.social', invited: false },
+      { id: 'a21', name: 'Wren Ashby', handle: 'wrena.bsky.social', invited: false },
+      { id: 'a22', name: 'Yara Haidar', handle: 'yarah.bsky.social', invited: false },
+      { id: 'a23', name: 'Colm Sweeney', handle: 'colms.bsky.social', invited: false },
+      { id: 'a24', name: 'Bianca Rossi', handle: 'biancar.bsky.social', invited: false },
+    ],
+  };
+
+  setViewMode = (mode) => this.setState({ viewMode: mode, openMenuId: null });
+  toggleMic = () => this.setState((s) => ({ micOn: !s.micOn }));
+  toggleHandRaised = () => this.setState((s) => ({ handRaised: !s.handRaised }));
+  acceptInvite = () => this.setState({ promoted: true, inviteToastOpen: false, micOn: true });
+  declineInvite = () => this.setState({ inviteToastOpen: false });
+  stepDown = () => this.setState({ promoted: false });
+  toggleMenu = (id) => this.setState((s) => ({ openMenuId: s.openMenuId === id ? null : id }));
+  toggleMute = (id) => this.setState((s) => ({ speakers: s.speakers.map((sp) => (sp.id === id ? { ...sp, muted: !sp.muted } : sp)) }));
+  removeFromStage = (id) => this.setState((s) => ({ speakers: s.speakers.filter((sp) => sp.id !== id), openMenuId: null }));
+  blockSpeaker = (id) => this.setState((s) => ({ speakers: s.speakers.filter((sp) => sp.id !== id), openMenuId: null }));
+  inviteAudience = (id) => this.setState((s) => ({ audience: s.audience.map((a) => (a.id === id ? { ...a, invited: true } : a)) }));
+  toggleLiveStatus = () => this.setState((s) => ({ liveStatus: s.liveStatus === 'live' ? 'paused' : 'live' }));
+  openConfirmEnd = () => this.setState({ confirmEndOpen: true });
+  closeConfirmEnd = () => this.setState({ confirmEndOpen: false });
+  confirmEnd = () => this.setState({ confirmEndOpen: false, liveStatus: 'ended' });
+
+  sendReaction = (emoji) => {
+    const el = this.meAvatarRef.current;
+    const rect = el ? el.getBoundingClientRect() : null;
+    const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+    const y = rect ? rect.top + rect.height / 2 : window.innerHeight - 120;
+    const id = Math.random().toString(36).slice(2);
+    this.setState((s) => ({ floatingReactions: [...s.floatingReactions, { id, emoji, x, y }] }));
+    setTimeout(() => {
+      this.setState((s) => ({ floatingReactions: s.floatingReactions.filter((f) => f.id !== id) }));
+    }, 1600);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const isHost = s.viewMode === 'host';
+
+    const meSynthetic = !isHost && s.promoted
+      ? [{ id: 'me', name: 'You', handle: '', isHost: false, speaking: false, muted: !s.micOn }]
+      : [];
+    const speakers = [...meSynthetic, ...s.speakers].map((sp) => {
+      const isMe = sp.id === 'me' || (isHost && sp.isHost);
+      return {
+        ...sp,
+        initials: initials(sp.name),
+        hasHandle: !!sp.handle,
+        noHandle: !sp.handle,
+        ring: sp.speaking ? '0 0 0 2px var(--color-accent)' : '0 0 0 1px var(--color-neutral-800)',
+        canManage: isHost && !sp.isHost,
+        showMenu: isHost && !sp.isHost && s.openMenuId === sp.id,
+        toggleMenu: () => this.toggleMenu(sp.id),
+        toggleMute: () => this.toggleMute(sp.id),
+        removeFromStage: () => this.removeFromStage(sp.id),
+        block: () => this.blockSpeaker(sp.id),
+        muteLabel: sp.muted ? 'Unmute' : 'Mute',
+        muteIcon: sp.muted ? 'ph-microphone-slash' : 'ph-microphone',
+        avatarRef: isMe ? this.meAvatarRef : null,
+      };
+    });
+
+    const audience = s.audience.map((a) => ({
+      ...a,
+      notInvited: !a.invited,
+      initials: initials(a.name),
+      invite: () => this.inviteAudience(a.id),
+    }));
+
+    const posts = [
+      { author: 'Maria Chen', handle: 'maria.bsky.social', time: '12m', text: 'Starting with Beloved by Toni Morrison, still banned in more districts than any book should be.', initials: 'MC' },
+      { author: 'Jordan Lee', handle: 'jordanlee.bsky.social', time: '4m', text: 'Adding And Tango Makes Three to the list. Kids deserve to see families like theirs on the shelf.', initials: 'JL' },
+    ];
+
+    const reactionOptions = ['👍', '❤️', '😂', '🎉', '👏'].map((emoji) => ({
+      emoji,
+      send: () => this.sendReaction(emoji),
+    }));
+
+    return {
+      isHost,
+      isListener: !isHost,
+      reactionOptions,
+      floatingReactions: s.floatingReactions,
+      meAvatarRef: this.meAvatarRef,
+      isListenerChecked: s.viewMode === 'listener',
+      isHostChecked: s.viewMode === 'host',
+      setListenerMode: () => this.setViewMode('listener'),
+      setHostMode: () => this.setViewMode('host'),
+      listenerCount: s.audience.length,
+      speakers,
+      audience,
+      posts,
+      showInviteToast: !isHost && !s.promoted && s.inviteToastOpen,
+      acceptInvite: this.acceptInvite,
+      declineInvite: this.declineInvite,
+      showHostControls: isHost,
+      showPromotedControls: !isHost && s.promoted,
+      showWaitingControls: !isHost && !s.promoted,
+      micOn: s.micOn,
+      toggleMic: this.toggleMic,
+      micLabel: s.micOn ? 'Mute' : 'Unmute',
+      micIcon: s.micOn ? 'ph-microphone' : 'ph-microphone-slash',
+      handRaised: s.handRaised,
+      toggleHandRaised: this.toggleHandRaised,
+      handLabel: s.handRaised ? 'Hand raised' : 'Raise hand to speak',
+      stepDown: this.stepDown,
+      isLive: s.liveStatus === 'live',
+      liveDotColor: s.liveStatus === 'live' ? 'var(--color-accent)' : 'var(--color-neutral-600)',
+      liveStatusLabel: s.liveStatus === 'live' ? 'Live to your followers' : s.liveStatus === 'paused' ? 'Broadcast paused' : 'Space ended',
+      toggleLiveStatus: this.toggleLiveStatus,
+      liveToggleLabel: s.liveStatus === 'live' ? 'Pause broadcast' : 'Resume broadcast',
+      liveToggleIcon: s.liveStatus === 'live' ? 'ph-pause' : 'ph-play',
+      confirmEndOpen: s.confirmEndOpen,
+      openConfirmEnd: this.openConfirmEnd,
+      closeConfirmEnd: this.closeConfirmEnd,
+      confirmEnd: this.confirmEnd,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

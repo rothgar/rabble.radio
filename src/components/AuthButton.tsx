@@ -63,7 +63,7 @@ export function AuthButton(): ReactElement {
         ) : null}
         <span className="text-sm text-slate-200">@{me.handle}</span>
         <a
-          href="/api/auth/logout"
+          href="/logout"
           className="rounded-md border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800"
         >
           Sign out

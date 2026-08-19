@@ -9,9 +9,17 @@ import { destroySession } from '@/lib/session';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-async function handleLogout(request: Request): Promise<NextResponse> {
+function canonicalBaseUrl(): string {
+  return (
+    process.env.PUBLIC_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    'https://rabble.exe.xyz'
+  ).replace(/\/+$/, '');
+}
+
+async function handleLogout(_request: Request): Promise<NextResponse> {
   await destroySession();
-  const url = new URL('/', request.url);
+  const url = new URL('/', canonicalBaseUrl());
   return NextResponse.redirect(url, { status: 302 });
 }
 

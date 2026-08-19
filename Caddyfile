@@ -12,6 +12,13 @@
 # configuration is required.
 
 :3000 {
-	reverse_proxy /rtc/* livekit:7880
+	# LiveKit signaling uses WebSocket upgrade. The upgrade handshake must
+	# happen over HTTP/1.1; forcing HTTP/1.1 to the backend avoids aborted
+	# connections when the client arrives over HTTP/2.
+	reverse_proxy /rtc/* livekit:7880 {
+		transport http {
+			versions 1.1
+		}
+	}
 	reverse_proxy app:3000
 }

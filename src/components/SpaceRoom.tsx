@@ -293,21 +293,26 @@ function Inner({
   }, [localParticipant]);
 
   // Partition participants into speakers / audience using permissions.
+  // The local participant is handled separately so we never render it in
+  // both the speaker grid and the audience section.
+  const localIdentityKey = localParticipant?.identity || identity;
+  const remoteParticipants = participants.filter(
+    (p) => !(p as { isLocal?: boolean }).isLocal && p.identity !== localIdentityKey
+  );
+
   const speakers: Participant[] = [];
   const audience: Participant[] = [];
-  for (const p of participants) {
+  for (const p of remoteParticipants) {
     if (canPublishFor(p)) speakers.push(p);
     else audience.push(p);
   }
 
-  const localIdentityKey = localParticipant?.identity || identity;
   const localOnStage =
     isHost || role === 'host' || canPublishFor(localParticipant);
-  if (
-    localOnStage &&
-    localParticipant &&
-    !speakers.some((p) => p.identity === localIdentityKey)
-  ) {
+  if (localOnStage && localParticipant) {
+    // Render the local user at the top of the stage grid with the known
+    // identity (the LiveKit local participant may have an empty identity
+    // before the room fully connects).
     speakers.unshift(localParticipant);
   }
 

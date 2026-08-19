@@ -47,7 +47,7 @@ export function NocturneShell({
         <div data-testid="nocturne-nav-avatar">{navAvatar}</div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1180px] flex-1 grid-cols-1 gap-6 px-4 py-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-1 grid-cols-1 gap-6 px-4 py-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
         <main className="flex min-w-0 flex-col gap-6" data-testid="nocturne-main">
           {header}
           {main}

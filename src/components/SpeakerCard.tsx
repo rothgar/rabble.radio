@@ -159,7 +159,7 @@ export function SpeakerCard({
 
   return (
     <div
-      className="relative flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3"
+      className="relative flex min-w-0 flex-col gap-3 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3"
       data-testid={`speaker-card-${identity}`}
       data-local={isLocal ? 'true' : 'false'}
       data-host={isHost ? 'true' : 'false'}

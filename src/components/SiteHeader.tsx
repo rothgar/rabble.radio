@@ -61,17 +61,17 @@ export function SiteHeader(): ReactElement {
         <span className="text-base font-medium tracking-tight">Rabble Radio</span>
       </Link>
 
-      <nav className="flex items-center gap-3">
+      <nav className="flex items-center gap-1 sm:gap-3">
         <Link
           href="/stations"
-          className="rounded-md px-2 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-100"
+          className="rounded-md px-2 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 sm:py-1.5"
           data-testid="site-nav-stations"
         >
           Stations
         </Link>
         <Link
           href="/hosts"
-          className="rounded-md px-2 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-100"
+          className="rounded-md px-2 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 sm:py-1.5"
           data-testid="site-nav-hosts"
         >
           Hosts

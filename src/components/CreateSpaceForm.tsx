@@ -16,9 +16,10 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { PublicSpace } from '@/types';
+import { isValidTag, MAX_TAGS_PER_SHOW, YOUTUBE_CATEGORIES } from '@/lib/tags';
 
 type Mode = 'now' | 'schedule';
 
@@ -79,6 +80,7 @@ function computeDefaultSchedule(now: Date = new Date()): string {
 
 export function CreateSpaceForm(): ReactElement {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [mode, setMode] = useState<Mode>('now');
@@ -88,6 +90,11 @@ export function CreateSpaceForm(): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Pre-select a tag passed via ?tag= (e.g. from a station suggestion card).
+  const [tags, setTags] = useState<string[]>(() => {
+    const tag = searchParams.get('tag');
+    return tag && isValidTag(tag) ? [tag] : [];
+  });
 
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -124,6 +131,14 @@ export function CreateSpaceForm(): ReactElement {
     setMenuOpen(false);
   }, []);
 
+  const toggleTag = useCallback((tag: string) => {
+    setTags((prev) => {
+      if (prev.includes(tag)) return prev.filter((t) => t !== tag);
+      if (prev.length >= MAX_TAGS_PER_SHOW) return prev;
+      return [...prev, tag];
+    });
+  }, []);
+
   const onSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -142,7 +157,8 @@ export function CreateSpaceForm(): ReactElement {
           description?: string;
           startNow?: true;
           scheduledAt?: string;
-        } = { title: trimmedTitle };
+          tags: string[];
+        } = { title: trimmedTitle, tags };
         if (trimmedDescription) {
           payload.description = trimmedDescription;
         }
@@ -219,10 +235,10 @@ export function CreateSpaceForm(): ReactElement {
               JSON.stringify(join)
             );
           }
-          router.push(`/space/${body.space.id}`);
+          router.push(`/show/${body.space.id}`);
           return;
         }
-        router.push('/spaces');
+        router.push('/stations');
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Unexpected error creating space.'
@@ -231,7 +247,7 @@ export function CreateSpaceForm(): ReactElement {
         setSubmitting(false);
       }
     },
-    [description, mode, router, scheduleInput, submitting, title]
+    [description, mode, router, scheduleInput, submitting, tags, title]
   );
 
   const submitLabel = submitting
@@ -301,6 +317,46 @@ export function CreateSpaceForm(): ReactElement {
           </p>
         </div>
       ) : null}
+
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-slate-200">
+          Tags <span className="text-slate-500">(pick up to {MAX_TAGS_PER_SHOW})</span>
+        </span>
+        <div
+          className="flex flex-wrap gap-2"
+          data-testid="tag-picker"
+          role="group"
+          aria-label="Category tags"
+        >
+          {YOUTUBE_CATEGORIES.map((tag) => {
+            const selected = tags.includes(tag);
+            const disabled = !selected && tags.length >= MAX_TAGS_PER_SHOW;
+            return (
+              <button
+                key={tag}
+                type="button"
+                aria-pressed={selected}
+                disabled={disabled}
+                onClick={() => toggleTag(tag)}
+                className={
+                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ' +
+                  (selected
+                    ? 'border-sky-500 bg-sky-600 text-white'
+                    : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 ' +
+                      (disabled ? 'opacity-40' : ''))
+                }
+                data-testid={`tag-option-${tag}`}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-500" data-testid="tag-count">
+          {tags.length}/{MAX_TAGS_PER_SHOW} selected
+        </p>
+      </div>
+
       {error ? (
         <p
           role="alert"
@@ -312,7 +368,7 @@ export function CreateSpaceForm(): ReactElement {
       ) : null}
       <div className="flex items-center justify-end gap-2">
         <Link
-          href="/spaces"
+          href="/stations"
           className="rounded-md border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
         >
           Cancel
@@ -341,7 +397,7 @@ export function CreateSpaceForm(): ReactElement {
           {menuOpen ? (
             <div
               role="menu"
-              className="absolute right-0 top-full z-10 mt-1 min-w-[12rem] rounded-md border border-slate-700 bg-slate-900 py-1 text-sm shadow-lg"
+              className="absolute right-0 top-full z-10 mt-1 min-w-[12rem] max-w-[calc(100vw-1rem)] rounded-md border border-slate-700 bg-slate-900 py-1 text-sm shadow-lg"
               data-testid="schedule-menu"
             >
               <button

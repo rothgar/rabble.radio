@@ -86,6 +86,7 @@ export function SpeakerCard({
       data-testid={`speaker-avatar-${identity}`}
       data-speaking={isSpeaking ? 'true' : 'false'}
       data-local={isLocal ? 'true' : 'false'}
+      data-local-avatar={isLocal ? 'true' : undefined}
     >
       {avatarUrl && !avatarBroken ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -190,7 +191,7 @@ export function SpeakerCard({
 
       {menuOpen && showMenu ? (
         <div
-          className="absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-2 text-sm shadow-lg"
+          className="absolute left-1/2 top-full z-20 mt-2 w-48 max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-2 text-sm shadow-lg"
           ref={menuRef}
           data-testid={`speaker-menu-panel-${identity}`}
         >

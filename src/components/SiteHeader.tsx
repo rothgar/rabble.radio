@@ -61,21 +61,7 @@ export function SiteHeader(): ReactElement {
         <span className="text-base font-medium tracking-tight">Rabble Radio</span>
       </Link>
 
-      <nav className="flex items-center gap-1 sm:gap-3">
-        <Link
-          href="/stations"
-          className="hidden rounded-md px-2 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-100 sm:inline-block"
-          data-testid="site-nav-stations"
-        >
-          Stations
-        </Link>
-        <Link
-          href="/hosts"
-          className="hidden rounded-md px-2 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-100 sm:inline-block"
-          data-testid="site-nav-hosts"
-        >
-          Hosts
-        </Link>
+      <nav className="flex items-center gap-3">
         {me ? (
           <UserMenu
             handle={me.handle}
@@ -85,7 +71,7 @@ export function SiteHeader(): ReactElement {
         ) : (
           <Link
             href="/login"
-            className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 active:bg-sky-700 sm:px-3 sm:py-2"
+            className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 active:bg-sky-700"
             data-testid="site-signin"
           >
             Sign in

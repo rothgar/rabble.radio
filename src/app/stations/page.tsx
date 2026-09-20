@@ -46,20 +46,19 @@ export default async function HomePage(): Promise<ReactElement> {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 p-6">
+      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:p-6">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Stations</h1>
-            <p className="text-sm text-slate-400">
-              Browse live and upcoming shows by category. Each show appears in
-              its primary station.
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Stations</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Browse live and upcoming shows by category.
             </p>
           </div>
         </header>
 
       {stations.length === 0 && suggestions.length === 0 ? (
         <div
-          className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 p-12 text-center"
+          className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 p-8 text-center sm:p-12"
           data-testid="home-empty"
         >
           <p className="text-lg text-slate-300">No stations yet.</p>
@@ -69,7 +68,7 @@ export default async function HomePage(): Promise<ReactElement> {
           </p>
           <Link
             href="/stations/new"
-            className="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            className="rounded-lg bg-sky-600 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-500"
             data-testid="create-show-link"
           >
             Create a show

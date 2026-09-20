@@ -38,7 +38,7 @@ export function SiteHeader(): ReactElement {
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-6 py-3 backdrop-blur"
+      className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur sm:px-6"
       data-testid="site-header"
     >
       <Link
@@ -48,7 +48,7 @@ export function SiteHeader(): ReactElement {
       >
         <span
           aria-hidden
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-700 text-sky-200"
+          className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-sky-700 text-sky-200"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
@@ -64,14 +64,14 @@ export function SiteHeader(): ReactElement {
       <nav className="flex items-center gap-1 sm:gap-3">
         <Link
           href="/stations"
-          className="rounded-md px-2 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 sm:py-1.5"
+          className="hidden rounded-md px-2 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-100 sm:inline-block"
           data-testid="site-nav-stations"
         >
           Stations
         </Link>
         <Link
           href="/hosts"
-          className="rounded-md px-2 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 sm:py-1.5"
+          className="hidden rounded-md px-2 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-100 sm:inline-block"
           data-testid="site-nav-hosts"
         >
           Hosts
@@ -85,7 +85,7 @@ export function SiteHeader(): ReactElement {
         ) : (
           <Link
             href="/login"
-            className="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 active:bg-sky-700 sm:px-3 sm:py-2"
             data-testid="site-signin"
           >
             Sign in

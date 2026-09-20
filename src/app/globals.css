@@ -2,18 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Rabble Radio Design Tokens ─────────────────────────────────────────────
+   Single source of truth for the design system.
+   Reference these when building iOS (SwiftUI / UIColor) or Android (Compose /
+   ColorScheme) so the visual language stays consistent across platforms.
+
+   Spacing:   4 px base grid  →  iOS pt / Android dp are 1:1 at 1× density
+   Touch:     44 px minimum   →  Apple HIG + Android accessibility guideline
+   Radius:    see scale below →  matches typical iOS sheet / card radii
+   Type:      Inter, fallback to system-ui / SF Pro / Roboto on device
+   ──────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --color-bg: #161826;
-  --color-surface: #232532;
-  --color-text: #e9e9ed;
-  --color-accent: #9184d9;
-  --color-accent-2: #a7a1db;
-  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  /* ── Backgrounds ─────────────────────────────────────────────────────── */
+  --color-bg:             #161826;  /* Page / window background */
+  --color-surface:        #232532;  /* Card, panel, list-row background */
+  --color-surface-raised: #2c2f43;  /* Sheet, popover, elevated surface */
 
-  --color-section: #262a60;
-  --color-section-glow: #353b80;
-  --color-section-ghost: #4c5397;
+  /* ── Text ────────────────────────────────────────────────────────────── */
+  --color-text:           #e9e9ed;  /* Primary label */
+  --color-text-secondary: #9397ab;  /* Secondary label */
+  --color-text-tertiary:  #595d6c;  /* Placeholder / disabled */
 
+  /* ── Accent (brand purple) ───────────────────────────────────────────── */
+  --color-accent:         #9184d9;
+  --color-accent-hover:   #a396e0;
+  --color-accent-muted:   rgba(145, 132, 217, 0.15);
+  --color-accent-100:     #f5f4ff;
+  --color-accent-200:     #e7e5fe;
+  --color-accent-300:     #d2cefd;
+  --color-accent-400:     #b5abfc;
+  --color-accent-500:     #968ae0;
+  --color-accent-600:     #796cbf;
+  --color-accent-700:     #5d5294;
+  --color-accent-800:     #423a6a;
+  --color-accent-900:     #2b2741;
+
+  /* ── Borders ─────────────────────────────────────────────────────────── */
+  --color-border:         rgba(233, 233, 237, 0.10);
+  --color-border-strong:  rgba(233, 233, 237, 0.20);
+  --color-divider:        rgba(233, 233, 237, 0.12); /* alias kept for compat */
+
+  /* ── Status ──────────────────────────────────────────────────────────── */
+  --color-live:    #f87171;  /* Red — live indicator */
+  --color-success: #34d399;  /* Green */
+  --color-warning: #fbbf24;  /* Amber */
+  --color-error:   #f87171;  /* Red */
+
+  /* ── Legacy compat aliases (used by existing components) ─────────────── */
   --color-neutral-100: #f3f5fe;
   --color-neutral-200: #e4e7f5;
   --color-neutral-300: #cfd3e5;
@@ -23,17 +59,7 @@
   --color-neutral-700: #595d6c;
   --color-neutral-800: #3f424d;
   --color-neutral-900: #292b31;
-
-  --color-accent-100: #f5f4ff;
-  --color-accent-200: #e7e5fe;
-  --color-accent-300: #d2cefd;
-  --color-accent-400: #b5abfc;
-  --color-accent-500: #968ae0;
-  --color-accent-600: #796cbf;
-  --color-accent-700: #5d5294;
-  --color-accent-800: #423a6a;
-  --color-accent-900: #2b2741;
-
+  --color-accent-2:          #a7a1db;
   --color-accent-2-100: #f5f4ff;
   --color-accent-2-200: #e7e5fe;
   --color-accent-2-300: #d2cefd;
@@ -43,46 +69,92 @@
   --color-accent-2-700: #5c5783;
   --color-accent-2-800: #423e5d;
   --color-accent-2-900: #2b293a;
+  --color-section:       #262a60;
+  --color-section-glow:  #353b80;
+  --color-section-ghost: #4c5397;
 
-  --font-heading: "Inter", system-ui, sans-serif;
-  --font-heading-weight: 500;
-  --font-body: "Inter", system-ui, sans-serif;
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  /* iOS equivalent:  SF Pro / Dynamic Type categories
+     Android equiv:  Roboto / Material 3 type scale (sp values match px at 1×)
+     Web:            Inter                                                     */
+  --font-sans:           "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading:        "Inter", system-ui, sans-serif;
+  --font-heading-weight: 600;
+  --font-body:           "Inter", system-ui, sans-serif; /* compat */
 
-  --space-1: 2.8px;
-  --space-2: 5.6px;
-  --space-3: 8.4px;
-  --space-4: 11.2px;
-  --space-6: 16.8px;
-  --space-8: 22.4px;
+  /* Type scale */
+  --text-xs:   11px;  /* Caption 2        — badges, timestamps */
+  --text-sm:   13px;  /* Caption 1        — secondary labels   */
+  --text-base: 15px;  /* Body             — primary body copy  */
+  --text-md:   17px;  /* Headline / Title 3 — list items, btns */
+  --text-lg:   20px;  /* Title 2          — section headings   */
+  --text-xl:   24px;  /* Title 1          — page headings      */
+  --text-2xl:  30px;  /* Large Title (mobile)                  */
+  --text-3xl:  36px;  /* Large Title (desktop)                 */
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 14px;
+  /* ── Spacing (4 px grid) ─────────────────────────────────────────────── */
+  /* All values are exact multiples of 4.
+     In iOS: use as CGFloat pt  (same numbers, 1:1 at @1x)
+     In Android: use as dp      (same numbers)                              */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;   /* standard edge margin on iPhone SE */
+  --space-5:  20px;
+  --space-6:  24px;   /* standard edge margin on iPhone 14 */
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
 
-  --shadow-sm: 0 0 0 1px #3f424d;
-  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0,0,0,0.55);
-  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0,0,0,0.65);
+  /* Page gutters — use at the outermost container edge */
+  --gutter:        16px;   /* mobile  (<640 px) */
+  --gutter-tablet: 24px;   /* tablet  (640 px+) */
+  --gutter-desk:   32px;   /* desktop (1024 px+) */
+
+  /* ── Touch targets ───────────────────────────────────────────────────── */
+  /* Apple HIG minimum: 44 pt / Android: 48 dp recommended, 44 acceptable  */
+  --touch-min: 44px;
+
+  /* ── Border radius ───────────────────────────────────────────────────── */
+  /* Matches common iOS / Android component radii.
+     Tip: SwiftUI's .cornerRadius() and Android's RoundedCornerShape()
+     accept these numbers directly.                                         */
+  --radius-xs:  4px;    /* Chips, badges, tags */
+  --radius-sm:  8px;    /* Buttons, text inputs */
+  --radius-md:  12px;   /* Cards, list containers */
+  --radius-lg:  16px;   /* Panels, action sheets */
+  --radius-xl:  24px;   /* Bottom sheets, modals */
+  --radius-full: 9999px;
+
+  /* ── Elevation / shadows ─────────────────────────────────────────────── */
+  --shadow-sm: 0 0 0 1px var(--color-border);
+  --shadow-md: 0 0 0 1px var(--color-border-strong), 0 6px 18px rgba(0,0,0,0.50);
+  --shadow-lg: 0 0 0 1px rgba(233,233,237,0.30),     0 16px 40px rgba(0,0,0,0.65);
 }
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
 
 @keyframes pulse-live {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  50%       { opacity: 0.35; }
 }
 
 @keyframes float-up {
-  0% { transform: translateY(0); opacity: 1; }
+  0%   { transform: translateY(0);     opacity: 1; }
   100% { transform: translateY(-60px); opacity: 0; }
 }
 
-html,
-body {
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+
+html, body {
   padding: 0;
   margin: 0;
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
   background-color: var(--color-bg);
   color: var(--color-text);
+  -webkit-text-size-adjust: 100%; /* prevent iOS auto-zoom */
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }

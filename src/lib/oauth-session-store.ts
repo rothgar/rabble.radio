@@ -6,7 +6,6 @@
 // @atproto/oauth-client-node.
 
 import type { NodeSavedSession, NodeSavedSessionStore } from '@atproto/oauth-client-node';
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
@@ -35,10 +34,10 @@ export function createPrismaSessionStore(): NodeSavedSessionStore {
           where: { did: key },
           create: {
             did: key,
-            data: value as unknown as Prisma.InputJsonValue,
+            data: value as unknown as object,
           },
           update: {
-            data: value as unknown as Prisma.InputJsonValue,
+            data: value as unknown as object,
           },
         });
         logger.info('oauth.session_store.set', { key, success: true });

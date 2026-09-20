@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
+import { Button } from '@/components/ui';
 
 interface Me {
   did: string;
@@ -38,17 +39,17 @@ export function SiteHeader(): ReactElement {
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur sm:px-6"
+      className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 px-4 py-3 backdrop-blur sm:px-6"
       data-testid="site-header"
     >
       <Link
         href="/stations"
-        className="flex items-center gap-2 text-slate-100"
+        className="flex items-center gap-2 text-[var(--color-text)]"
         data-testid="site-brand"
       >
         <span
           aria-hidden
-          className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-sky-700 text-sky-200"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-white"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
@@ -58,7 +59,7 @@ export function SiteHeader(): ReactElement {
             <path d="M16 8a6 6 0 0 1 0 8" />
           </svg>
         </span>
-        <span className="text-base font-medium tracking-tight">Rabble Radio</span>
+        <span className="text-title font-semibold tracking-tight">Rabble Radio</span>
       </Link>
 
       <nav className="flex items-center gap-3">
@@ -69,13 +70,9 @@ export function SiteHeader(): ReactElement {
             avatarUrl={me.avatarUrl ?? null}
           />
         ) : (
-          <Link
-            href="/login"
-            className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 active:bg-sky-700"
-            data-testid="site-signin"
-          >
+          <Button href="/login" size="md" data-testid="site-signin">
             Sign in
-          </Link>
+          </Button>
         )}
       </nav>
     </header>

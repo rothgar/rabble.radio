@@ -1,26 +1,18 @@
-// src/components/StationCard.tsx
-//
-// A compact station tile on the /stations home page. Half-page width (stacked
-// on mobile). Shows the category name, a show count, and the profile images of
-// the hosts whose shows are in this station. The whole tile links to the
-// station's detail page.
-
-import Link from 'next/link';
 import type { ReactElement } from 'react';
 import type { PublicHost, PublicSpace } from '@/types';
+import { Card } from '@/components/ui';
 
 interface StationCardProps {
   tag: string;
   shows: PublicSpace[];
 }
 
-/** Maximum host avatars to render before collapsing into "+N". */
 const MAX_AVATARS = 3;
 
 function HostAvatar({ host }: { host: PublicHost }): ReactElement {
   return (
     <span
-      className="relative inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-[10px] font-medium text-slate-200 ring-2 ring-slate-900"
+      className="relative inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[var(--color-surface-raised)] text-[10px] font-medium text-[var(--color-text-secondary)] ring-2 ring-[var(--color-bg)]"
       data-testid="station-host-avatar"
       title={`@${host.handle}`}
     >
@@ -41,44 +33,43 @@ export function StationCard({ tag, shows }: StationCardProps): ReactElement {
   );
 
   return (
-    <Link
+    <Card
       href={`/station/${encodeURIComponent(tag)}`}
-      className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900 p-5 transition hover:border-sky-600 hover:bg-slate-800/80 active:bg-slate-800"
+      interactive
       data-testid="station-card"
       data-station={tag}
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="truncate text-base font-semibold text-slate-100">
-          {tag}
-        </h2>
-        <span
-          className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-300"
-          data-testid="station-count"
-        >
-          {count} {count === 1 ? 'show' : 'shows'}
-        </span>
-      </div>
-      <div className="flex items-center gap-2" data-testid="station-hosts">
-        <div className="flex -space-x-2">
-          {hosts.slice(0, MAX_AVATARS).map((host) => (
-            <HostAvatar key={host.did} host={host} />
-          ))}
-        </div>
-        {hosts.length > MAX_AVATARS ? (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="truncate text-title font-semibold text-[var(--color-text)]">
+            {tag}
+          </h2>
           <span
-            className="text-xs text-slate-400"
-            data-testid="station-host-more"
+            className="shrink-0 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-label text-[var(--color-text-secondary)]"
+            data-testid="station-count"
           >
-            +{hosts.length - MAX_AVATARS}
+            {count} {count === 1 ? 'show' : 'shows'}
           </span>
-        ) : null}
-        {hosts.length > 0 ? (
-          <span className="ml-auto text-xs text-slate-500">
-            {hosts.length} {hosts.length === 1 ? 'host' : 'hosts'}
-          </span>
-        ) : null}
+        </div>
+        <div className="flex items-center gap-2" data-testid="station-hosts">
+          <div className="flex -space-x-2">
+            {hosts.slice(0, MAX_AVATARS).map((host) => (
+              <HostAvatar key={host.did} host={host} />
+            ))}
+          </div>
+          {hosts.length > MAX_AVATARS ? (
+            <span className="text-label text-[var(--color-text-tertiary)]" data-testid="station-host-more">
+              +{hosts.length - MAX_AVATARS}
+            </span>
+          ) : null}
+          {hosts.length > 0 ? (
+            <span className="ml-auto text-label text-[var(--color-text-tertiary)]">
+              {hosts.length} {hosts.length === 1 ? 'host' : 'hosts'}
+            </span>
+          ) : null}
+        </div>
       </div>
-    </Link>
+    </Card>
   );
 }
 

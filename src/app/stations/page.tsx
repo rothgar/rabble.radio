@@ -47,13 +47,26 @@ export default async function HomePage(): Promise<ReactElement> {
     <>
       <SiteHeader />
       <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:p-6">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Stations</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Browse live and upcoming shows by category.
-            </p>
+
+        {/* Sign-in banner — only shown to unauthenticated visitors */}
+        {!user && (
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-sky-800/50 bg-sky-950/40 px-6 py-8 text-center sm:flex-row sm:text-left">
+            <div className="flex-1">
+              <p className="text-base font-semibold text-slate-100">Join the conversation</p>
+              <p className="mt-1 text-sm text-slate-400">Sign in with your Bluesky account to host or join live audio shows.</p>
+            </div>
+            <Link
+              href="/login"
+              className="w-full rounded-xl bg-sky-500 px-6 py-3.5 text-center text-base font-semibold text-white hover:bg-sky-400 active:bg-sky-600 sm:w-auto sm:shrink-0"
+            >
+              Sign in with Bluesky
+            </Link>
           </div>
+        )}
+
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Stations</h1>
+          <p className="mt-1 text-sm text-slate-400">Live and upcoming shows by category.</p>
         </header>
 
       {stations.length === 0 && suggestions.length === 0 ? (

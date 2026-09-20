@@ -294,7 +294,7 @@ export function SpacePageClient({
       >
         <p className="mb-3">Sign in with Bluesky to join this space.</p>
         <a
-          href="/api/auth/bluesky"
+          href="/login"
           className="inline-block rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]"
         >
           Sign in

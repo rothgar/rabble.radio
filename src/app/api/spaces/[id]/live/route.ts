@@ -54,7 +54,7 @@ function originFromRequest(request: Request): string {
       return (
         process.env.NEXT_PUBLIC_APP_URL ||
         process.env.PUBLIC_URL ||
-        'https://rabble.exe.xyz'
+        'https://rabble.invalid'
       );
     }
     return `${url.protocol}//${url.host}`;
@@ -62,7 +62,7 @@ function originFromRequest(request: Request): string {
     return (
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.PUBLIC_URL ||
-      'https://rabble.exe.xyz'
+      'https://rabble.invalid'
     );
   }
 }
@@ -125,7 +125,7 @@ export async function POST(
   }
 
   const origin = originFromRequest(request);
-  const spaceUrl = `${origin}/space/${space.id}`;
+  const spaceUrl = `${origin}/show/${space.id}`;
   const session = { did: user.did, handle: user.handle };
   const thumb =
     typeof body.thumb === 'string' && body.thumb.length > 0

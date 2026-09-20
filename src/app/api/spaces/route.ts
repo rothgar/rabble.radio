@@ -32,6 +32,7 @@ import {
   startRecording,
 } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
+import { normalizeTags } from '@/lib/tags';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
@@ -57,7 +58,7 @@ function originFromRequest(request: Request): string {
       return (
         process.env.NEXT_PUBLIC_APP_URL ||
         process.env.PUBLIC_URL ||
-        'https://rabble.exe.xyz'
+        'https://rabble.invalid'
       );
     }
     return `${url.protocol}//${url.host}`;
@@ -65,7 +66,7 @@ function originFromRequest(request: Request): string {
     return (
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.PUBLIC_URL ||
-      'https://rabble.exe.xyz'
+      'https://rabble.invalid'
     );
   }
 }
@@ -88,6 +89,7 @@ interface CreateSpaceBody {
   description?: unknown;
   scheduledAt?: unknown;
   startNow?: unknown;
+  tags?: unknown;
 }
 
 /**
@@ -144,6 +146,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       {
         error: 'validation_error',
         message: 'Description must be 2000 characters or fewer.',
+      },
+      { status: 400 }
+    );
+  }
+
+  // Tags must be a subset of the allowed YouTube categories, up to 3.
+  const tags = normalizeTags(body.tags);
+  if (Array.isArray(body.tags) && body.tags.length > 0 && tags.length === 0) {
+    return NextResponse.json(
+      {
+        error: 'validation_error',
+        message: 'Tags must be valid YouTube categories.',
       },
       { status: 400 }
     );
@@ -247,6 +261,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     space = await createSpace({
       title,
       description,
+      tags,
       hostId: user.did,
       // startNow always creates a row with no scheduledAt; the scheduledAt
       // path keeps whatever the caller validated.
@@ -309,7 +324,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     try {
       const liveSpace = await setSpaceLive(space.id, true);
-      const spaceUrl = `${origin}/space/${liveSpace.id}`;
+      const spaceUrl = `${origin}/show/${liveSpace.id}`;
       const session = { did: user.did, handle: user.handle };
       const atproto = await publishLiveStatus({
         session,

@@ -26,6 +26,7 @@ import {
 import type { ReactElement, ReactNode } from 'react';
 import {
   LiveKitRoom,
+  RoomAudioRenderer,
   useLocalParticipant,
   useParticipants,
 } from '@livekit/components-react';
@@ -38,6 +39,7 @@ import { AudienceBubbles, type AudienceMember } from '@/components/AudienceBubbl
 import { AudienceRows } from '@/components/AudienceRows';
 import { RoomSidebar, type PublicRecording } from '@/components/RoomSidebar';
 import { BottomControlBar } from '@/components/BottomControlBar';
+import { ShareButtons } from '@/components/ShareButtons';
 import { FloatingReaction } from '@/components/FloatingReaction';
 import { StageInviteToast } from '@/components/StageInviteToast';
 import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
@@ -182,7 +184,13 @@ function canPublishFor(p: Participant | undefined | null): boolean {
  * exactly once after the room connects so the host appears as a live
  * speaker.
  */
-function HostAutoUnmute({ role }: { role: SpaceRole }): null {
+function HostAutoUnmute({
+  role,
+  onError,
+}: {
+  role: SpaceRole;
+  onError?: (err: Error) => void;
+}): null {
   const { localParticipant } = useLocalParticipant();
   const enabledRef = useRef(false);
 
@@ -191,10 +199,11 @@ function HostAutoUnmute({ role }: { role: SpaceRole }): null {
     if (enabledRef.current) return;
     if (!localParticipant) return;
     enabledRef.current = true;
-    void localParticipant.setMicrophoneEnabled(true).catch(() => {
+    void localParticipant.setMicrophoneEnabled(true).catch((err: unknown) => {
       enabledRef.current = false;
+      onError?.(err instanceof Error ? err : new Error('Microphone access denied.'));
     });
-  }, [localParticipant, role]);
+  }, [localParticipant, onError, role]);
 
   return null;
 }
@@ -232,6 +241,7 @@ interface InnerProps {
   onDeclineInvite: () => void;
   stageSlot?: ReactNode;
   stageControlsProps: StageControlsProps;
+  onMicError?: (err: Error) => void;
 }
 
 function Inner({
@@ -263,6 +273,7 @@ function Inner({
   onDeclineInvite,
   stageSlot,
   stageControlsProps,
+  onMicError,
 }: InnerProps): ReactElement {
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
@@ -383,7 +394,6 @@ function Inner({
         ref={localAvatarRef}
         className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-700)] ring-1 ring-[var(--color-neutral-800)]"
         data-testid="nav-avatar-tile"
-        data-local-avatar="true"
       >
         {localAvatar ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -530,7 +540,7 @@ function Inner({
 
   return (
     <>
-      <HostAutoUnmute role={role} />
+      <HostAutoUnmute role={role} onError={onMicError} />
       <StageControls {...stageControlsProps} />
       {stageSlot}
       <NocturneShell
@@ -540,7 +550,6 @@ function Inner({
             title={title}
             host={host}
             listenerCount={listenerCount}
-            shareableUrl={shareableUrl}
           />
         }
         main={
@@ -555,6 +564,15 @@ function Inner({
             ) : null}
             {onStageSection}
             {audienceSection}
+            <div
+              className="flex flex-col gap-3 rounded-lg border border-[var(--color-divider)] bg-[var(--color-surface)] p-6"
+              data-testid="room-share-card"
+            >
+              <p className="text-sm font-semibold text-[var(--color-neutral-400)]">
+                Share this show
+              </p>
+              <ShareButtons shareableUrl={shareableUrl} title={title} />
+            </div>
           </div>
         }
         sidebar={
@@ -737,8 +755,15 @@ export function SpaceRoom({
         .toString(36)
         .slice(2, 7)}`;
       setFloatingReactions((prev) => [...prev, { id, emoji, x, y }]);
+      // Best-effort: record the reaction server-side so it feeds the room's
+      // popularity metric. Failures are swallowed — the local emoji already
+      // rendered.
+      void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/reactions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }).catch(() => undefined);
     },
-    [reactionId]
+    [reactionId, spaceId]
   );
 
   // StageControls renders no visible DOM but bridges useSpaceState to the
@@ -810,6 +835,7 @@ export function SpaceRoom({
         onError={handleError}
         data-lk-theme="default"
       >
+        <RoomAudioRenderer />
         <Inner
           identity={identity}
           displayName={displayName}
@@ -839,6 +865,7 @@ export function SpaceRoom({
           onDeclineInvite={handleDeclineInvite}
           stageSlot={stageSlot}
           stageControlsProps={stageControlsProps}
+          onMicError={handleError}
         />
       </LiveKitRoom>
     </div>

@@ -69,7 +69,7 @@ services:
           memory: 384M
 
   livekit:
-    image: livekit/livekit-server:v1.8
+    image: livekit/livekit-server:v1.13.5
     container_name: rabble-livekit
     restart: unless-stopped
     command:
@@ -80,7 +80,7 @@ services:
       - "--keys"
       - "devkey: devsecret0123456789abcdef0123456789abcdef"
       - "--node-ip"
-      - "0.0.0.0"
+      - "${LIVEKIT_NODE_IP:-127.0.0.1}"
       - "--dev"
       - "--redis-host"
       - "redis:6379"
@@ -161,7 +161,7 @@ services:
       # appends /rtc/v1/... to that base URL. Override here if you
       # terminate TLS on a separate subdomain (e.g.
       # wss://livekit.rabble.exe.xyz) or run with a different proxy.
-      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-wss://rabble.exe.xyz}
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:3000}
       # Recording infrastructure — pointing at the in-network service names
       # so the app container can reach MinIO/Egress via Docker DNS.
       RECORDING_BUCKET: rabble-recordings

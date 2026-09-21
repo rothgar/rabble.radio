@@ -14,6 +14,7 @@ export interface BlueskySession {
 
 export interface AppSessionData {
   bluesky?: BlueskySession;
+  loginRedirect?: string;
 }
 
 const COOKIE_NAME = 'bs_spaces_session';
@@ -69,6 +70,32 @@ export async function setSession(data: BlueskySession): Promise<void> {
   );
   session.bluesky = data;
   await session.save();
+}
+
+/**
+ * Store a post-login redirect path in the session so the OAuth callback can
+ * pick it up. Only accepts relative paths (must start with "/").
+ */
+export async function saveLoginRedirect(next: string): Promise<void> {
+  if (!next.startsWith('/') || next.startsWith('//')) return;
+  const cookieStore = await cookies();
+  const session = await getIronSession<AppSessionData>(cookieStore, sessionOptions());
+  session.loginRedirect = next;
+  await session.save();
+}
+
+/**
+ * Read and clear the stored post-login redirect path. Returns null if none.
+ */
+export async function getAndClearLoginRedirect(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const session = await getIronSession<AppSessionData>(cookieStore, sessionOptions());
+  const next = session.loginRedirect ?? null;
+  if (next) {
+    session.loginRedirect = undefined;
+    await session.save();
+  }
+  return next;
 }
 
 /**

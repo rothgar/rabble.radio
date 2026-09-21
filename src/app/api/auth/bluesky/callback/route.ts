@@ -8,7 +8,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { Agent } from '@atproto/api';
 import { prisma } from '@/lib/db';
 import { getOAuthClient } from '@/lib/auth';
-import { getSession, setSession } from '@/lib/session';
+import { getSession, setSession, getAndClearLoginRedirect } from '@/lib/session';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -82,10 +82,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const loginRedirect = await getAndClearLoginRedirect();
   await setSession({ did, handle });
   log.info('oauth.callback.success', { did, handle });
 
-  const publicUrl = process.env.PUBLIC_URL || 'https://rabble.exe.xyz';
-  const redirectTo = new URL('/spaces', publicUrl);
+  const publicUrl = process.env.PUBLIC_URL || 'https://rabble.invalid';
+  const redirectTo = new URL(loginRedirect ?? '/stations', publicUrl);
   return NextResponse.redirect(redirectTo, { status: 302 });
 }

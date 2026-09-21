@@ -7,6 +7,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getOAuthClient } from '@/lib/auth';
+import { saveLoginRedirect } from '@/lib/session';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   if (!/^[a-zA-Z0-9._-]+$/.test(handle)) {
     return badRequest('Invalid handle format.');
+  }
+
+  const next = request.nextUrl.searchParams.get('next');
+  if (next) {
+    await saveLoginRedirect(next);
   }
 
   try {

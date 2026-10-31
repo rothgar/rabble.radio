@@ -38,6 +38,14 @@ RUN apt-get update && \
 # compile the app.
 RUN pnpm prisma generate
 RUN pnpm build
+# Self-contained copy of the prisma CLI (plus its full dependency tree:
+# @prisma/config, effect, c12, ...) for the `migrate deploy` job. Hand-copying
+# node_modules/prisma + node_modules/@prisma is no longer enough since Prisma 6.
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    mkdir -p /prisma-cli && cd /prisma-cli && \
+    echo '{"name":"prisma-cli","private":true}' > package.json && \
+    pnpm add "prisma@$(node -p "require('/app/node_modules/prisma/package.json').version")" \
+      --config.node-linker=hoisted --config.lockfile=false
 
 # ---------- Stage 3: runner ----------
 FROM node:22-bookworm-slim AS runner
@@ -74,13 +82,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client ./node_modules/@prisma/client
-# Copy the prisma CLI package plus the @prisma/* runtime helpers it depends
-# on (engines, debug, etc.) so the `migrate` service can run
-# `prisma migrate deploy` without us having to ship the full node_modules
-# tree. The prisma package's `main` is build/index.js so we invoke it
-# directly via `node` in docker-compose.yml to avoid relying on the .bin
-# symlink.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+# Copy the self-contained prisma CLI tree built above (prisma, @prisma/config,
+# @prisma/engines and their dependencies) so the `migrate` job can run
+# `prisma migrate deploy` without shipping the app's full node_modules. The
+# app's own @prisma/* packages are copied afterwards so the generated client
+# wins. The prisma package's `main` is build/index.js so we invoke it
+# directly via `node` to avoid relying on the .bin symlink.
+COPY --from=builder --chown=nextjs:nodejs /prisma-cli/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs

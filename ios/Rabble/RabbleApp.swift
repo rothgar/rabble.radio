@@ -15,6 +15,7 @@ struct RabbleApp: App {
 }
 
 /// Shared services: base URL, session cookies, API client.
+@MainActor
 final class AppEnvironment: ObservableObject {
     let baseURL: URL
     let session: SessionStore

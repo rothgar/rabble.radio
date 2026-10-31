@@ -1,5 +1,7 @@
-# XcodeGen spec (https://github.com/yonaskolb/XcodeGen). Generate the Xcode
-# project with `xcodegen generate`, or open the generated Rabble.xcodeproj.
+# XcodeGen spec (https://github.com/yonaskolb/XcodeGen), kept as the
+# readable description of the target. A hand-maintained Rabble.xcodeproj that
+# matches it is committed so the app builds without XcodeGen; regenerate from
+# this file if the two drift (`xcodegen generate`).
 name: Rabble
 options:
   bundleIdPrefix: radio.rabble
@@ -26,7 +28,7 @@ targets:
       - package: LiveKit
         product: LiveKit
     info:
-      path: Rabble/Info.plist
+      path: Config/Info.plist
       properties:
         CFBundleDisplayName: Rabble
         UILaunchScreen: {}

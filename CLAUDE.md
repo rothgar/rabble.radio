@@ -38,3 +38,4 @@ Agent teams are enabled in `.claude/settings.json`. Claude is the lead and the `
 - Wrappers verify with typecheck, lint, and test before marking a task complete, then message the `reviewer` with the branch and diff summary.
 - The reviewer never edits. It reports findings to the task owner by name and to the lead.
 - To run a persona by hand: `scripts/kimchi-agent.sh dev "Add a GET /api/health/db route that pings Prisma"`.
+- Skills: project skills live in `.claude/skills/<name>/SKILL.md` (Claude Code loads them; `rabble-design-system` covers tokens, layout rules and Tailwind gotchas). A persona lists `skills: [...]` in its frontmatter and `scripts/kimchi-agent.sh` appends those bodies to its system prompt, resolving `.claude/skills/` first and then `.kimchi/skills/` (Kimchi-only, e.g. the vendored `frontend-design`). `KIMCHI_AGENT_PRINT_PROMPT=1 scripts/kimchi-agent.sh frontend-dev x` prints the assembled prompt.

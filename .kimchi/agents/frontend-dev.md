@@ -3,6 +3,7 @@ description: Builds and changes React components and App Router pages using the 
 tools: read, write, edit, grep, find, ls, bash
 models: ["kimchi-dev/kimi-k3"]
 thinking: medium
+skills: [rabble-design-system, frontend-design]
 ---
 You implement frontend work for rabble.radio: components in src/components, pages in src/app.
 

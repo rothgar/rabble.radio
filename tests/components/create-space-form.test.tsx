@@ -18,6 +18,7 @@ const pushMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
+  useSearchParams: () => new URLSearchParams(''),
 }));
 
 import { CreateSpaceForm } from '@/components/CreateSpaceForm';
@@ -173,7 +174,7 @@ describe('<CreateSpaceForm />', () => {
     submit();
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith(`/space/${SPACE_ID}`);
+      expect(pushMock).toHaveBeenCalledWith(`/show/${SPACE_ID}`);
     });
     expect(calls).toHaveLength(1);
     const init = calls[0].init;
@@ -182,6 +183,7 @@ describe('<CreateSpaceForm />', () => {
       title: 'My space',
       description: 'A description',
       startNow: true,
+      tags: [],
     });
     const stored = sessionStorage.getItem(`rabble_join_${SPACE_ID}`);
     expect(stored).not.toBeNull();
@@ -213,7 +215,7 @@ describe('<CreateSpaceForm />', () => {
     submit();
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith('/spaces');
+      expect(pushMock).toHaveBeenCalledWith('/stations');
     });
     expect(calls).toHaveLength(1);
     const body = JSON.parse(String(calls[0].init?.body)) as {

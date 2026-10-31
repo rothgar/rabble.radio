@@ -5,6 +5,8 @@
 
 import { randomBytes } from 'node:crypto';
 import { prisma } from '@/lib/db';
+import { getRoomParticipantSummary, roomNameForSpace } from '@/lib/livekit';
+import { normalizeTags } from '@/lib/tags';
 import type { PublicHost, PublicSpace } from '@/types';
 
 // Local model shapes that mirror the Prisma schema. We define them by hand so
@@ -19,7 +21,12 @@ export interface SpaceModel {
   isLive: boolean;
   scheduledAt: Date | null;
   expiresAt: Date | null;
+  emptySince: Date | null;
   status: string;
+  listenerCount: number;
+  speakerCount: number;
+  reactionCount: number;
+  tags: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +49,8 @@ export interface CreateSpaceInput {
   title: string;
   description?: string | null;
   hostId: string;
+  /** Up to 3 category tags (validated against the YouTube category list). */
+  tags?: string[];
   /**
    * Optional ISO string or Date for when the space is scheduled to go live.
    * If null/undefined the space is "active" immediately and gets a 24h
@@ -70,7 +79,14 @@ export const SPACE_STATUS = {
 } as const;
 export type SpaceStatus = (typeof SPACE_STATUS)[keyof typeof SPACE_STATUS];
 
-/** How long an immediate (unscheduled) empty space stays active before expiry. */
+/** How long an empty room stays around before the occupancy sweep expires it. */
+export const EMPTY_SPACE_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Hard upper bound for how long an active space can stay around before the
+ * fallback sweep expires it, regardless of occupancy. Kept much larger than
+ * EMPTY_SPACE_TTL_MS so occupancy is the primary expiry driver.
+ */
 export const ACTIVE_SPACE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Visibility window for a scheduled space (show for ~1h after start). */
@@ -167,6 +183,8 @@ export async function createSpace(
       ? input.description.trim()
       : null;
 
+  const tags = normalizeTags(input.tags);
+
   const now = (options.now ?? (() => new Date()))();
   const scheduledAt = normalizeScheduledAt(input.scheduledAt);
 
@@ -177,20 +195,25 @@ export async function createSpace(
     ? SPACE_STATUS.SCHEDULED
     : SPACE_STATUS.ACTIVE;
 
-  // For immediate spaces, set a 24h expiry so empty rooms don't linger.
-  // For scheduled spaces, leave expiresAt null until after the start time.
+  // For immediate spaces, the room starts empty, so start the empty
+  // countdown now (it expires EMPTY_SPACE_TTL_MS later if nobody joins).
+  // expiresAt is a hard upper-bound fallback for the sweep.
+  // For scheduled spaces, leave expiresAt/emptySince null until they go live.
   const expiresAt = isFutureSchedule
     ? null
-    : new Date(now.getTime() + ACTIVE_SPACE_TTL_MS);
+    : new Date(now.getTime() + EMPTY_SPACE_TTL_MS);
+  const emptySince = isFutureSchedule ? null : now;
 
   return prisma.space.create({
     data: {
       slug,
       title,
       description,
+      tags,
       hostId: input.hostId,
       scheduledAt,
       expiresAt,
+      emptySince,
       status,
     },
     include: { host: true },
@@ -240,16 +263,21 @@ export async function setSpaceLive(
   const status: SpaceStatus = isLive
     ? SPACE_STATUS.LIVE
     : SPACE_STATUS.ACTIVE;
-  // When a space goes live we clear its expiration timer (rooms that have
-  // started don't auto-expire). When ending, we re-arm the 24h expiry so
-  // empty rooms clean up.
-  const expiresAt = isLive ? null : new Date(now.getTime() + ACTIVE_SPACE_TTL_MS);
+  // Going live means the host is in the room, so it is occupied (no hard
+  // deadline, emptySince null). Ending the live state re-arms the hard
+  // fallback deadline and starts the empty countdown; the occupancy sweep
+  // corrects emptySince if participants remain.
+  const expiresAt = isLive
+    ? null
+    : new Date(now.getTime() + ACTIVE_SPACE_TTL_MS);
+  const emptySince = isLive ? null : now;
   return prisma.space.update({
     where: { id },
     data: {
       isLive,
       status,
       expiresAt,
+      emptySince,
     },
     include: { host: true },
   });
@@ -270,19 +298,27 @@ export async function expireSpace(id: string): Promise<SpaceWithHost> {
 }
 
 /**
- * Sweep stale spaces. A space is "stale" when:
- *   - status = 'active'
- *   - scheduledAt IS NULL  (i.e. never scheduled)
- *   - expiresAt < now
- *   - updatedAt < now - 5 min  (avoid racing with very recent updates)
+ * Sweep stale spaces. Two passes:
  *
- * Returns the number of rows that were transitioned to 'expired'.
+ *  1. Hard-TTL fallback: expire `active` spaces that are past their
+ *     `expiresAt` and haven't been touched recently (belt-and-suspenders so
+ *     abandoned rooms still clean up even if LiveKit is unreachable).
+ *  2. Occupancy-based: for `active`/`live` spaces, check the LiveKit room
+ *     and expire any that have been empty for longer than EMPTY_SPACE_TTL_MS.
+ *     If a room is occupied, its `emptySince` clock is reset. While we are
+ *     querying LiveKit we also refresh the `listenerCount`/`speakerCount`
+ *     occupancy metrics.
+ *
+ * Returns the total number of rows transitioned to 'expired'.
  */
 export async function expireStaleSpaces(
   now: Date = new Date()
 ): Promise<number> {
+  let expired = 0;
+
+  // 1) Hard-TTL fallback for unscheduled active spaces.
   const graceCutoff = new Date(now.getTime() - EXPIRATION_GRACE_MS);
-  const result = await prisma.space.updateMany({
+  const fallback = await prisma.space.updateMany({
     where: {
       status: SPACE_STATUS.ACTIVE,
       scheduledAt: null,
@@ -294,7 +330,65 @@ export async function expireStaleSpaces(
       status: SPACE_STATUS.EXPIRED,
     },
   });
-  return result.count;
+  expired += fallback.count;
+
+  // 2) Occupancy-based sweep for active/live spaces.
+  const candidates = await prisma.space.findMany({
+    where: { status: { in: [SPACE_STATUS.ACTIVE, SPACE_STATUS.LIVE] } },
+    select: { id: true, emptySince: true },
+  });
+  for (const space of candidates) {
+    const roomName = roomNameForSpace(space.id);
+    const summary = await getRoomParticipantSummary(roomName);
+    if (summary === null) continue; // LiveKit unreachable — fail safe.
+    const occupied = summary.speakers + summary.listeners > 0;
+    // Always refresh the occupancy metrics when we have a reading.
+    await prisma.space.update({
+      where: { id: space.id },
+      data: {
+        speakerCount: summary.speakers,
+        listenerCount: summary.listeners,
+        emptySince: occupied ? null : space.emptySince,
+      },
+    });
+    if (occupied) continue;
+    // Room is empty.
+    if (space.emptySince === null) {
+      // First sweep observing it empty: start the countdown.
+      await prisma.space.update({
+        where: { id: space.id },
+        data: { emptySince: now },
+      });
+      continue;
+    }
+    if (now.getTime() - space.emptySince.getTime() >= EMPTY_SPACE_TTL_MS) {
+      await prisma.space.update({
+        where: { id: space.id },
+        data: { isLive: false, status: SPACE_STATUS.EXPIRED },
+      });
+      expired++;
+    }
+  }
+
+  return expired;
+}
+
+/**
+ * Increment the reaction counter for a space. Returns the new count.
+ */
+export async function incrementSpaceReactions(
+  spaceId: string
+): Promise<number | null> {
+  try {
+    const updated = await prisma.space.update({
+      where: { id: spaceId },
+      data: { reactionCount: { increment: 1 } },
+      select: { reactionCount: true },
+    });
+    return updated.reactionCount;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -358,6 +452,19 @@ export function isSpaceVisibleToAnonymous(
 }
 
 /**
+ * Popularity score used to rank rooms by how much is happening in them.
+ * A "popular" room is one with a live audience, speakers on stage, and/or
+ * lots of reactions.
+ */
+export function popularityScore(space: {
+  listenerCount: number;
+  speakerCount: number;
+  reactionCount: number;
+}): number {
+  return space.listenerCount + space.speakerCount + space.reactionCount;
+}
+
+/**
  * List spaces visible to a given user. Combines:
  *   - All spaces the user hosts (regardless of status/expiration).
  *   - Non-hosted spaces that are visible per `isSpaceVisible`.
@@ -380,7 +487,7 @@ export async function getSpacesForUser(
   return prisma.space.findMany({
     where: {
       OR: [
-        { hostId: userDid },
+        { hostId: userDid, status: { not: SPACE_STATUS.EXPIRED } },
         visibleSpacesWhere(now),
       ],
     },
@@ -464,7 +571,7 @@ const LOOPBACK_HOSTS = new Set([
  * Canonical public origin used to build shareable URLs. Falls back through:
  *   1. `NEXT_PUBLIC_APP_URL`
  *   2. `PUBLIC_URL`
- *   3. `https://rabble.exe.xyz`
+ *   3. `https://rabbit.invalid`
  *
  * The fallback list is intentionally defined here (and re-exported via
  * `defaultPublicOrigin`) so the spaces service is the single source of
@@ -474,7 +581,7 @@ export function defaultPublicOrigin(): string {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.PUBLIC_URL ||
-    'https://rabble.exe.xyz'
+    'https://rabbit.invalid'
   );
 }
 
@@ -508,7 +615,7 @@ export function toPublicSpace(
   origin?: string | null
 ): PublicSpace {
   const base = canonicalizeOrigin(origin);
-  const shareableUrl = `${base}/space/${space.id}`;
+  const shareableUrl = `${base}/show/${space.id}`;
   return {
     id: space.id,
     slug: space.slug,
@@ -518,6 +625,10 @@ export function toPublicSpace(
     status: space.status,
     scheduledAt: space.scheduledAt ? space.scheduledAt.toISOString() : null,
     expiresAt: space.expiresAt ? space.expiresAt.toISOString() : null,
+    listenerCount: space.listenerCount,
+    speakerCount: space.speakerCount,
+    reactionCount: space.reactionCount,
+    tags: space.tags ?? [],
     createdAt: space.createdAt.toISOString(),
     updatedAt: space.updatedAt.toISOString(),
     host: toPublicHost(space.host),

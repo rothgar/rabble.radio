@@ -8,6 +8,8 @@ import type { PublicSpace } from '@/types';
 
 interface SpaceCardProps {
   space: PublicSpace;
+  /** Render with a "featured / most popular" highlight. */
+  featured?: boolean;
 }
 
 function formatRelative(dateIso: string): string {
@@ -68,14 +70,28 @@ function statusBadge(space: PublicSpace): BadgeSpec {
   }
 }
 
-export function SpaceCard({ space }: SpaceCardProps): ReactElement {
+export function SpaceCard({ space, featured = false }: SpaceCardProps): ReactElement {
   const badge = statusBadge(space);
   return (
     <Link
-      href={`/space/${space.id}`}
-      className="group flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900 p-4 transition hover:border-sky-600 hover:bg-slate-800/80"
+      href={`/show/${space.id}`}
+      className={
+        'group flex flex-col gap-3 rounded-lg border p-4 transition ' +
+        (featured
+          ? 'border-sky-500 bg-gradient-to-br from-sky-900/60 to-slate-900 ring-1 ring-sky-500/60 hover:ring-sky-400'
+          : 'border-slate-800 bg-slate-900 hover:border-sky-600 hover:bg-slate-800/80')
+      }
       data-testid="space-card"
+      data-featured={featured ? 'true' : 'false'}
     >
+      {featured ? (
+        <span
+          className="inline-flex w-fit items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+          data-testid="featured-badge"
+        >
+          Most popular
+        </span>
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <h3 className="line-clamp-2 text-base font-semibold text-slate-100 group-hover:text-sky-300">
           {space.title}
@@ -105,6 +121,33 @@ export function SpaceCard({ space }: SpaceCardProps): ReactElement {
         <span>@{space.host.handle}</span>
         <span>{formatRelative(space.createdAt)}</span>
       </div>
+      <div
+        className="flex items-center gap-3 border-t border-slate-800 pt-2 text-xs text-slate-400"
+        data-testid="space-metrics"
+      >
+        <span title="Speakers on stage">
+          🎙️ {space.speakerCount}
+        </span>
+        <span title="Listeners">
+          👂 {space.listenerCount}
+        </span>
+        <span title="Reactions">
+          💬 {space.reactionCount}
+        </span>
+      </div>
+      {space.tags.length > 0 ? (
+        <div className="flex flex-wrap gap-1" data-testid="space-tags">
+          {space.tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300"
+              data-testid={`space-tag-${tag}`}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </Link>
   );
 }

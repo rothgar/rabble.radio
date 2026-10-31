@@ -55,6 +55,7 @@ function Bubble({
           : 'bg-[var(--color-accent-800)] ring-1 ring-[var(--color-neutral-800)]')
       }
       data-testid={`${testId}-avatar-${identity}`}
+      data-local-avatar={highlight ? 'true' : undefined}
     >
       {avatarUrl && !broken ? (
         // eslint-disable-next-line @next/next/no-img-element

@@ -35,7 +35,7 @@ export function DeleteSpaceButton({
         method: 'DELETE',
       });
       if (res.ok) {
-        window.location.href = '/spaces';
+        window.location.href = '/stations';
         return;
       }
       const body = (await res

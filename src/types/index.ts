@@ -35,6 +35,12 @@ export interface PublicSpace {
   scheduledAt: string | null;
   /** ISO string when the space should be considered expired, null otherwise. */
   expiresAt: string | null;
+  /** Live occupancy/reaction metrics (drives popularity sorting). */
+  listenerCount: number;
+  speakerCount: number;
+  reactionCount: number;
+  /** Up to 3 category tags used to group shows into stations. */
+  tags: string[];
   createdAt: string;
   updatedAt: string;
   host: PublicHost;

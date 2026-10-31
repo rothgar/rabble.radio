@@ -23,27 +23,9 @@ export function NocturneShell({
       data-testid="nocturne-shell"
     >
       <header
-        className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-divider)] bg-[var(--color-bg)]/95 px-6 py-3 backdrop-blur"
+        className="sticky top-0 z-30 flex items-center justify-end border-b border-[var(--color-divider)] bg-[var(--color-bg)]/95 px-6 py-3 backdrop-blur"
         data-testid="nocturne-nav"
       >
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-700)] text-[var(--color-accent-200)]"
-          >
-            {/* Inline SVG brand mark: a stylized broadcast ring */}
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-              <path d="M5 5a10 10 0 0 0 0 14" />
-              <path d="M19 5a10 10 0 0 1 0 14" />
-              <path d="M8 8a6 6 0 0 0 0 8" />
-              <path d="M16 8a6 6 0 0 1 0 8" />
-            </svg>
-          </span>
-          <span className="text-base font-medium tracking-tight">
-            Rabble Radio
-          </span>
-        </div>
         <div data-testid="nocturne-nav-avatar">{navAvatar}</div>
       </header>
 
@@ -57,12 +39,14 @@ export function NocturneShell({
         </aside>
       </div>
 
-      <div
+      <footer
         className="sticky bottom-0 z-30 mt-auto border-t border-[var(--color-divider)] bg-[var(--color-bg)]/95 px-4 py-3 backdrop-blur"
-        data-testid="nocturne-bottombar"
+        data-testid="nocturne-footer"
       >
-        {bottomBar}
-      </div>
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-3">
+          {bottomBar}
+        </div>
+      </footer>
     </div>
   );
 }

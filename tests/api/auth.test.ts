@@ -255,7 +255,7 @@ describe('GET /api/auth/bluesky/callback', () => {
       },
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toContain('/spaces');
+    expect(res.headers.get('location')).toContain('/stations');
     expect(cookieJar.get('bs_spaces_session')).toBeTruthy();
   });
 

@@ -253,6 +253,54 @@ export async function generateToken(
 }
 
 /**
+ * Return the number of participants currently in a LiveKit room, or `-1` if
+ * the LiveKit server could not be reached (e.g. misconfigured env or a
+ * transient network error). Callers use `-1` to fail safe and avoid expiring
+ * a room whose occupancy is unknown.
+ */
+export async function getRoomParticipantCount(roomName: string): Promise<number> {
+  try {
+    const client = getLiveKitClient();
+    const participants = await client.listParticipants(roomName);
+    return participants.length;
+  } catch {
+    return -1;
+  }
+}
+
+export interface RoomParticipantSummary {
+  /** Participants with publish rights (hosts + speakers). */
+  speakers: number;
+  /** Participants without publish rights (listen-only). */
+  listeners: number;
+}
+
+/**
+ * Return a breakdown of a room's participants by role, or `null` if the
+ * LiveKit server could not be reached. A speaker is a participant with
+ * publish rights (`canPublish`); everyone else is a listener. Used by the
+ * metrics sweep to snapshot live occupancy.
+ */
+export async function getRoomParticipantSummary(
+  roomName: string
+): Promise<RoomParticipantSummary | null> {
+  try {
+    const client = getLiveKitClient();
+    const participants = await client.listParticipants(roomName);
+    let speakers = 0;
+    let listeners = 0;
+    for (const p of participants) {
+      const perms = (p.permission ?? {}) as { canPublish?: boolean };
+      if (perms.canPublish === false) listeners++;
+      else speakers++;
+    }
+    return { speakers, listeners };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Idempotently create a LiveKit room. If the room already exists this is a
  * no-op; otherwise it creates it with sensible defaults for an audio space
  * (emptyTimeout / departureTimeout keep the room around long enough for

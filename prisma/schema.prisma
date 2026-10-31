@@ -36,10 +36,24 @@ model Space {
   /// When an unscheduled empty space should be considered expired. Null for
   /// scheduled spaces until after the scheduled time passes.
   expiresAt   DateTime?
+  /// The time the room was last observed empty (no LiveKit participants).
+  /// Null while the room is occupied or has never been observed empty.
+  /// Spaces empty for longer than EMPTY_SPACE_TTL_MS are expired by the
+  /// occupancy sweep.
+  emptySince  DateTime?
   /// One of "scheduled", "active", "live", "ended", "expired". Becomes the
   /// source of truth over time; `isLive` is kept updated for backwards
   /// compatibility.
   status      String    @default("active")
+  /// Live occupancy metrics (snapshots refreshed by the metrics sweep).
+  /// `listenerCount`/`speakerCount` come from LiveKit participants;
+  /// `reactionCount` is incremented when participants react.
+  listenerCount Int       @default(0)
+  speakerCount  Int       @default(0)
+  reactionCount Int       @default(0)
+  /// Up to 3 category tags (from the YouTube video-category list) used to
+  /// group shows into stations.
+  tags        String[]  @default([])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -53,6 +67,7 @@ model Space {
   @@index([status])
   @@index([scheduledAt])
   @@index([expiresAt])
+  @@index([emptySince])
 }
 
 /// Per-session recording row. Created when the host goes live and an

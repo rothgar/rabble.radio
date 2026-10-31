@@ -13,7 +13,7 @@ function canonicalBaseUrl(): string {
   return (
     process.env.PUBLIC_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    'https://rabble.exe.xyz'
+    'https://rabbit.invalid'
   ).replace(/\/+$/, '');
 }
 

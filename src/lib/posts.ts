@@ -96,6 +96,34 @@ export async function listSpacePosts(
   );
 }
 
+/**
+ * Count posts per space for many spaces at once. Returns a map keyed by
+ * spaceId. Spaces with no posts are omitted.
+ */
+export async function countPostsBySpace(
+  spaceIds: string[]
+): Promise<Record<string, number>> {
+  const unique = Array.from(new Set(spaceIds.filter(Boolean)));
+  if (unique.length === 0) return {};
+  const client = prisma as unknown as {
+    spacePost: {
+      groupBy: (args: unknown) => Promise<
+        Array<{ spaceId: string; _count: { _all: number } }>
+      >;
+    };
+  };
+  const rows = await client.spacePost.groupBy({
+    by: ['spaceId'],
+    where: { spaceId: { in: unique } },
+    _count: { _all: true },
+  });
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    out[r.spaceId] = r._count._all;
+  }
+  return out;
+}
+
 export function toPublicSpacePost(
   row: SpacePostModel,
   view: PostView

@@ -114,7 +114,7 @@ sync: ## Sync source, tests, and Prisma files to the remote host
 
 .PHONY: remote-migrate
 remote-migrate: ## Run Prisma migrations on the remote host
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && docker compose run --rm migrate npx prisma migrate deploy'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && docker compose run --rm migrate'
 
 .PHONY: remote-build
 remote-build: ## Build the Docker image on the remote host

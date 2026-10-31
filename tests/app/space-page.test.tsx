@@ -32,7 +32,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { useParams } from 'next/navigation';
-import SpacePage from '@/app/space/[id]/page';
+import SpacePage from '@/app/show/[id]/page';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
 
@@ -234,23 +234,23 @@ describe('<SpacePage />', () => {
   });
 
   it('retries loading when the retry button is clicked', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('first boom'))
-      .mockImplementation((url: string) => {
-        if (url === '/api/spaces/sp1') {
-          return Promise.resolve(
-            jsonResponse({ space: makeSpace() })
-          );
+    let firstSpaceFetch = true;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/spaces/sp1') {
+        if (firstSpaceFetch) {
+          firstSpaceFetch = false;
+          return Promise.reject(new Error('first boom'));
         }
-        if (url === '/api/me') {
-          return Promise.resolve(jsonResponse({}));
-        }
-        if (url === '/api/spaces/sp1/recording') {
-          return Promise.resolve(jsonResponse({ recording: null }));
-        }
-        return Promise.reject(new Error(`unexpected url ${url}`));
-      });
+        return Promise.resolve(jsonResponse({ space: makeSpace() }));
+      }
+      if (url === '/api/me') {
+        return Promise.resolve(jsonResponse({}, 401));
+      }
+      if (url === '/api/spaces/sp1/recording') {
+        return Promise.resolve(jsonResponse({ recording: null }));
+      }
+      return Promise.reject(new Error(`unexpected url ${url}`));
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<SpacePage />);
@@ -291,9 +291,11 @@ describe('<SpacePage />', () => {
       expect(screen.getByTestId('space-detail')).toBeInTheDocument();
     });
     // Anonymous viewer sees the sign-in prompt instead of a join button.
-    expect(
-      screen.getByRole('link', { name: /sign in/i })
-    ).toHaveAttribute('href', '/api/auth/bluesky');
+    const signInLinks = screen.getAllByRole('link', { name: /sign in/i });
+    expect(signInLinks.length).toBeGreaterThan(0);
+    for (const link of signInLinks) {
+      expect(link).toHaveAttribute('href', '/api/auth/bluesky');
+    }
     expect(screen.queryByTestId('join-button')).not.toBeInTheDocument();
   });
 });

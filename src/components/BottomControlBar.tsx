@@ -17,6 +17,17 @@ export interface BottomControlBarProps {
   onToggleHand?: () => void;
 }
 
+/**
+ * Shared action-button classes. Every control button is `flex-1 min-w-0` so
+ * all buttons in a row are the same width and shape regardless of label
+ * length, with centered, truncated text so nothing misaligns on mobile.
+ */
+const ACTION_BTN =
+  'inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]';
+
+const ACTION_BTN_SECONDARY =
+  'border border-[var(--color-divider)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-accent-800)]';
+
 export function BottomControlBar({
   role,
   micOn,
@@ -30,13 +41,14 @@ export function BottomControlBar({
   const renderActions = (): ReactElement => {
     if (role === 'audience') {
       return (
-        <div className="flex items-center gap-2" data-testid="bottom-bar-audience">
+        <div className="flex w-full items-center gap-2" data-testid="bottom-bar-audience">
           <button
             type="button"
             onClick={() => onToggleHand?.()}
             aria-pressed={handRaised}
             className={
-              'inline-flex min-w-[190px] items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ' +
+              ACTION_BTN +
+              ' ' +
               (handRaised
                 ? 'border border-[var(--color-accent)] bg-[var(--color-accent-800)] text-[var(--color-accent-100)] hover:bg-[var(--color-accent-700)]'
                 : 'bg-[var(--color-accent)] text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]')
@@ -44,16 +56,25 @@ export function BottomControlBar({
             data-testid="bottom-bar-raise-hand"
           >
             <Hand size={16} weight="bold" />
-            {handRaised ? 'Hand raised' : 'Raise hand to speak'}
+            <span className="truncate">
+              {handRaised ? (
+                'Hand raised'
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Raise hand to speak</span>
+                  <span className="sm:hidden">Raise hand</span>
+                </>
+              )}
+            </span>
           </button>
           <button
             type="button"
             onClick={onLeave}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-accent-800)]"
+            className={`${ACTION_BTN} ${ACTION_BTN_SECONDARY}`}
             data-testid="bottom-bar-leave"
           >
             <SignOut size={16} weight="bold" />
-            Leave
+            <span className="truncate">Leave</span>
           </button>
         </div>
       );
@@ -61,39 +82,40 @@ export function BottomControlBar({
 
     // host + speaker share mic toggle + leave
     return (
-      <div className="flex items-center gap-2" data-testid="bottom-bar-speaker">
+      <div className="flex w-full items-center gap-2" data-testid="bottom-bar-speaker">
         <button
           type="button"
           onClick={onMicToggle}
           aria-pressed={micOn}
           className={
-            'inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ' +
+            ACTION_BTN +
+            ' ' +
             (micOn
-              ? 'border border-[var(--color-divider)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-accent-800)]'
+              ? ACTION_BTN_SECONDARY
               : 'bg-[var(--color-accent)] text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]')
           }
           data-testid="bottom-bar-mic-toggle"
         >
-          {micOn ? 'Mute mic' : 'Unmute mic'}
+          <span className="truncate">{micOn ? 'Mute mic' : 'Unmute mic'}</span>
         </button>
         {role === 'speaker' && onStepDown ? (
           <button
             type="button"
             onClick={onStepDown}
-            className="inline-flex items-center justify-center rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-accent-800)]"
+            className={`${ACTION_BTN} ${ACTION_BTN_SECONDARY}`}
             data-testid="bottom-bar-step-down"
           >
-            Step down
+            <span className="truncate">Step down</span>
           </button>
         ) : null}
         <button
           type="button"
           onClick={onLeave}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-accent-800)]"
+          className={`${ACTION_BTN} ${ACTION_BTN_SECONDARY}`}
           data-testid="bottom-bar-leave"
         >
           <SignOut size={16} weight="bold" />
-          Leave
+          <span className="truncate">Leave</span>
         </button>
       </div>
     );
@@ -101,7 +123,7 @@ export function BottomControlBar({
 
   return (
     <div
-      className="mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4"
+      className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center justify-between gap-3"
       data-testid="bottom-control-bar"
       data-role={role}
     >
@@ -109,10 +131,12 @@ export function BottomControlBar({
         <ReactionBar onReact={onReact} />
         <span
           aria-hidden
-          className="mx-1 h-6 w-px bg-[var(--color-divider)]"
+          className="mx-1 hidden h-6 w-px bg-[var(--color-divider)] sm:block"
         />
       </div>
-      <div className="flex items-center gap-2">{renderActions()}</div>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {renderActions()}
+      </div>
     </div>
   );
 }

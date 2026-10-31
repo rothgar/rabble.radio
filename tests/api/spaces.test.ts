@@ -136,7 +136,7 @@ function publicSpaceFromRow(space: Record<string, unknown>) {
       displayName: 'Alice',
       avatarUrl: null,
     },
-    shareableUrl: `http://localhost/space/${space.id}`,
+    shareableUrl: `http://localhost/show/${space.id}`,
   };
 }
 
@@ -177,7 +177,7 @@ describe('GET /api/spaces', () => {
     const body = await res.json();
     expect(body.spaces).toHaveLength(2);
     expect(body.spaces[0].id).toBe('sp2');
-    expect(body.spaces[0].shareableUrl).toBe('http://localhost/space/sp2');
+    expect(body.spaces[0].shareableUrl).toBe('http://localhost/show/sp2');
   });
 });
 
@@ -234,10 +234,11 @@ describe('POST /api/spaces', () => {
     const body = await res.json();
     expect(body.space.id).toBe('sp1');
     expect(body.space.title).toBe('New room');
-    expect(body.space.shareableUrl).toBe('http://localhost/space/sp1');
+    expect(body.space.shareableUrl).toBe('http://localhost/show/sp1');
     expect(mockCreateSpace).toHaveBeenCalledWith({
       title: 'New room',
       description: 'Talking about things',
+      tags: [],
       hostId: 'did:plc:host123',
       scheduledAt: null,
     });
@@ -418,6 +419,7 @@ describe('POST /api/spaces', () => {
     expect(mockCreateSpace).toHaveBeenCalledWith({
       title: 'Later',
       description: null,
+      tags: [],
       hostId: 'did:plc:host123',
       scheduledAt: scheduled,
     });
@@ -469,6 +471,7 @@ describe('POST /api/spaces', () => {
     expect(mockCreateSpace).toHaveBeenCalledWith({
       title: 'Now',
       description: null,
+      tags: [],
       hostId: 'did:plc:host123',
       scheduledAt: null,
     });
@@ -483,7 +486,7 @@ describe('POST /api/spaces', () => {
     });
     expect(mockPublishLiveStatus).toHaveBeenCalledTimes(1);
     expect(mockPublishLiveStatus.mock.calls[0][0]).toMatchObject({
-      spaceUrl: 'http://localhost/space/sp1',
+      spaceUrl: 'http://localhost/show/sp1',
       title: 'My room',
       session: {
         did: 'did:plc:host123',

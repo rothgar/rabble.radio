@@ -213,3 +213,30 @@ These are intentionally out of scope for Chunk 7:
 - Observability stack (Prometheus, Grafana, OpenTelemetry).
 
 Each of these is a separate chunk once the MVP is validated.
+
+## Homelab deployment (wrtk8s via Flux)
+
+The live deployment lives in the `homelab-flux` repo under
+`clusters/wrtk8s/rabble/` and is reconciled by Flux from `main`.
+
+1. Commit the app change on `main` here, then build and push a sha-tagged
+   image (the registry accepts pushes from the LAN):
+
+   ```bash
+   SHA=$(git rev-parse --short HEAD)
+   docker build -t cr.jgarr.net/rabble:$SHA -t cr.jgarr.net/rabble:latest .
+   docker push cr.jgarr.net/rabble:$SHA && docker push cr.jgarr.net/rabble:latest
+   ```
+
+2. In `homelab-flux`, set `image: cr.jgarr.net/rabble:$SHA` in both
+   `app.yaml` and `migrate-job.yaml`, and rename the Job to
+   `rabble-migrate-$SHA` (Job specs are immutable; Flux prunes the old one).
+   Commit and push to `main`.
+
+3. `flux reconcile source git flux-system && flux reconcile kustomization flux-system`,
+   then `kubectl -n rabble rollout status deploy/rabble-app` and
+   `curl https://rabble.jgarr.net/api/health`.
+
+Public hostnames are HTTPRoutes on the shared Traefik Gateway
+(`rabble.jgarr.net` for the app, `rabble-livekit.jgarr.net` for LiveKit
+signaling) published to Cloudflare by external-dns.

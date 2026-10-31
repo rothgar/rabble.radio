@@ -18,6 +18,10 @@
   --color-bg:             #161826;  /* Page / window background */
   --color-surface:        #232532;  /* Card, panel, list-row background */
   --color-surface-raised: #2c2f43;  /* Sheet, popover, elevated surface */
+  /* Translucent variants for sticky bars and placeholder panels (Tailwind 3
+     cannot apply an opacity modifier to a var() color). */
+  --color-bg-translucent:      rgba(22, 24, 38, 0.95);
+  --color-surface-translucent: rgba(35, 37, 50, 0.40);
 
   /* ── Text ────────────────────────────────────────────────────────────── */
   --color-text:           #e9e9ed;  /* Primary label */

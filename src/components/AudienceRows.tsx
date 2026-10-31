@@ -87,7 +87,7 @@ export function AudienceRows({
   if (audience.length === 0) {
     return (
       <div
-        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface)]/40 p-4 text-sm text-[var(--color-neutral-500)]"
+        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-neutral-500)]"
         data-testid="audience-rows-empty"
       >
         No listeners yet.

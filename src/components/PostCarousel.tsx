@@ -116,7 +116,7 @@ export function PostCarousel({
   if (posts.length === 0) {
     return (
       <div
-        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface)]/40 p-3 text-xs text-[var(--color-neutral-500)]"
+        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-3 text-xs text-[var(--color-neutral-500)]"
         data-testid="post-carousel-empty"
       >
         {emptyMessage}

@@ -39,7 +39,7 @@ export function SiteHeader(): ReactElement {
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 px-4 py-3 backdrop-blur sm:px-6"
+      className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg-translucent)] px-4 py-3 backdrop-blur sm:px-6"
       data-testid="site-header"
     >
       <Link

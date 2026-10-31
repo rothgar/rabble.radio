@@ -24,7 +24,7 @@ export function NocturneShell({
       data-testid="nocturne-shell"
     >
       <header
-        className="sticky top-0 z-30 flex min-h-touch items-center justify-between border-b border-[var(--color-divider)] bg-[var(--color-bg)]/95 px-4 py-3 backdrop-blur sm:px-6"
+        className="sticky top-0 z-30 flex min-h-touch items-center justify-between border-b border-[var(--color-divider)] bg-[var(--color-bg-translucent)] px-4 py-3 backdrop-blur sm:px-6"
         data-testid="nocturne-nav"
       >
         <Link
@@ -59,7 +59,7 @@ export function NocturneShell({
       </div>
 
       <footer
-        className="sticky bottom-0 z-30 mt-auto border-t border-[var(--color-divider)] bg-[var(--color-bg)]/95 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:px-6"
+        className="sticky bottom-0 z-30 mt-auto border-t border-[var(--color-divider)] bg-[var(--color-bg-translucent)] px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:px-6"
         data-testid="nocturne-footer"
       >
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-3">

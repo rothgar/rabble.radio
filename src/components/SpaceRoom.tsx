@@ -424,7 +424,7 @@ function Inner({
       </h2>
       {speakers.length === 0 ? (
         <p
-          className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface)]/40 p-4 text-sm text-[var(--color-neutral-500)]"
+          className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-neutral-500)]"
           data-testid="on-stage-empty"
         >
           No speakers yet.

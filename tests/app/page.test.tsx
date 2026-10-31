@@ -1,18 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+
+const { mockRedirect } = vi.hoisted(() => ({ mockRedirect: vi.fn() }));
+
+vi.mock('next/navigation', () => ({
+  redirect: mockRedirect,
+}));
+
 import HomePage from '@/app/page';
 
 describe('HomePage', () => {
-  it('renders the Rabble heading', () => {
-    render(<HomePage />);
-    expect(
-      screen.getByRole('heading', { level: 1, name: /rabble/i })
-    ).toBeInTheDocument();
-  });
-
-  it('renders a link to /api/health', () => {
-    render(<HomePage />);
-    const link = screen.getByRole('link', { name: /check health/i });
-    expect(link).toHaveAttribute('href', '/api/health');
+  it('redirects to /stations', () => {
+    HomePage();
+    expect(mockRedirect).toHaveBeenCalledWith('/stations');
   });
 });

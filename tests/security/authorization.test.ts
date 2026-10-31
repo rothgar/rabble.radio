@@ -389,6 +389,9 @@ describe('GET /api/auth/bluesky/callback — state mismatch', () => {
     const res = await GET(req);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toBe('oauth_state_mismatch');
+    // State validation is delegated to @atproto/oauth-client-node, which
+    // rejects an unknown state inside callback(); the route maps any
+    // callback failure (including a missing session) to a 400.
+    expect(body.error).toBe('oauth_callback_failed');
   });
 });

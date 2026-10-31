@@ -12,7 +12,10 @@ const mockPrisma = {
 
 vi.mock('@prisma/client', () => {
   return {
-    PrismaClient: vi.fn().mockImplementation(() => mockPrisma),
+    // vitest 4+ mocks are only constructible when given a real function.
+    PrismaClient: vi.fn(function PrismaClient() {
+      return mockPrisma;
+    }),
   };
 });
 

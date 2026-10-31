@@ -1,16 +1,35 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
+import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextTs from 'eslint-config-next/typescript';
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    ignores: [
+      '.next/**',
+      '.claude/**',
+      '.kimchi/**',
+      'node_modules/**',
+      'src/generated/**',
+      'redesign/**',
+      'coverage/**',
+      'dist/**',
+    ],
+  },
+  ...nextVitals,
+  ...nextTs,
+  {
+    files: ['next.config.js', 'postcss.config.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    rules: {
+      // React Compiler lint rule introduced with eslint-config-next 16. The
+      // codebase has several fetch-then-setState effects that predate it;
+      // surface them as warnings until they are migrated.
+      'react-hooks/set-state-in-effect': 'warn',
+    },
+  },
 ];
 
 export default eslintConfig;

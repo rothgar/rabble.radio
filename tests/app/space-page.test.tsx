@@ -46,6 +46,10 @@ function makeSpace(overrides: Partial<PublicSpace> = {}): PublicSpace {
     status: 'scheduled',
     scheduledAt: '2025-03-01T00:00:00.000Z',
     expiresAt: null,
+    listenerCount: 0,
+    speakerCount: 0,
+    reactionCount: 0,
+    tags: [],
     createdAt: '2025-02-01T00:00:00.000Z',
     updatedAt: '2025-02-01T00:00:00.000Z',
     host: {
@@ -294,7 +298,7 @@ describe('<SpacePage />', () => {
     const signInLinks = screen.getAllByRole('link', { name: /sign in/i });
     expect(signInLinks.length).toBeGreaterThan(0);
     for (const link of signInLinks) {
-      expect(link).toHaveAttribute('href', '/api/auth/bluesky');
+      expect(link).toHaveAttribute('href', '/login');
     }
     expect(screen.queryByTestId('join-button')).not.toBeInTheDocument();
   });

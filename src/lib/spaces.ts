@@ -571,7 +571,7 @@ const LOOPBACK_HOSTS = new Set([
  * Canonical public origin used to build shareable URLs. Falls back through:
  *   1. `NEXT_PUBLIC_APP_URL`
  *   2. `PUBLIC_URL`
- *   3. `https://rabbit.invalid`
+ *   3. `https://rabble.invalid`
  *
  * The fallback list is intentionally defined here (and re-exported via
  * `defaultPublicOrigin`) so the spaces service is the single source of
@@ -581,7 +581,7 @@ export function defaultPublicOrigin(): string {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.PUBLIC_URL ||
-    'https://rabbit.invalid'
+    'https://rabble.invalid'
   );
 }
 

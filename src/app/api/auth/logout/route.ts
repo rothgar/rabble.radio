@@ -9,17 +9,21 @@ import { destroySession } from '@/lib/session';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function canonicalBaseUrl(): string {
-  return (
-    process.env.PUBLIC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    'https://rabbit.invalid'
-  ).replace(/\/+$/, '');
+/**
+ * Base URL for the post-logout redirect. Prefers the configured public
+ * origin (so a deployment behind a TLS-terminating proxy redirects to the
+ * https host), falling back to the request's own origin for local dev.
+ */
+function canonicalBaseUrl(request: Request): string {
+  const configured =
+    process.env.PUBLIC_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  return new URL(request.url).origin;
 }
 
-async function handleLogout(_request: Request): Promise<NextResponse> {
+async function handleLogout(request: Request): Promise<NextResponse> {
   await destroySession();
-  const url = new URL('/', canonicalBaseUrl());
+  const url = new URL('/', canonicalBaseUrl(request));
   return NextResponse.redirect(url, { status: 302 });
 }
 

@@ -32,6 +32,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  if (!result?.session) {
+    log.error('oauth.callback.failed', { message: 'No session returned.' });
+    return NextResponse.json(
+      {
+        error: 'oauth_callback_failed',
+        message: 'OAuth callback did not return a session.',
+        correlationId,
+      },
+      { status: 400 }
+    );
+  }
+
   const oauthSession = result.session;
   log.info('oauth.callback.result', {
     did: oauthSession.sub,

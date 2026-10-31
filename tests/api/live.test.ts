@@ -165,7 +165,7 @@ describe('POST /api/spaces/[id]/live', () => {
     expect(mockSetSpaceLive).toHaveBeenCalledWith('sp1', true);
     expect(mockPublishLiveStatus).toHaveBeenCalledTimes(1);
     expect(mockPublishLiveStatus.mock.calls[0][0].spaceUrl).toBe(
-      'http://localhost/spaces/sp1'
+      'http://localhost/show/sp1'
     );
   });
 

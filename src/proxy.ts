@@ -1,4 +1,4 @@
-// src/middleware.ts
+// src/proxy.ts
 //
 // Redirects legacy /spaces, /space, and /shows routes to their /stations and
 // /show equivalents, and protects the authenticated show pages by checking
@@ -67,7 +67,7 @@ function getSessionSecret(): string | null {
   return secret;
 }
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   // First, redirect legacy routes to the current ones.

@@ -3,6 +3,7 @@
 // Targeted unit tests for the Prisma-backed ATProto OAuth session store.
 // Mocks Prisma so this runs without a real database.
 
+import type { NodeSavedSession } from '@atproto/oauth-client-node';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPrismaSessionStore } from '@/lib/oauth-session-store';
 
@@ -20,13 +21,16 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-const sampleSession = {
+const sampleSession: NodeSavedSession = {
+  authMethod: { method: 'none' },
   dpopJwk: { kty: 'EC', crv: 'P-256', x: 'abc', y: 'def' } as const,
   tokenSet: {
     access_token: 'at',
     refresh_token: 'rt',
     token_type: 'DPoP',
-    expires_at: Date.now() / 1000 + 3600,
+    iss: 'https://pds.local',
+    aud: 'did:web:pds.local',
+    expires_at: new Date(Date.now() + 3600_000).toISOString(),
     scope: 'atproto',
     sub: 'did:plc:abc123',
   },

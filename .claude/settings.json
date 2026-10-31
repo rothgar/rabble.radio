@@ -1,0 +1,20 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "worktree": { "baseRef": "head" },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm test*)",
+      "Bash(pnpm typecheck*)",
+      "Bash(pnpm lint*)",
+      "Bash(pnpm prisma:generate*)",
+      "Bash(rtk pnpm test*)",
+      "Bash(rtk pnpm typecheck*)",
+      "Bash(rtk pnpm lint*)",
+      "Bash(rtk git status*)",
+      "Bash(rtk git diff*)",
+      "Bash(rtk git log*)"
+    ]
+  }
+}

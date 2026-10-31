@@ -58,4 +58,22 @@ describe('<BottomControlBar />', () => {
       );
     }
   });
+
+  it('anonymous listeners get a sign-in link instead of raise hand', () => {
+    render(
+      <BottomControlBar
+        role="audience"
+        anonymous
+        signInHref="/login?next=%2Fshow%2Fsp1"
+        {...baseProps()}
+      />
+    );
+    const bar = screen.getByTestId('bottom-control-bar');
+    expect(bar).toHaveAttribute('data-anonymous', 'true');
+    expect(screen.queryByTestId('bottom-bar-raise-hand')).not.toBeInTheDocument();
+    const link = screen.getByTestId('bottom-bar-signin');
+    expect(link).toHaveAttribute('href', '/login?next=%2Fshow%2Fsp1');
+    expect(link.className).toContain('min-h-touch');
+    expect(screen.getByTestId('bottom-bar-leave')).toBeInTheDocument();
+  });
 });

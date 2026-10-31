@@ -94,6 +94,9 @@ describe('/station/[tag] page', () => {
     const shows = screen.getAllByTestId('station-show');
     expect(shows).toHaveLength(2);
     expect(screen.getByTestId('station-count')).toHaveTextContent('2 shows');
+    // 3 + 3 listeners across the two shows carrying the tag (anonymous
+    // listeners are part of listenerCount from the occupancy sweep).
+    expect(screen.getByTestId('station-listeners')).toHaveTextContent('6 listening');
     expect(screen.getAllByTestId('station-host-avatar')).toHaveLength(2);
     expect(shows[0]).toHaveTextContent('4 posts');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Music');

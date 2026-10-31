@@ -5,6 +5,10 @@
 //   GET /.well-known/jwks.json
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// The modules under test pull in @/lib/db transitively; stub it so no real
+// PrismaClient is constructed (its engine load rejects asynchronously).
+vi.mock('@/lib/db', () => ({ prisma: {} }));
 import { generateKeyPair, exportPKCS8, exportJWK } from 'jose';
 
 function resetAuthState(): void {

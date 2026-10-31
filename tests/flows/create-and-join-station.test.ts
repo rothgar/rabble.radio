@@ -205,12 +205,29 @@ describe('flow: host creates a station show, users join, host goes live', () => 
     expect(body.spaces.map((s: { id: string }) => s.id)).toEqual([showId]);
   });
 
-  it('anonymous join is rejected with 401', async () => {
+  it('a visitor without an account joins as an anonymous listener', async () => {
     state.currentUser = null;
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
     const res = await POST(
       new NextRequest(`http://localhost/api/spaces/${showId}/join`, {
         method: 'POST',
+      }),
+      params(showId)
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.anonymous).toBe(true);
+    expect(body.role).toBe('audience');
+    expect(body.identity).toMatch(/^anon:/);
+    expect(body.token).toBe(`tok-audience-${body.identity}`);
+  });
+
+  it('an anonymous visitor cannot take the show live', async () => {
+    state.currentUser = null;
+    const { POST } = await import('@/app/api/spaces/[id]/live/route');
+    const res = await POST(
+      jsonRequest(`http://localhost/api/spaces/${showId}/live`, {
+        action: 'start',
       }),
       params(showId)
     );

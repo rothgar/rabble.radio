@@ -175,3 +175,51 @@ describe('<SpacePageClient /> onJoinedChange', () => {
     expect(onJoinedChange).toHaveBeenLastCalledWith(true);
   });
 });
+
+describe('<SpacePageClient /> anonymous listening', () => {
+  it('lets a signed-out visitor listen and mounts the room as anonymous', async () => {
+    global.fetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.endsWith('/join') && init?.method === 'POST') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              token: 'jwt-token',
+              wsUrl: 'wss://livekit.example.com',
+              role: 'audience',
+              roomName: 'space-room',
+              identity: 'anon:123',
+              handle: '',
+              displayName: null,
+              avatarUrl: null,
+              anonymous: true,
+            }),
+          } as unknown as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ posts: [] }),
+        } as unknown as Response;
+      }
+    ) as unknown as typeof fetch;
+
+    render(<SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} />);
+
+    const card = await screen.findByTestId('space-unauthenticated');
+    expect(card).toBeInTheDocument();
+    expect(screen.getByTestId('space-signin-link')).toHaveAttribute(
+      'href',
+      `/login?next=${encodeURIComponent(`/show/${SPACE_ID}`)}`
+    );
+    expect(screen.queryByTestId('join-button')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('listen-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('space-room')).toBeInTheDocument();
+    });
+  });
+});

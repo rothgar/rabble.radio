@@ -1,9 +1,10 @@
 // src/proxy.ts
 //
 // Redirects legacy /spaces, /space, and /shows routes to their /stations and
-// /show equivalents, and protects the authenticated show pages by checking
-// for a sealed session cookie. The public stations listing and anything else
-// (the marketing home, health check, and OAuth routes) are allowed through.
+// /show equivalents, and protects the pages that require a session (creating
+// a show) by checking for a sealed session cookie. Browsing stations and
+// listening to a show are public; the show page offers anonymous listening
+// and prompts for sign-in only to take part.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { sealData, unsealData } from 'iron-session';
@@ -42,11 +43,9 @@ function loginRedirect(request: NextRequest): NextResponse {
 }
 
 function isProtectedPath(pathname: string): boolean {
-  // Creating a show and viewing a show detail page require a session.
+  // Creating a show requires a session. Show pages are public so anyone can
+  // listen; the page itself asks for sign-in before joining the stage.
   if (pathname === '/stations/new' || pathname.startsWith('/stations/new/')) {
-    return true;
-  }
-  if (/^\/show\/[^/]+\/?$/.test(pathname)) {
     return true;
   }
   return false;

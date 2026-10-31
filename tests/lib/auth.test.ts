@@ -5,6 +5,10 @@
 // confirm the loopback metadata has the shape Bluesky expects.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// The modules under test pull in @/lib/db transitively; stub it so no real
+// PrismaClient is constructed (its engine load rejects asynchronously).
+vi.mock('@/lib/db', () => ({ prisma: {} }));
 import {
   buildAtprotoLoopbackClientMetadata,
 } from '@atproto/oauth-client-node';

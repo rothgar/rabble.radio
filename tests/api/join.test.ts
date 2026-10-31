@@ -89,8 +89,9 @@ beforeEach(() => {
 });
 
 describe('POST /api/spaces/[id]/join', () => {
-  it('requires authentication', async () => {
+  it('issues an anonymous listen-only token without a session', async () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
     const req = new NextRequest('http://localhost/api/spaces/sp1/join', {
       method: 'POST',
@@ -98,9 +99,36 @@ describe('POST /api/spaces/[id]/join', () => {
     const res = await POST(req, {
       params: Promise.resolve({ id: 'sp1' }),
     });
-    expect(res.status).toBe(401);
-    expect(mockCreateRoom).not.toHaveBeenCalled();
-    expect(mockGenerateToken).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.anonymous).toBe(true);
+    expect(body.role).toBe('audience');
+    expect(body.identity).toMatch(/^anon:/);
+    expect(body.handle).toBe('');
+    expect(body.displayName).toBeNull();
+    expect(mockCreateRoom).toHaveBeenCalledWith('sp1');
+    expect(mockGenerateToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'audience',
+        name: 'Listener',
+        identity: expect.stringMatching(/^anon:/),
+      })
+    );
+    // No profile lookup for anonymous listeners.
+    expect(mockFindUserByDid).not.toHaveBeenCalled();
+  });
+
+  it('never grants host to an anonymous caller even if the host DID were guessable', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace({ hostId: 'anon:spoof' }));
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(
+      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    const body = await res.json();
+    expect(body.role).toBe('audience');
+    expect(body.anonymous).toBe(true);
   });
 
   it('returns 404 when the space does not exist', async () => {

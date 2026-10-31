@@ -44,6 +44,7 @@ import { FloatingReaction } from '@/components/FloatingReaction';
 import { StageInviteToast } from '@/components/StageInviteToast';
 import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
 import type { PublicSpacePost } from '@/lib/posts';
+import { isAnonymousIdentity } from '@/lib/anonymous';
 
 export type SpaceRole = 'host' | 'audience';
 export type BottomRole = 'host' | 'speaker' | 'audience';
@@ -57,6 +58,12 @@ export interface SpaceRoomProps {
   handle?: string;
   avatarUrl?: string | null;
   isHost?: boolean;
+  /**
+   * True when the local user joined without an account. Anonymous listeners
+   * hear the room and count toward the listener total but are never rendered
+   * as participants and cannot raise a hand.
+   */
+  anonymous?: boolean;
   hostActions?: {
     onInvite?: (identity: string) => Promise<void> | void;
     onMuteToggle?: (
@@ -109,7 +116,10 @@ function useResolvedProfiles(identities: string[]): ResolvedProfileMap {
   const [profiles, setProfiles] = useState<ResolvedProfileMap>({});
 
   const identitiesKey = useMemo(
-    () => Array.from(new Set(identities)).sort().join('|'),
+    () =>
+      Array.from(new Set(identities.filter((id) => !isAnonymousIdentity(id))))
+        .sort()
+        .join('|'),
     [identities]
   );
 
@@ -216,6 +226,7 @@ interface InnerProps {
   identity: string;
   displayName?: string;
   isHost: boolean;
+  anonymous: boolean;
   hostActions: SpaceRoomProps['hostActions'];
   mergedProfiles: ResolvedProfileMap;
   handleLeave: () => void;
@@ -248,6 +259,7 @@ function Inner({
   identity,
   displayName,
   isHost,
+  anonymous,
   hostActions,
   mergedProfiles,
   handleLeave,
@@ -311,10 +323,13 @@ function Inner({
     (p) => !(p as { isLocal?: boolean }).isLocal && p.identity !== localIdentityKey
   );
 
+  // Anonymous listeners (identity `anon:…`) are counted but never rendered.
   const speakers: Participant[] = [];
   const audience: Participant[] = [];
+  let anonymousListeners = 0;
   for (const p of remoteParticipants) {
-    if (canPublishFor(p)) speakers.push(p);
+    if (isAnonymousIdentity(p.identity)) anonymousListeners++;
+    else if (canPublishFor(p)) speakers.push(p);
     else audience.push(p);
   }
 
@@ -386,7 +401,19 @@ function Inner({
     [localIdentityKey, resolveIdentity]
   );
 
-  const listenerCount = audience.length + speakers.length;
+  // Everyone in the room, including anonymous listeners and the local user
+  // when they are an anonymous listener themselves.
+  const listenerCount =
+    audience.length + speakers.length + anonymousListeners + (anonymous ? 1 : 0);
+  const anonymousNote =
+    anonymousListeners > 0 ? (
+      <p
+        className="text-label text-[var(--color-text-tertiary)]"
+        data-testid="anonymous-listeners"
+      >
+        +{anonymousListeners} listening without an account
+      </p>
+    ) : null;
 
   const navAvatar = (
     <div className="flex items-center gap-2" data-testid="nav-avatar">
@@ -484,8 +511,9 @@ function Inner({
       data-view="rows"
     >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
-        Listening · {audience.length}
+        Listening · {audience.length + anonymousListeners}
       </h2>
+      {anonymousNote}
       <AudienceRows
         audience={audience.map<AudienceMember>((p) => ({
           identity: resolveIdentity(p),
@@ -520,8 +548,9 @@ function Inner({
       data-view="bubbles"
     >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
-        Listening · {audience.length + 1}
+        Listening · {audience.length + anonymousListeners + 1}
       </h2>
+      {anonymousNote}
       <AudienceBubbles
         localIdentity={localIdentityKey}
         localName={localName}
@@ -590,6 +619,8 @@ function Inner({
         bottomBar={
           <BottomControlBar
             role={bottomRole}
+            anonymous={anonymous}
+            signInHref={`/login?next=${encodeURIComponent(`/show/${spaceId}`)}`}
             micOn={micOn}
             onMicToggle={onMicToggle}
             onLeave={handleLeave}
@@ -625,6 +656,7 @@ export function SpaceRoom({
   onLeave,
   stageSlot,
   isHost = false,
+  anonymous = false,
   hostActions,
   title,
   host,
@@ -812,6 +844,7 @@ export function SpaceRoom({
       className="flex flex-col"
       data-testid="space-room"
       data-role={role}
+      data-anonymous={anonymous ? 'true' : 'false'}
     >
       {connectionError ? (
         <div
@@ -840,6 +873,7 @@ export function SpaceRoom({
           identity={identity}
           displayName={displayName}
           isHost={isHost}
+          anonymous={anonymous}
           hostActions={hostActions}
           mergedProfiles={mergedProfiles}
           handleLeave={handleLeave}

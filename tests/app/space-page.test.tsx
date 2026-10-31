@@ -298,7 +298,7 @@ describe('<SpacePage />', () => {
     const signInLinks = screen.getAllByRole('link', { name: /sign in/i });
     expect(signInLinks.length).toBeGreaterThan(0);
     for (const link of signInLinks) {
-      expect(link).toHaveAttribute('href', '/login');
+      expect(link.getAttribute('href') ?? '').toMatch(/^\/login/);
     }
     expect(screen.queryByTestId('join-button')).not.toBeInTheDocument();
   });

@@ -46,6 +46,8 @@ interface JoinResponse {
   handle: string;
   displayName?: string | null;
   avatarUrl?: string | null;
+  /** True when joined without a session (listen-only). */
+  anonymous?: boolean;
 }
 
 interface PostsListResponse {
@@ -260,6 +262,7 @@ export function SpacePageClient({
         handle: body.handle ?? '',
         displayName: body.displayName ?? null,
         avatarUrl: body.avatarUrl ?? null,
+        anonymous: body.anonymous === true,
       });
     } catch (err) {
       setError(
@@ -281,6 +284,7 @@ export function SpacePageClient({
         handle={joined.handle}
         avatarUrl={joined.avatarUrl ?? null}
         isHost={isHost}
+        anonymous={joined.anonymous === true}
         hostActions={hostActions}
         onLeave={handleLeave}
         title={title}
@@ -302,16 +306,43 @@ export function SpacePageClient({
   if (!isAuthenticated) {
     return (
       <section
-        className="rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text)]"
+        className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)] sm:p-6"
         data-testid="space-unauthenticated"
       >
-        <p className="mb-3">Sign in with Bluesky to join this space.</p>
-        <a
-          href="/login"
-          className="inline-block rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]"
-        >
-          Sign in
-        </a>
+        <p>
+          Listen without an account. You will count toward the listener total
+          but will not appear in the room; sign in with Bluesky to raise your
+          hand, react, or take the stage.
+        </p>
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-md border border-[var(--color-live-border)] bg-[var(--color-live-muted)] px-3 py-2 text-sm text-[var(--color-live)]"
+            data-testid="join-error"
+          >
+            {error}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              void onJoin();
+            }}
+            disabled={joining}
+            className="inline-flex min-h-touch items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            data-testid="listen-button"
+          >
+            {joining ? 'Connecting…' : 'Listen'}
+          </button>
+          <a
+            href={`/login?next=${encodeURIComponent(`/show/${spaceId}`)}`}
+            className="inline-flex min-h-touch items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border-strong)] px-4 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-raised)]"
+            data-testid="space-signin-link"
+          >
+            Sign in
+          </a>
+        </div>
       </section>
     );
   }

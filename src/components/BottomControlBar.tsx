@@ -8,6 +8,10 @@ export type BottomControlRole = 'host' | 'speaker' | 'audience';
 
 export interface BottomControlBarProps {
   role: BottomControlRole;
+  /** Anonymous listeners cannot raise a hand; they get a sign-in link instead. */
+  anonymous?: boolean;
+  /** Where the sign-in link should go (defaults to /login). */
+  signInHref?: string;
   micOn: boolean;
   onMicToggle: () => void;
   onLeave: () => void;
@@ -30,6 +34,8 @@ const ACTION_BTN_SECONDARY =
 
 export function BottomControlBar({
   role,
+  anonymous = false,
+  signInHref = '/login',
   micOn,
   onMicToggle,
   onLeave,
@@ -42,6 +48,15 @@ export function BottomControlBar({
     if (role === 'audience') {
       return (
         <div className="flex w-full items-center gap-2" data-testid="bottom-bar-audience">
+          {anonymous ? (
+            <a
+              href={signInHref}
+              className={`${ACTION_BTN} bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]`}
+              data-testid="bottom-bar-signin"
+            >
+              <span className="truncate">Sign in to speak</span>
+            </a>
+          ) : (
           <button
             type="button"
             onClick={() => onToggleHand?.()}
@@ -67,6 +82,7 @@ export function BottomControlBar({
               )}
             </span>
           </button>
+          )}
           <button
             type="button"
             onClick={onLeave}
@@ -126,6 +142,7 @@ export function BottomControlBar({
       className="mx-auto flex w-full max-w-[1180px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"
       data-testid="bottom-control-bar"
       data-role={role}
+      data-anonymous={anonymous ? 'true' : 'false'}
     >
       <div className="flex items-center justify-center gap-3 sm:justify-start">
         <ReactionBar onReact={onReact} />

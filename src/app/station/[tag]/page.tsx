@@ -62,6 +62,8 @@ export default async function StationPage({
   const hosts = Array.from(
     new Map(shows.map((s) => [s.host.did, s.host])).values()
   );
+  // Live occupancy from the LiveKit sweep; includes anonymous listeners.
+  const listening = shows.reduce((sum, s) => sum + s.listenerCount, 0);
 
   return (
     <>
@@ -76,12 +78,21 @@ export default async function StationPage({
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold tracking-tight">{decoded}</h1>
-          <span
-            className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]"
-            data-testid="station-count"
-          >
-            {shows.length} shows
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]"
+              data-testid="station-count"
+            >
+              {shows.length} shows
+            </span>
+            <span
+              className="rounded-full bg-[var(--color-live-muted)] px-2 py-0.5 text-xs font-medium text-[var(--color-live)]"
+              data-testid="station-listeners"
+              title="Everyone listening right now, including people without an account"
+            >
+              {listening} listening
+            </span>
+          </div>
         </div>
         {hosts.length > 0 ? (
           <div

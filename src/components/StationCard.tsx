@@ -31,6 +31,7 @@ export function StationCard({ tag, shows }: StationCardProps): ReactElement {
   const hosts = Array.from(
     new Map(shows.map((s) => [s.host.did, s.host])).values()
   );
+  const listening = shows.reduce((sum, s) => sum + s.listenerCount, 0);
 
   return (
     <Card
@@ -64,6 +65,9 @@ export function StationCard({ tag, shows }: StationCardProps): ReactElement {
           ) : null}
           {hosts.length > 0 ? (
             <span className="ml-auto text-label text-[var(--color-text-tertiary)]">
+              {listening > 0 ? (
+                <span data-testid="station-card-listeners">{listening} listening · </span>
+              ) : null}
               {hosts.length} {hosts.length === 1 ? 'host' : 'hosts'}
             </span>
           ) : null}

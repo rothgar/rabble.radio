@@ -4,6 +4,10 @@
 // modules so we can drive auth, host role, and start/end actions.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// The modules under test pull in @/lib/db transitively; stub it so no real
+// PrismaClient is constructed (its engine load rejects asynchronously).
+vi.mock('@/lib/db', () => ({ prisma: {} }));
 import { NextRequest } from 'next/server';
 
 const {

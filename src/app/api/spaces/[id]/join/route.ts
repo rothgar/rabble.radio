@@ -2,12 +2,15 @@
 //
 // POST /api/spaces/[id]/join
 //
-// Mint a LiveKit access token scoped to the requested space. Requires an
-// authenticated session. The caller is treated as the space host iff their
-// session DID matches the space's hostId; everyone else joins as audience.
+// Mint a LiveKit access token scoped to the requested space. The caller is
+// treated as the space host iff their session DID matches the space's
+// hostId; every other signed-in user joins as audience. Visitors without a
+// session join as anonymous listeners: a listen-only token under a synthetic
+// `anon:<uuid>` identity that counts toward the room's listener total but is
+// never rendered as an active participant and cannot be invited to stage.
 //
 // Returns:
-//   { token, wsUrl, role, roomName }
+//   { token, wsUrl, role, roomName, identity, handle, displayName, avatarUrl, anonymous }
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
@@ -22,6 +25,7 @@ import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/db';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
+import { newAnonymousIdentity } from '@/lib/anonymous';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,6 +39,8 @@ interface JoinResponseBody {
   handle: string;
   displayName: string | null;
   avatarUrl: string | null;
+  /** True when the caller had no session and received a listen-only token. */
+  anonymous: boolean;
 }
 
 interface ErrorBody {
@@ -48,10 +54,9 @@ export async function POST(
 ): Promise<NextResponse<JoinResponseBody | ErrorBody>> {
   const correlationId = correlationIdFromRequest(request);
   const log = createLogger({ correlationId });
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const sessionUser = await getCurrentUser();
+  const anonymous = sessionUser === null;
+  const user = sessionUser ?? { did: newAnonymousIdentity(), handle: '' };
 
   const { id } = await context.params;
   if (!id) {
@@ -69,7 +74,7 @@ export async function POST(
   }
 
   const role: SpaceRole =
-    user.did === space.hostId ? 'host' : 'audience';
+    !anonymous && user.did === space.hostId ? 'host' : 'audience';
   const roomName = roomNameForSpace(space.id);
 
   try {
@@ -99,10 +104,12 @@ export async function POST(
   // client can render a friendly header label without a follow-up
   // /api/users round-trip. Falls back to empty strings (not the raw DID)
   // if the row is missing for any reason.
-  const profile = await prisma.user.findUnique({
-    where: { did: user.did },
-    select: { displayName: true, avatarUrl: true },
-  });
+  const profile = anonymous
+    ? null
+    : await prisma.user.findUnique({
+        where: { did: user.did },
+        select: { displayName: true, avatarUrl: true },
+      });
   // Diagnostic: log the resolved avatarUrl at debug level so we can
   // confirm whether the database has the value before the response
   // leaves the server. Temporary aid; remove once avatar rendering is
@@ -117,12 +124,13 @@ export async function POST(
       room: roomName,
       identity: user.did,
       role,
-      name: user.handle,
+      name: anonymous ? 'Listener' : user.handle,
     });
     log.info('livekit.join.token_minted', {
       spaceId: space.id,
       did: user.did,
       role,
+      anonymous,
     });
     return NextResponse.json(
       {
@@ -133,6 +141,7 @@ export async function POST(
         identity: user.did,
         handle: user.handle,
         displayName: profile?.displayName ?? null,
+        anonymous,
         avatarUrl: profile?.avatarUrl ?? null,
       } satisfies JoinResponseBody,
       { status: 200 }

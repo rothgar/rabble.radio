@@ -48,6 +48,11 @@
   --color-success: #34d399;  /* Green */
   --color-warning: #fbbf24;  /* Amber */
   --color-error:   #f87171;  /* Red */
+  /* Translucent fills/borders for status badges and alerts. Tailwind 3 cannot
+     apply an opacity modifier to a var() color, so these are explicit. */
+  --color-live-muted:     rgba(248, 113, 113, 0.15);
+  --color-live-border:    rgba(248, 113, 113, 0.40);
+  --color-success-muted:  rgba(52, 211, 153, 0.15);
 
   /* ── Legacy compat aliases (used by existing components) ─────────────── */
   --color-neutral-100: #f3f5fe;

@@ -61,17 +61,17 @@ function statusBadge(view: {
     case 'live':
       return {
         label: 'Live',
-        className: 'bg-[var(--color-live)]/15 text-[var(--color-live)]',
+        className: 'bg-[var(--color-live-muted)] text-[var(--color-live)]',
       };
     case 'scheduled':
       return {
         label: 'Scheduled',
-        className: 'bg-[var(--color-accent)]/15 text-[var(--color-accent-300)]',
+        className: 'bg-[var(--color-accent-muted)] text-[var(--color-accent-300)]',
       };
     case 'active':
       return {
         label: 'Active',
-        className: 'bg-[var(--color-success)]/15 text-[var(--color-success)]',
+        className: 'bg-[var(--color-success-muted)] text-[var(--color-success)]',
       };
     case 'ended':
       return {
@@ -87,7 +87,7 @@ function statusBadge(view: {
       return view.isLive
         ? {
             label: 'Live',
-            className: 'bg-[var(--color-live)]/15 text-[var(--color-live)]',
+            className: 'bg-[var(--color-live-muted)] text-[var(--color-live)]',
           }
         : {
             label: 'Upcoming',
@@ -325,7 +325,7 @@ export default function SpacePage(): ReactElement {
             </Link>
           </header>
           <section
-            className="flex flex-col gap-3 rounded-lg border border-[var(--color-live)]/40 bg-[var(--color-live)]/10 p-6"
+            className="flex flex-col gap-3 rounded-lg border border-[var(--color-live-border)] bg-[var(--color-live-muted)] p-6"
             role="alert"
             data-testid="space-error"
           >
@@ -434,7 +434,7 @@ export default function SpacePage(): ReactElement {
               </div>
               {view.status === 'scheduled' && view.scheduledAt ? (
                 <p
-                  className="rounded-md border border-[var(--color-accent)]/40 bg-[var(--color-accent-muted)] px-3 py-2 text-sm text-[var(--color-accent-100)]"
+                  className="rounded-md border border-[var(--color-accent-700)] bg-[var(--color-accent-muted)] px-3 py-2 text-sm text-[var(--color-accent-100)]"
                   data-testid="scheduled-info"
                 >
                   Scheduled for{' '}

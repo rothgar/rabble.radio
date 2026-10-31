@@ -24,7 +24,7 @@ const LISTENER_AVATAR_CAP = 4;
 function HostAvatar({ show }: { show: PublicSpace }): ReactElement {
   return (
     <span
-      className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-xs font-medium text-slate-200"
+      className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-surface-raised)] text-xs font-medium text-[var(--color-text)]"
       data-testid="station-show-host"
       title={`@${show.host.handle}`}
     >
@@ -50,14 +50,14 @@ function ListenerStack({ count }: { count: number }): ReactElement {
         {Array.from({ length: visible }).map((_, i) => (
           <span
             key={i}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 text-[9px] font-medium text-slate-300 ring-2 ring-slate-900"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-surface-raised)] text-[9px] font-medium text-[var(--color-text-tertiary)] ring-2 ring-[var(--color-bg)]"
             aria-hidden
           >
             {count > 0 ? '' : ''}
           </span>
         ))}
       </span>
-      <span className="text-xs text-slate-400" data-testid="station-show-listener-count">
+      <span className="text-xs text-[var(--color-text-secondary)]" data-testid="station-show-listener-count">
         {count} listening
       </span>
     </span>
@@ -71,24 +71,24 @@ export function StationShowCard({
 }: StationShowCardProps): ReactElement {
   return (
     <li
-      className="rounded-lg border border-slate-800 bg-slate-900 p-4 transition hover:border-sky-600 hover:bg-slate-800/80"
+      className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-raised)]"
       data-testid="station-show"
     >
       <Link href={`/show/${show.id}`} className="flex flex-col gap-2.5">
         <div className="flex items-center gap-3">
           <HostAvatar show={show} />
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-slate-100 group-hover:text-sky-300">
+            <h3 className="truncate text-base font-semibold text-[var(--color-text)] group-hover:text-[var(--color-accent-300)]">
               {show.title}
             </h3>
-            <p className="truncate text-xs text-slate-500">
+            <p className="truncate text-xs text-[var(--color-text-tertiary)]">
               @{show.host.handle}
             </p>
           </div>
         </div>
         <ListenerStack count={show.listenerCount} />
         <div
-          className="flex flex-wrap items-center gap-3 text-xs text-slate-400"
+          className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-secondary)]"
           data-testid="station-show-metrics"
         >
           <span title="Posts shared">💬 {postCount} posts</span>

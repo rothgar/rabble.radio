@@ -431,7 +431,7 @@ function Inner({
         </p>
       ) : (
         <div
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"
           data-testid="speakers-grid"
         >
           {speakers.map((p) => {
@@ -565,7 +565,7 @@ function Inner({
             {onStageSection}
             {audienceSection}
             <div
-              className="flex flex-col gap-3 rounded-lg border border-[var(--color-divider)] bg-[var(--color-surface)] p-6"
+              className="flex flex-col gap-3 rounded-lg border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 sm:p-6"
               data-testid="room-share-card"
             >
               <p className="text-sm font-semibold text-[var(--color-neutral-400)]">
@@ -816,7 +816,7 @@ export function SpaceRoom({
       {connectionError ? (
         <div
           role="alert"
-          className="mx-auto my-3 max-w-md rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-xs text-red-200"
+          className="mx-4 my-3 max-w-md rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-xs text-red-200 sm:mx-auto"
           data-testid="space-room-error"
         >
           {connectionError}

@@ -27,6 +27,7 @@ import type { ReactElement } from 'react';
 import { SpacePageClient } from '@/components/SpacePageClient';
 import { ShareButtons } from '@/components/ShareButtons';
 import { SiteHeader } from '@/components/SiteHeader';
+import { PageLayout } from '@/components/ui';
 import type { PublicSpace, PublicUser } from '@/types';
 
 /**
@@ -58,19 +59,40 @@ function statusBadge(view: {
 }): StatusBadgeSpec {
   switch (view.status) {
     case 'live':
-      return { label: 'Live', className: 'bg-red-600/20 text-red-300' };
+      return {
+        label: 'Live',
+        className: 'bg-[var(--color-live)]/15 text-[var(--color-live)]',
+      };
     case 'scheduled':
-      return { label: 'Scheduled', className: 'bg-sky-700/40 text-sky-200' };
+      return {
+        label: 'Scheduled',
+        className: 'bg-[var(--color-accent)]/15 text-[var(--color-accent-300)]',
+      };
     case 'active':
-      return { label: 'Active', className: 'bg-emerald-700/30 text-emerald-200' };
+      return {
+        label: 'Active',
+        className: 'bg-[var(--color-success)]/15 text-[var(--color-success)]',
+      };
     case 'ended':
-      return { label: 'Ended', className: 'bg-slate-700 text-slate-300' };
+      return {
+        label: 'Ended',
+        className: 'bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]',
+      };
     case 'expired':
-      return { label: 'Expired', className: 'bg-slate-800 text-slate-500' };
+      return {
+        label: 'Expired',
+        className: 'bg-[var(--color-surface)] text-[var(--color-text-tertiary)]',
+      };
     default:
       return view.isLive
-        ? { label: 'Live', className: 'bg-red-600/20 text-red-300' }
-        : { label: 'Upcoming', className: 'bg-slate-700 text-slate-300' };
+        ? {
+            label: 'Live',
+            className: 'bg-[var(--color-live)]/15 text-[var(--color-live)]',
+          }
+        : {
+            label: 'Upcoming',
+            className: 'bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]',
+          };
   }
 }
 
@@ -103,14 +125,25 @@ const INITIAL_STATE: LoadState = {
   recording: null,
 };
 
+/** Classes matching the PageLayout primitive's gutters and max width. */
+const PAGE_MAIN_CLASSES =
+  'mx-auto flex min-h-screen w-full max-w-content flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8';
+
+const BACK_LINK_CLASSES =
+  'inline-flex min-h-touch items-center self-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)]';
+
 export default function SpacePage(): ReactElement {
   const params = useParams<{ id: string }>();
   const id = typeof params?.id === 'string' ? params.id : '';
 
   const [state, setState] = useState<LoadState>(INITIAL_STATE);
+  // True while the user is inside the live room; hides the page chrome so
+  // the NocturneShell owns the whole viewport.
+  const [inRoom, setInRoom] = useState(false);
 
   const load = useCallback(async (spaceId: string) => {
     if (!spaceId) {
+      setInRoom(false);
       setState({
         status: 'not-found',
         space: null,
@@ -235,22 +268,21 @@ export default function SpacePage(): ReactElement {
     return (
       <>
         <SiteHeader />
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-        <header className="flex items-center gap-3">
-          <Link
-            href="/stations"
-            className="text-sm text-slate-400 hover:text-slate-200"
+        <PageLayout>
+          <header className="flex items-center gap-3">
+            <Link href="/stations" className={BACK_LINK_CLASSES}>
+              &larr; Stations
+            </Link>
+          </header>
+          <section
+            className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
+            data-testid="space-loading"
           >
-            &larr; Stations
-          </Link>
-        </header>
-        <section
-          className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900 p-6"
-          data-testid="space-loading"
-        >
-          <p className="text-sm text-slate-400">Loading space&hellip;</p>
-        </section>
-      </main>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Loading space&hellip;
+            </p>
+          </section>
+        </PageLayout>
       </>
     );
   }
@@ -259,28 +291,25 @@ export default function SpacePage(): ReactElement {
     return (
       <>
         <SiteHeader />
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-        <header className="flex items-center gap-3">
-          <Link
-            href="/stations"
-            className="text-sm text-slate-400 hover:text-slate-200"
+        <PageLayout>
+          <header className="flex items-center gap-3">
+            <Link href="/stations" className={BACK_LINK_CLASSES}>
+              &larr; Stations
+            </Link>
+          </header>
+          <section
+            className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
+            data-testid="space-not-found"
           >
-            &larr; Stations
-          </Link>
-        </header>
-        <section
-          className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900 p-6"
-          data-testid="space-not-found"
-        >
-          <h1 className="text-2xl font-bold tracking-tight">
-            Space not found
-          </h1>
-          <p className="text-sm text-slate-400">
-            We couldn&apos;t find a space with that ID. It may have ended or
-            been removed.
-          </p>
-        </section>
-      </main>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Space not found
+            </h1>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              We couldn&apos;t find a space with that ID. It may have ended or
+              been removed.
+            </p>
+          </section>
+        </PageLayout>
       </>
     );
   }
@@ -289,38 +318,35 @@ export default function SpacePage(): ReactElement {
     return (
       <>
         <SiteHeader />
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-        <header className="flex items-center gap-3">
-          <Link
-            href="/stations"
-            className="text-sm text-slate-400 hover:text-slate-200"
+        <PageLayout>
+          <header className="flex items-center gap-3">
+            <Link href="/stations" className={BACK_LINK_CLASSES}>
+              &larr; Stations
+            </Link>
+          </header>
+          <section
+            className="flex flex-col gap-3 rounded-lg border border-[var(--color-live)]/40 bg-[var(--color-live)]/10 p-6"
+            role="alert"
+            data-testid="space-error"
           >
-            &larr; Stations
-          </Link>
-        </header>
-        <section
-          className="flex flex-col gap-3 rounded-lg border border-red-800 bg-red-950/40 p-6"
-          role="alert"
-          data-testid="space-error"
-        >
-          <h1 className="text-2xl font-bold tracking-tight">
-            Something went wrong
-          </h1>
-          <p className="text-sm text-red-200">
-            {state.error ?? 'Failed to load space.'}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              void load(id);
-            }}
-            className="self-start rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-            data-testid="space-retry-button"
-          >
-            Retry
-          </button>
-        </section>
-      </main>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Something went wrong
+            </h1>
+            <p className="text-sm text-[var(--color-live)]">
+              {state.error ?? 'Failed to load space.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void load(id);
+              }}
+              className="inline-flex min-h-touch items-center self-start rounded-md border border-[var(--color-border-strong)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-raised)]"
+              data-testid="space-retry-button"
+            >
+              Retry
+            </button>
+          </section>
+        </PageLayout>
       </>
     );
   }
@@ -332,19 +358,16 @@ export default function SpacePage(): ReactElement {
     return (
       <>
         <SiteHeader />
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-        <header className="flex items-center gap-3">
-          <Link
-            href="/stations"
-            className="text-sm text-slate-400 hover:text-slate-200"
-          >
-            &larr; Stations
-          </Link>
-        </header>
-        <section className="rounded-lg border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">
-          Loading space&hellip;
-        </section>
-      </main>
+        <PageLayout>
+          <header className="flex items-center gap-3">
+            <Link href="/stations" className={BACK_LINK_CLASSES}>
+              &larr; Stations
+            </Link>
+          </header>
+          <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text-secondary)]">
+            Loading space&hellip;
+          </section>
+        </PageLayout>
       </>
     );
   }
@@ -353,81 +376,103 @@ export default function SpacePage(): ReactElement {
   const isHost = Boolean(user && user.did === view.host.did);
   const badge = statusBadge(view);
 
+  // Once the user joins, SpacePageClient mounts SpaceRoom (the full
+  // NocturneShell, with its own sticky header and bottom control bar). The
+  // page chrome is swapped for a full-bleed <main> so we don't end up with
+  // two stacked headers and nested page padding. The placeholders are
+  // rendered as `null` siblings at the same tree positions (instead of
+  // conditionally mounting SpacePageClient) so the room is never unmounted
+  // by the swap.
   return (
     <>
-        <SiteHeader />
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/stations"
-          className="text-sm text-slate-400 hover:text-slate-200"
-        >
-          &larr; Stations
-        </Link>
-      </header>
-
-      <SpacePageClient
-        spaceId={view.id}
-        isAuthenticated={Boolean(user)}
-        isHost={isHost}
-        isLive={view.isLive}
-        status={view.status}
-        scheduledAt={view.scheduledAt}
-        title={view.title}
-        host={{
-          handle: view.host.handle,
-          displayName: view.host.displayName ?? null,
-          avatarUrl: view.host.avatarUrl ?? null,
-        }}
-        shareableUrl={view.shareableUrl}
-        recording={state.recording}
-      />
-
-      <section
-        className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900 p-6"
-        data-testid="space-detail"
+      {inRoom ? null : <SiteHeader />}
+      <main
+        className={inRoom ? 'flex w-full flex-col' : PAGE_MAIN_CLASSES}
       >
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">{view.title}</h1>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}
-            data-testid="space-status-badge"
-          >
-            {badge.label}
-          </span>
-        </div>
-        {view.status === 'scheduled' && view.scheduledAt ? (
-          <p
-            className="rounded-md border border-sky-700 bg-sky-900/30 px-3 py-2 text-sm text-sky-100"
-            data-testid="scheduled-info"
-          >
-            Scheduled for{' '}
-            <span className="font-medium">
-              {new Date(view.scheduledAt).toLocaleString()}
-            </span>
-            .
-          </p>
-        ) : null}
-        {view.description ? (
-          <p className="whitespace-pre-wrap text-sm text-slate-300">
-            {view.description}
-          </p>
-        ) : (
-          <p className="text-sm italic text-slate-500">No description.</p>
+        {inRoom ? null : (
+          <header className="flex items-center gap-3">
+            <Link href="/stations" className={BACK_LINK_CLASSES}>
+              &larr; Stations
+            </Link>
+          </header>
         )}
-      </section>
 
-      <section
-        className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900 p-4"
-        data-testid="show-share"
-      >
-        <p className="text-xs text-slate-500">Share this show</p>
-        <code className="break-all text-xs text-slate-200" data-testid="shareable-url">
-          {view.shareableUrl}
-        </code>
-        <ShareButtons shareableUrl={view.shareableUrl} title={view.title} />
-      </section>
-    </main>
-      </>
+        <SpacePageClient
+          spaceId={view.id}
+          isAuthenticated={Boolean(user)}
+          isHost={isHost}
+          isLive={view.isLive}
+          status={view.status}
+          scheduledAt={view.scheduledAt}
+          title={view.title}
+          host={{
+            handle: view.host.handle,
+            displayName: view.host.displayName ?? null,
+            avatarUrl: view.host.avatarUrl ?? null,
+          }}
+          shareableUrl={view.shareableUrl}
+          recording={state.recording}
+          onJoinedChange={setInRoom}
+        />
+
+        {inRoom ? null : (
+          <>
+            <section
+              className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
+              data-testid="space-detail"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h1 className="text-2xl font-bold tracking-tight">
+                  {view.title}
+                </h1>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}
+                  data-testid="space-status-badge"
+                >
+                  {badge.label}
+                </span>
+              </div>
+              {view.status === 'scheduled' && view.scheduledAt ? (
+                <p
+                  className="rounded-md border border-[var(--color-accent)]/40 bg-[var(--color-accent-muted)] px-3 py-2 text-sm text-[var(--color-accent-100)]"
+                  data-testid="scheduled-info"
+                >
+                  Scheduled for{' '}
+                  <span className="font-medium">
+                    {new Date(view.scheduledAt).toLocaleString()}
+                  </span>
+                  .
+                </p>
+              ) : null}
+              {view.description ? (
+                <p className="whitespace-pre-wrap text-sm text-[var(--color-text)]">
+                  {view.description}
+                </p>
+              ) : (
+                <p className="text-sm italic text-[var(--color-text-tertiary)]">
+                  No description.
+                </p>
+              )}
+            </section>
+
+            <section
+              className="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+              data-testid="show-share"
+            >
+              <p className="text-xs text-[var(--color-text-tertiary)]">
+                Share this show
+              </p>
+              <code
+                className="break-all text-xs text-[var(--color-text)]"
+                data-testid="shareable-url"
+              >
+                {view.shareableUrl}
+              </code>
+              <ShareButtons shareableUrl={view.shareableUrl} title={view.title} />
+            </section>
+          </>
+        )}
+      </main>
+    </>
   );
 }

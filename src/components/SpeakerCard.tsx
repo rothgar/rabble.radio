@@ -73,7 +73,7 @@ export function SpeakerCard({
     <div
       ref={avatarRef}
       className={
-        'flex h-20 w-20 items-center justify-center overflow-hidden rounded-full ' +
+        'flex h-16 w-16 items-center justify-center overflow-hidden rounded-full sm:h-20 sm:w-20 ' +
         (isSpeaking
           ? 'bg-[var(--color-accent-700)]'
           : 'bg-[var(--color-accent-700)]')
@@ -138,7 +138,7 @@ export function SpeakerCard({
 
   return (
     <div
-      className="relative flex min-w-0 flex-col items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4"
+      className="relative flex min-w-0 flex-col items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3 sm:p-4"
       data-testid={`speaker-card-${identity}`}
       data-local={isLocal ? 'true' : 'false'}
       data-host={isHost ? 'true' : 'false'}

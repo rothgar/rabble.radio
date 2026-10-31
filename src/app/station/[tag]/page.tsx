@@ -18,6 +18,7 @@ import { countPostsBySpace } from '@/lib/posts';
 import { isValidTag, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { StationShowCard } from '@/components/StationShowCard';
 import { SiteHeader } from '@/components/SiteHeader';
+import { PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,15 +34,18 @@ export default async function StationPage({
     return (
       <>
         <SiteHeader />
-        <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-          <Link href="/stations" className="text-sm text-slate-400 hover:text-slate-200">
+        <PageLayout>
+          <Link
+            href="/stations"
+            className="inline-flex min-h-touch items-center self-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+          >
             &larr; Stations
           </Link>
           <h1 className="text-3xl font-bold tracking-tight">Station not found</h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-[var(--color-text-secondary)]">
             &ldquo;{decoded}&rdquo; isn&apos;t a valid category.
           </p>
-        </main>
+        </PageLayout>
       </>
     );
   }
@@ -62,15 +66,18 @@ export default async function StationPage({
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-      <Link href="/stations" className="text-sm text-slate-400 hover:text-slate-200">
+      <PageLayout>
+      <Link
+        href="/stations"
+        className="inline-flex min-h-touch items-center self-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+      >
         &larr; Stations
       </Link>
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold tracking-tight">{decoded}</h1>
           <span
-            className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-300"
+            className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]"
             data-testid="station-count"
           >
             {shows.length} shows
@@ -85,7 +92,7 @@ export default async function StationPage({
               {hosts.map((h) => (
                 <span
                   key={h.did}
-                  className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-[10px] font-medium text-slate-200 ring-2 ring-slate-900"
+                  className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--color-surface-raised)] text-[10px] font-medium text-[var(--color-text)] ring-2 ring-[var(--color-bg)]"
                   data-testid="station-host-avatar"
                   title={`@${h.handle}`}
                 >
@@ -102,7 +109,7 @@ export default async function StationPage({
                 </span>
               ))}
             </div>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-[var(--color-text-tertiary)]">
               {hosts.length} {hosts.length === 1 ? 'host' : 'hosts'}
             </span>
           </div>
@@ -111,16 +118,16 @@ export default async function StationPage({
 
       {shows.length === 0 ? (
         <div
-          className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 p-12 text-center"
+          className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--color-border-strong)] p-12 text-center"
           data-testid="station-empty"
         >
-          <p className="text-lg text-slate-300">No shows in this station yet.</p>
-          <p className="max-w-md text-sm text-slate-500">
+          <p className="text-lg text-[var(--color-text)]">No shows in this station yet.</p>
+          <p className="max-w-md text-sm text-[var(--color-text-tertiary)]">
             When a host tags a show with {decoded}, it will appear here.
           </p>
           <Link
             href="/stations/new"
-            className="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            className="inline-flex min-h-touch items-center rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]"
           >
             Create a show
           </Link>
@@ -138,20 +145,23 @@ export default async function StationPage({
         </ul>
       )}
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-[var(--color-text-tertiary)]">
         Other stations:{' '}
         {YOUTUBE_CATEGORIES.filter((c) => c !== decoded)
           .slice(0, 8)
           .map((c) => (
             <span key={c}>
-              <Link href={`/station/${encodeURIComponent(c)}`} className="text-sky-300 hover:underline">
+              <Link
+                href={`/station/${encodeURIComponent(c)}`}
+                className="text-[var(--color-accent-300)] hover:underline"
+              >
                 {c}
               </Link>
               {', '}
             </span>
           ))}
       </p>
-      </main>
+      </PageLayout>
     </>
   );
 }

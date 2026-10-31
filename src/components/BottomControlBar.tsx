@@ -23,7 +23,7 @@ export interface BottomControlBarProps {
  * length, with centered, truncated text so nothing misaligns on mobile.
  */
 const ACTION_BTN =
-  'inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]';
+  'inline-flex min-h-touch min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]';
 
 const ACTION_BTN_SECONDARY =
   'border border-[var(--color-divider)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-accent-800)]';
@@ -123,18 +123,18 @@ export function BottomControlBar({
 
   return (
     <div
-      className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center justify-between gap-3"
+      className="mx-auto flex w-full max-w-[1180px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"
       data-testid="bottom-control-bar"
       data-role={role}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-center gap-3 sm:justify-start">
         <ReactionBar onReact={onReact} />
         <span
           aria-hidden
           className="mx-1 hidden h-6 w-px bg-[var(--color-divider)] sm:block"
         />
       </div>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
         {renderActions()}
       </div>
     </div>

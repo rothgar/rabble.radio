@@ -9,7 +9,7 @@ vi.mock('@/components/SpaceRoom', () => ({
 }));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SpacePageClient } from '@/components/SpacePageClient';
 
 const SPACE_ID = 'sp-auto-join';
@@ -123,5 +123,55 @@ describe('<SpacePageClient /> auto-join handoff', () => {
       expect(screen.getByTestId('join-button')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('space-room')).not.toBeInTheDocument();
+  });
+});
+
+describe('<SpacePageClient /> onJoinedChange', () => {
+  it('reports false on mount and true after a successful join', async () => {
+    const onJoinedChange = vi.fn();
+
+    global.fetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.endsWith('/join') && init?.method === 'POST') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              token: 'jwt-token',
+              wsUrl: 'wss://livekit.example.com',
+              role: 'host',
+              roomName: 'space-room',
+              identity: 'did:plc:abc',
+              handle: 'host.bsky.social',
+            }),
+          } as unknown as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ posts: [] }),
+        } as unknown as Response;
+      }
+    ) as unknown as typeof fetch;
+
+    render(
+      <SpacePageClient {...baseProps()} onJoinedChange={onJoinedChange} />
+    );
+
+    // Initially not joined.
+    await waitFor(() => {
+      expect(onJoinedChange).toHaveBeenCalledWith(false);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('join-button')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('join-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('space-room')).toBeInTheDocument();
+    });
+    expect(onJoinedChange).toHaveBeenLastCalledWith(true);
   });
 });

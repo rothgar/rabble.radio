@@ -29,6 +29,12 @@ export interface SpacePageClientProps {
   };
   shareableUrl: string;
   recording: PublicRecording | null;
+  /**
+   * Called whenever the joined state changes (`true` once the user is in
+   * the room, `false` after leaving). Lets the surrounding page swap its
+   * chrome (site header, detail sections) for the full-bleed room.
+   */
+  onJoinedChange?: (joined: boolean) => void;
 }
 
 interface JoinResponse {
@@ -58,6 +64,7 @@ export function SpacePageClient({
   host,
   shareableUrl,
   recording,
+  onJoinedChange,
 }: SpacePageClientProps): ReactElement {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +72,12 @@ export function SpacePageClient({
   const [live, setLive] = useState<boolean>(isLive);
   const [posts, setPosts] = useState<PublicSpacePost[]>([]);
   const [postsError, setPostsError] = useState<string | null>(null);
+
+  // Notify the surrounding page whenever the user enters or leaves the
+  // room so it can hide the page chrome while the full-screen shell is up.
+  useEffect(() => {
+    onJoinedChange?.(joined !== null);
+  }, [joined, onJoinedChange]);
 
   const refreshPosts = useCallback(async () => {
     try {

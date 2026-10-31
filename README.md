@@ -91,3 +91,8 @@ tests/                       # Vitest unit + API tests
 ## License
 
 UNLICENSED — internal MVP.
+
+## Mobile apps
+
+- `android/` — native Android client (Kotlin, Jetpack Compose, LiveKit Android SDK). `cd android && nix-shell && ./gradlew assembleDebug`; see `android/README.md`.
+- `ios/` — native iOS client (SwiftUI, LiveKit Swift SDK), described by an XcodeGen `project.yml`; see `ios/README.md` for building on the Mac mini.

@@ -55,6 +55,15 @@ const {
 // @/lib/session uses cookies() + iron-session, which are mocked below. Mock
 // getCurrentUser (which the auth helper inspects) but preserve the real
 // getSession/setSession so OAuth state flows through the cookieJar.
+vi.mock('@/lib/metrics', () => ({
+  startShowSession: vi.fn(async () => undefined),
+  endShowSession: vi.fn(async () => undefined),
+  recordJoin: vi.fn(async () => undefined),
+  recordLeave: vi.fn(async () => undefined),
+  recordStageChange: vi.fn(async () => undefined),
+  recordReaction: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/lib/session', async () => {
   const actual = await vi.importActual<typeof import('@/lib/session')>(
     '@/lib/session'

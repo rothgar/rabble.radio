@@ -20,6 +20,7 @@
 
 import { getLiveKitClient, generateToken, roomNameForSpace, muteParticipant, removeParticipant, type SpaceRole } from '@/lib/livekit';
 import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
+import { recordLeave, recordStageChange } from '@/lib/metrics';
 
 export interface StageParticipantSummary {
   identity: string;
@@ -318,6 +319,7 @@ export async function acceptStageInvite(
 
   store.delete(key);
   markSpeaker(space.id, input.userDid);
+  await recordStageChange({ spaceId: space.id, identity: input.userDid, onStage: true });
 
   const { token, wsUrl } = await generateToken({
     room: space.roomName,
@@ -351,6 +353,7 @@ export async function leaveStage(
 ): Promise<StageTokenResult> {
   const space = await resolveSpace(input.spaceId);
   unmarkSpeaker(space.id, input.userDid);
+  await recordStageChange({ spaceId: space.id, identity: input.userDid, onStage: false });
 
   const { token, wsUrl } = await generateToken({
     room: space.roomName,
@@ -403,6 +406,7 @@ export async function removeFromStage(
   unmarkSpeaker(space.id, input.targetIdentity);
   // Clear any pending invite just in case.
   getInviteStore().delete(inviteKey(space.id, input.targetIdentity));
+  await recordStageChange({ spaceId: space.id, identity: input.targetIdentity, onStage: false });
 
   const { token, wsUrl } = await generateToken({
     room: space.roomName,
@@ -463,6 +467,7 @@ export async function kickFromSpace(
   unmarkSpeaker(space.id, input.targetIdentity);
   getInviteStore().delete(inviteKey(space.id, input.targetIdentity));
   await removeParticipant(space.roomName, input.targetIdentity);
+  await recordLeave({ spaceId: space.id, identity: input.targetIdentity });
   await broadcastData(
     space.roomName,
     {
@@ -512,6 +517,7 @@ export async function blockFromSpace(
   unmarkSpeaker(space.id, input.targetIdentity);
   getInviteStore().delete(inviteKey(space.id, input.targetIdentity));
   await removeParticipant(space.roomName, input.targetIdentity);
+  await recordLeave({ spaceId: space.id, identity: input.targetIdentity });
   return { ok: true };
 }
 

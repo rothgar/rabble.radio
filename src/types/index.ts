@@ -39,6 +39,13 @@ export interface PublicSpace {
   listenerCount: number;
   speakerCount: number;
   reactionCount: number;
+  /** Lifetime totals rolled up from finished shows (see src/lib/metrics.ts). */
+  likeCount: number;
+  sessionCount: number;
+  totalListeners: number;
+  hostedSeconds: number;
+  /** ISO string of the last time a show on this station ended, null if never. */
+  lastLiveAt: string | null;
   /** Up to 3 category tags used to group shows into stations. */
   tags: string[];
   createdAt: string;

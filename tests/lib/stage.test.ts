@@ -17,6 +17,15 @@ const {
   mockGetSpaceBySlug: vi.fn(),
 }));
 
+vi.mock('@/lib/metrics', () => ({
+  startShowSession: vi.fn(async () => undefined),
+  endShowSession: vi.fn(async () => undefined),
+  recordJoin: vi.fn(async () => undefined),
+  recordLeave: vi.fn(async () => undefined),
+  recordStageChange: vi.fn(async () => undefined),
+  recordReaction: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/lib/livekit', () => ({
   getLiveKitClient: mockGetLiveKitClient,
   generateToken: mockGenerateToken,

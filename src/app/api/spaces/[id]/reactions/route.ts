@@ -12,6 +12,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSpaceById, getSpaceBySlug, incrementSpaceReactions } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { recordReaction } from '@/lib/metrics';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,5 +48,6 @@ export async function POST(
     );
   }
 
+  await recordReaction({ spaceId: space.id, did: user.did });
   return NextResponse.json({ reactionCount }, { status: 200 });
 }

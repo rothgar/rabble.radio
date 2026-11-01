@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { getRoomParticipantSummary, roomNameForSpace } from '@/lib/livekit';
 import { normalizeTags } from '@/lib/tags';
+import { endShowSession } from '@/lib/metrics';
 import type { PublicHost, PublicSpace } from '@/types';
 
 // Local model shapes that mirror the Prisma schema. We define them by hand so
@@ -26,6 +27,11 @@ export interface SpaceModel {
   listenerCount: number;
   speakerCount: number;
   reactionCount: number;
+  likeCount: number;
+  sessionCount: number;
+  totalListeners: number;
+  hostedSeconds: number;
+  lastLiveAt: Date | null;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -287,6 +293,7 @@ export async function setSpaceLive(
  * Mark a single space as expired.
  */
 export async function expireSpace(id: string): Promise<SpaceWithHost> {
+  await endShowSession({ spaceId: id });
   return prisma.space.update({
     where: { id },
     data: {
@@ -362,6 +369,7 @@ export async function expireStaleSpaces(
       continue;
     }
     if (now.getTime() - space.emptySince.getTime() >= EMPTY_SPACE_TTL_MS) {
+      await endShowSession({ spaceId: space.id });
       await prisma.space.update({
         where: { id: space.id },
         data: { isLive: false, status: SPACE_STATUS.EXPIRED },
@@ -628,6 +636,11 @@ export function toPublicSpace(
     listenerCount: space.listenerCount,
     speakerCount: space.speakerCount,
     reactionCount: space.reactionCount,
+    likeCount: space.likeCount,
+    sessionCount: space.sessionCount,
+    totalListeners: space.totalListeners,
+    hostedSeconds: space.hostedSeconds,
+    lastLiveAt: space.lastLiveAt ? space.lastLiveAt.toISOString() : null,
     tags: space.tags ?? [],
     createdAt: space.createdAt.toISOString(),
     updatedAt: space.updatedAt.toISOString(),

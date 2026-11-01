@@ -92,6 +92,25 @@ tests/                       # Vitest unit + API tests
 
 UNLICENSED — internal MVP.
 
+## Show metrics
+
+Every time a station goes live a `ShowSession` row is opened and closed with
+the show (`POST /api/spaces/[id]/live`). While it is open the app records who
+is in the room (`ShowParticipation`, from the join route and the LiveKit
+webhook at `/api/livekit/webhook`), stage time, reactions (`ShowReaction`)
+and likes (`ShowLike`, via `GET/POST/DELETE /api/spaces/[id]/like`). When the
+show ends the totals roll up into the station (`Space.likeCount`,
+`sessionCount`, `totalListeners`, `hostedSeconds`), per-host per-topic
+leaderboard rows (`HostTopicStats`, tag `*` = all topics) and per-topic totals
+(`TopicStats`). Read them with `getHostLeaderboard`, `getTopicStats` and
+`getRecentSessions` in `src/lib/metrics.ts`. Metrics writes are best-effort
+and never block joining, reacting or going live.
+
+The webhook needs `webhook.api_key` and `webhook.urls` in the LiveKit server
+config pointing at the app (the homelab manifests set it; the kind dev
+manifest in `k8s/livekit.yaml` runs LiveKit from flags only, so add a config
+file there if you want presence metrics locally).
+
 ## Mobile apps
 
 - `android/` — native Android client (Kotlin, Jetpack Compose, LiveKit Android SDK). `cd android && nix-shell && ./gradlew assembleDebug`; see `android/README.md`.

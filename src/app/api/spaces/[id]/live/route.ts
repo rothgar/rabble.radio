@@ -32,6 +32,7 @@ import {
   stopRecording,
 } from '@/lib/livekit';
 import { logger } from '@/lib/logger';
+import { endShowSession, startShowSession } from '@/lib/metrics';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -135,6 +136,11 @@ export async function POST(
   try {
     if (action === 'start') {
       const updated = await setSpaceLive(space.id, true);
+      await startShowSession({
+        spaceId: space.id,
+        hostDid: user.did,
+        tags: space.tags,
+      });
       const result = await publishLiveStatus({
         session,
         spaceUrl,
@@ -145,6 +151,7 @@ export async function POST(
         // Roll back the flag if ATProto publish failed so the UI does not
         // believe it is live when the banner is missing.
         await setSpaceLive(space.id, false).catch(() => undefined);
+        await endShowSession({ spaceId: space.id });
         return NextResponse.json(
           {
             ok: false,
@@ -203,6 +210,7 @@ export async function POST(
 
     // action === 'end'
     const updated = await setSpaceLive(space.id, false);
+    await endShowSession({ spaceId: space.id });
     const result = await deleteLiveStatus({ session });
 
     // Stop any active recording for this space. Best-effort.

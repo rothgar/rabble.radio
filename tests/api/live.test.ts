@@ -7,6 +7,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // The modules under test pull in @/lib/db transitively; stub it so no real
 // PrismaClient is constructed (its engine load rejects asynchronously).
+vi.mock('@/lib/metrics', () => ({
+  startShowSession: vi.fn(async () => undefined),
+  endShowSession: vi.fn(async () => undefined),
+  recordJoin: vi.fn(async () => undefined),
+  recordLeave: vi.fn(async () => undefined),
+  recordStageChange: vi.fn(async () => undefined),
+  recordReaction: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/lib/db', () => ({ prisma: {} }));
 import { NextRequest } from 'next/server';
 

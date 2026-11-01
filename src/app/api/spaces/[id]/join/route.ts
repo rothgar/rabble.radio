@@ -27,6 +27,7 @@ import { prisma } from '@/lib/db';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 import { newAnonymousIdentity } from '@/lib/anonymous';
 import { getIceServers, type IceServer } from '@/lib/turn';
+import { recordJoin } from '@/lib/metrics';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -141,6 +142,11 @@ export async function POST(
       identity: user.did,
       role,
       name: anonymous ? 'Listener' : user.handle,
+    });
+    await recordJoin({
+      spaceId: space.id,
+      identity: user.did,
+      role: role === 'host' ? 'host' : 'listener',
     });
     log.info('livekit.join.token_minted', {
       spaceId: space.id,

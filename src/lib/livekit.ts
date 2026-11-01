@@ -558,3 +558,13 @@ export async function getEgressStatus(
 // `output` field. The TS class doesn't accept the oneof discriminator via
 // the constructor; the SDK sets it via `.s3 = ...` after construction.
 // ---------------------------------------------------------------------------
+
+/**
+ * Inverse of roomNameForSpace for webhook payloads. Space ids are cuids, so
+ * the sanitising in roomNameForSpace never changes them.
+ */
+export function spaceIdFromRoomName(roomName: string): string | null {
+  if (!roomName.startsWith('space-')) return null;
+  const id = roomName.slice('space-'.length);
+  return id.length > 0 ? id : null;
+}

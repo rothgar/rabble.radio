@@ -51,6 +51,13 @@ model Space {
   listenerCount Int       @default(0)
   speakerCount  Int       @default(0)
   reactionCount Int       @default(0)
+  /// Lifetime totals rolled up from ShowSession rows when a show ends, plus
+  /// the running like count (see src/lib/metrics.ts).
+  likeCount      Int       @default(0)
+  sessionCount   Int       @default(0)
+  totalListeners Int       @default(0)
+  hostedSeconds  Int       @default(0)
+  lastLiveAt     DateTime?
   /// Up to 3 category tags (from the YouTube video-category list) used to
   /// group shows into stations.
   tags        String[]  @default([])
@@ -60,6 +67,9 @@ model Space {
   host        User         @relation(fields: [hostId], references: [did], onDelete: Cascade)
   posts       SpacePost[]
   recordings  Recording[]
+  sessions    ShowSession[]
+  reactions   ShowReaction[]
+  likes       ShowLike[]
 
   @@index([hostId])
   @@index([isLive])
@@ -128,4 +138,124 @@ model OAuthSession {
   updatedAt DateTime @updatedAt
 
   @@index([did])
+}
+
+/// One live run of a Space ("show"), from the host going live until they end
+/// it or the sweep expires it. Lifetime totals live on Space; these rows are
+/// what leaderboards and weekly digests aggregate from.
+model ShowSession {
+  id              String    @id @default(cuid())
+  spaceId         String
+  hostDid         String
+  /// Tags on the Space when the session started (a Space can be re-tagged).
+  tags            String[]  @default([])
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  durationSeconds Int       @default(0)
+  /// Most simultaneous participants other than the host.
+  peakListeners   Int       @default(0)
+  /// Distinct identities other than the host (anonymous ones included).
+  uniqueListeners Int       @default(0)
+  /// Distinct signed-in participants other than the host who took the stage.
+  guestCount      Int       @default(0)
+  reactionCount   Int       @default(0)
+  likeCount       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  space          Space               @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  participations ShowParticipation[]
+  reactions      ShowReaction[]
+
+  @@index([spaceId, startedAt])
+  @@index([hostDid, startedAt])
+  @@index([endedAt])
+}
+
+/// One participant's presence in one ShowSession. `identity` is a DID or an
+/// anonymous `anon:<uuid>` identity; `role` is the highest role reached.
+model ShowParticipation {
+  id           String    @id @default(cuid())
+  sessionId    String
+  spaceId      String
+  identity     String
+  anonymous    Boolean   @default(false)
+  /// "listener", "speaker" or "host".
+  role         String    @default("listener")
+  joinedAt     DateTime  @default(now())
+  leftAt       DateTime?
+  /// Seconds spent on stage, accumulated when leaving the stage or the room.
+  stageSeconds Int       @default(0)
+  stageSince   DateTime?
+
+  session ShowSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, identity])
+  @@index([identity, joinedAt])
+  @@index([spaceId])
+}
+
+/// One reaction tap. Counters on Space and ShowSession are kept in step; the
+/// rows exist so digests can window by time and topic.
+model ShowReaction {
+  id        String   @id @default(cuid())
+  spaceId   String
+  sessionId String?
+  did       String
+  kind      String   @default("reaction")
+  createdAt DateTime @default(now())
+
+  space   Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  session ShowSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([spaceId, createdAt])
+  @@index([sessionId])
+  @@index([did])
+}
+
+/// A signed-in user liking a show. One per user per Space.
+model ShowLike {
+  id        String   @id @default(cuid())
+  spaceId   String
+  did       String
+  createdAt DateTime @default(now())
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, did])
+  @@index([did])
+}
+
+/// Materialized per-host, per-topic totals behind the host leaderboard. The
+/// row with tag "*" is the host's all-topics total. Updated when a session
+/// ends and when likes land; rebuildable from ShowSession/ShowParticipation.
+model HostTopicStats {
+  id               String    @id @default(cuid())
+  hostDid          String
+  tag              String
+  showsHosted      Int       @default(0)
+  guestAppearances Int       @default(0)
+  likes            Int       @default(0)
+  reactions        Int       @default(0)
+  listeners        Int       @default(0)
+  hostedSeconds    Int       @default(0)
+  guestSeconds     Int       @default(0)
+  lastLiveAt       DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([hostDid, tag])
+  @@index([tag, listeners])
+  @@index([tag, hostedSeconds])
+}
+
+/// Materialized per-topic totals (one row per tag).
+model TopicStats {
+  tag           String    @id
+  shows         Int       @default(0)
+  listeners     Int       @default(0)
+  reactions     Int       @default(0)
+  likes         Int       @default(0)
+  hostedSeconds Int       @default(0)
+  lastLiveAt    DateTime?
+  updatedAt     DateTime  @updatedAt
 }

@@ -5,7 +5,7 @@
 // any upcoming scheduled spaces so people can grab calendar reminders.
 
 import { prisma } from '@/lib/db';
-import { SPACE_STATUS, type SpaceWithHost } from '@/lib/spaces';
+import { SPACE_STATUS, spaceInclude, withTags, type SpaceWithHost } from '@/lib/spaces';
 
 export interface TopHost {
   /** Host profile (public fields only). */
@@ -30,10 +30,11 @@ export async function getTopHosts(
   limit = 10,
   now: Date = new Date()
 ): Promise<TopHost[]> {
-  const spaces = await prisma.space.findMany({
+  const rows = await prisma.space.findMany({
     where: { status: { not: SPACE_STATUS.EXPIRED } },
-    include: { host: true },
+    include: spaceInclude,
   });
+  const spaces = rows.map(withTags);
 
   const byHost = new Map<string, TopHost>();
   for (const s of spaces) {

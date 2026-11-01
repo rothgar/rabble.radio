@@ -93,13 +93,7 @@ function emit(level: LogLevel, event: string, fields: LogFields): void {
   };
   // Convert Error objects to a serializable shape.
   if (record.err instanceof Error) {
-    const e = record.err as Error & { code?: string };
-    record.err = {
-      name: e.name,
-      message: e.message,
-      stack: e.stack,
-      code: e.code,
-    };
+    record.err = serializeError(record.err);
   }
   const line = JSON.stringify(record);
   if (process.env.NODE_ENV === 'production') {
@@ -139,6 +133,22 @@ export interface CreateLoggerOptions {
   correlationId?: string;
   /** Optional pre-bound context fields (e.g. user.did, space.id). */
   base?: LogFields;
+}
+
+/** Error -> plain object, following the `cause` chain (max 5 deep). */
+export function serializeError(err: unknown, depth = 0): Record<string, unknown> {
+  if (!(err instanceof Error)) return { message: String(err) };
+  const e = err as Error & { code?: string; cause?: unknown };
+  const out: Record<string, unknown> = {
+    name: e.name,
+    message: e.message,
+    stack: e.stack,
+    code: e.code,
+  };
+  if (e.cause !== undefined && depth < 5) {
+    out.cause = serializeError(e.cause, depth + 1);
+  }
+  return out;
 }
 
 export function createLogger(opts: CreateLoggerOptions = {}): Logger {

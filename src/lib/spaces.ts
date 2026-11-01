@@ -3,7 +3,6 @@
 // Service functions for the Space model. All Prisma access for spaces goes
 // through here so the API routes and server components stay thin.
 
-import { randomBytes } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { getRoomParticipantSummary, roomNameForSpace } from '@/lib/livekit';
 import { normalizeTags } from '@/lib/tags';
@@ -50,6 +49,17 @@ export interface HostUser {
 export type SpaceWithHost = SpaceModel & {
   host: HostUser;
 };
+
+/** Prisma include that fetches the host and the tag rows for a space. */
+export const spaceInclude = { host: true, tags: { select: { tag: true } } } as const;
+
+/** Flatten the SpaceTag join rows into the `tags: string[]` the app uses. */
+export function withTags<T extends { tags?: Array<{ tag: string } | string> }>(
+  row: T
+): Omit<T, 'tags'> & { tags: string[] } {
+  const { tags, ...rest } = row;
+  return { ...rest, tags: (tags ?? []).map((t) => (typeof t === 'string' ? t : t.tag)) };
+}
 
 export interface CreateSpaceInput {
   title: string;
@@ -105,7 +115,7 @@ export const EXPIRATION_GRACE_MS = 5 * 60 * 1000;
  * Generate a short, URL-safe random suffix (base36) for slug uniqueness.
  */
 export function generateSlugSuffix(length: number = SUFFIX_LENGTH): string {
-  const bytes = randomBytes(8);
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
   let suffix = '';
   for (const byte of bytes) {
     suffix += (byte % 36).toString(36);
@@ -210,50 +220,54 @@ export async function createSpace(
     : new Date(now.getTime() + EMPTY_SPACE_TTL_MS);
   const emptySince = isFutureSchedule ? null : now;
 
-  return prisma.space.create({
+  const row = await prisma.space.create({
     data: {
       slug,
       title,
       description,
-      tags,
+      tags: { create: tags.map((tag) => ({ tag })) },
       hostId: input.hostId,
       scheduledAt,
       expiresAt,
       emptySince,
       status,
     },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return withTags(row);
 }
 
 /**
  * List spaces ordered by creation time descending. Includes the host profile.
  */
 export async function getSpaces(): Promise<SpaceWithHost[]> {
-  return prisma.space.findMany({
+  const rows = await prisma.space.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return rows.map(withTags);
 }
 
 /**
  * Fetch a space by primary key with its host profile, or null if not found.
  */
 export async function getSpaceById(id: string): Promise<SpaceWithHost | null> {
-  return prisma.space.findUnique({
+  const row = await prisma.space.findUnique({
     where: { id },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return row ? withTags(row) : null;
 }
 
 /**
  * Fetch a space by its slug with its host profile, or null if not found.
  */
 export async function getSpaceBySlug(slug: string): Promise<SpaceWithHost | null> {
-  return prisma.space.findUnique({
+  const row = await prisma.space.findUnique({
     where: { slug },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return row ? withTags(row) : null;
 }
 
 /**
@@ -277,7 +291,7 @@ export async function setSpaceLive(
     ? null
     : new Date(now.getTime() + ACTIVE_SPACE_TTL_MS);
   const emptySince = isLive ? null : now;
-  return prisma.space.update({
+  const row = await prisma.space.update({
     where: { id },
     data: {
       isLive,
@@ -285,8 +299,9 @@ export async function setSpaceLive(
       expiresAt,
       emptySince,
     },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return withTags(row);
 }
 
 /**
@@ -294,14 +309,15 @@ export async function setSpaceLive(
  */
 export async function expireSpace(id: string): Promise<SpaceWithHost> {
   await endShowSession({ spaceId: id });
-  return prisma.space.update({
+  const row = await prisma.space.update({
     where: { id },
     data: {
       isLive: false,
       status: SPACE_STATUS.EXPIRED,
     },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return withTags(row);
 }
 
 /**
@@ -486,13 +502,14 @@ export async function getSpacesForUser(
 ): Promise<SpaceWithHost[]> {
   // Anonymous path: skip the OR and just filter on visibility-friendly rows.
   if (!userDid) {
-    return prisma.space.findMany({
+    const rows = await prisma.space.findMany({
       where: visibleSpacesWhere(now),
       orderBy: { createdAt: 'desc' },
-      include: { host: true },
+      include: spaceInclude,
     });
+    return rows.map(withTags);
   }
-  return prisma.space.findMany({
+  const rows = await prisma.space.findMany({
     where: {
       OR: [
         { hostId: userDid, status: { not: SPACE_STATUS.EXPIRED } },
@@ -500,8 +517,9 @@ export async function getSpacesForUser(
       ],
     },
     orderBy: { createdAt: 'desc' },
-    include: { host: true },
+    include: spaceInclude,
   });
+  return rows.map(withTags);
 }
 
 /**

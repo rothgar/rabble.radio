@@ -14,6 +14,32 @@ This repo currently covers the MVP:
 - Host-only post carousel so the host can pin posts to a running space
 - Single-process Next.js server, Docker image, kind-based local K8s
 
+## Quick start (Cloudflare, the deployed environment)
+
+The app runs on Cloudflare Workers (OpenNext) with D1 for the database, R2
+for recordings and LiveKit Cloud for media. The dev environment is
+`rabble.rodeo`; `rabble.radio` will be a second environment with its own
+resources. Config lives in `wrangler.jsonc`; secrets are set with
+`wrangler secret put` (LIVEKIT_URL/API_KEY/API_SECRET, JWKS_PRIVATE_KEY,
+JWKS_PUBLIC_KEY, JWKS_KID, SESSION_SECRET, S3_ACCESS_KEY, S3_SECRET_KEY).
+
+```bash
+pnpm install
+pnpm prisma:generate                 # engine-less client (no Rust engine needed)
+pnpm d1:migrate:local                # apply prisma/d1/*.sql to the local D1
+pnpm cf:preview                      # build with OpenNext and run on workerd
+pnpm cf:deploy                       # build and deploy the Worker
+pnpm d1:migrate:remote               # apply new migrations to the remote D1
+```
+
+Schema changes: edit `prisma/schema.prisma`, regenerate the client, and add a
+numbered SQL file under `prisma/d1/` (generate it with
+`prisma migrate diff --from-schema-datamodel <old> --to-schema-datamodel prisma/schema.prisma --script`).
+D1 is SQLite: tags live in join tables and JSON payloads are stored as text.
+
+See `docs/CLOUDFLARE-MIGRATION.md` for the full layout and the production
+plan.
+
 ## Quick start (no Kubernetes)
 
 ```bash

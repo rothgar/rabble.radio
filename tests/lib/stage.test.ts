@@ -26,6 +26,50 @@ vi.mock('@/lib/metrics', () => ({
   recordReaction: vi.fn(async () => undefined),
 }));
 
+
+// In-memory stand-in for the D1 tables that hold stage state.
+const fakeDb = vi.hoisted(() => {
+  type Row = Record<string, unknown>;
+  const tables: Record<string, Row[]> = { stageInvite: [], stageSpeaker: [], stageBlock: [] };
+  const keyFields: Record<string, [string, string]> = {
+    stageInvite: ['spaceId', 'targetIdentity'],
+    stageSpeaker: ['spaceId', 'identity'],
+    stageBlock: ['spaceId', 'identity'],
+  };
+  const matches = (row: Row, where: Row) =>
+    Object.entries(where).every(([k, v]) => row[k] === v);
+  const keyOf = (table: string, where: Row): Row => {
+    const [a, b] = keyFields[table];
+    const nested = (where[`${a}_${b}`] as Row | undefined) ?? where;
+    return { [a]: nested[a], [b]: nested[b] };
+  };
+  const model = (table: string) => ({
+    upsert: async ({ where, create, update }: { where: Row; create: Row; update: Row }) => {
+      const key = keyOf(table, where);
+      const existing = tables[table].find((r) => matches(r, key));
+      if (existing) Object.assign(existing, update);
+      else tables[table].push({ createdAt: new Date(), ...create });
+      return existing ?? create;
+    },
+    findUnique: async ({ where }: { where: Row }) =>
+      tables[table].find((r) => matches(r, keyOf(table, where))) ?? null,
+    findMany: async ({ where }: { where: Row }) => tables[table].filter((r) => matches(r, where)),
+    deleteMany: async ({ where }: { where: Row }) => {
+      const before = tables[table].length;
+      tables[table] = tables[table].filter((r) => !matches(r, where));
+      return { count: before - tables[table].length };
+    },
+  });
+  return {
+    prisma: { stageInvite: model('stageInvite'), stageSpeaker: model('stageSpeaker'), stageBlock: model('stageBlock') },
+    reset: () => {
+      for (const t of Object.keys(tables)) tables[t] = [];
+    },
+  };
+});
+
+vi.mock('@/lib/db', () => ({ prisma: fakeDb.prisma }));
+
 vi.mock('@/lib/livekit', () => ({
   getLiveKitClient: mockGetLiveKitClient,
   generateToken: mockGenerateToken,
@@ -75,7 +119,7 @@ beforeEach(() => {
 describe('inviteToStage', () => {
   it('creates a pending invite when the caller is the host', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
 
     const result = await stage.inviteToStage({
       spaceId: 'sp1',
@@ -84,12 +128,12 @@ describe('inviteToStage', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.invite.targetIdentity).toBe('did:plc:listener');
-    expect(stage.getPendingInvite('sp1', 'did:plc:listener')).not.toBeNull();
+    expect(await stage.getPendingInvite('sp1', 'did:plc:listener')).not.toBeNull();
   });
 
   it('throws 403 when the caller is not the host', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
 
     await expect(
       stage.inviteToStage({
@@ -102,7 +146,7 @@ describe('inviteToStage', () => {
 
   it('throws 404 when the space does not exist', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     mockGetSpaceById.mockResolvedValueOnce(null);
     mockGetSpaceBySlug.mockResolvedValueOnce(null);
 
@@ -117,7 +161,7 @@ describe('inviteToStage', () => {
 
   it('throws 400 when targetIdentity is missing', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
 
     await expect(
       stage.inviteToStage({
@@ -132,7 +176,7 @@ describe('inviteToStage', () => {
 describe('acceptStageInvite', () => {
   it('mints a speaker token when there is a pending invite', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     await stage.inviteToStage({
       spaceId: 'sp1',
       hostDid: 'did:plc:host123',
@@ -150,14 +194,14 @@ describe('acceptStageInvite', () => {
       expect.objectContaining({ role: 'speaker', identity: 'did:plc:listener' })
     );
     // Invite consumed.
-    expect(stage.getPendingInvite('sp1', 'did:plc:listener')).toBeNull();
+    expect(await stage.getPendingInvite('sp1', 'did:plc:listener')).toBeNull();
     // Speaker tracked.
-    expect(stage.listActiveSpeakers('sp1')).toContain('did:plc:listener');
+    expect(await stage.listActiveSpeakers('sp1')).toContain('did:plc:listener');
   });
 
   it('throws 404 when there is no pending invite', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
 
     await expect(
       stage.acceptStageInvite({
@@ -172,7 +216,7 @@ describe('acceptStageInvite', () => {
 describe('leaveStage', () => {
   it('returns an audience token for the speaker', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     await stage.inviteToStage({
       spaceId: 'sp1',
       hostDid: 'did:plc:host123',
@@ -193,12 +237,12 @@ describe('leaveStage', () => {
     expect(mockGenerateToken).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'audience', identity: 'did:plc:listener' })
     );
-    expect(stage.listActiveSpeakers('sp1')).not.toContain('did:plc:listener');
+    expect(await stage.listActiveSpeakers('sp1')).not.toContain('did:plc:listener');
   });
 
   it('mints an audience token even if the caller was never on stage', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     const result = await stage.leaveStage({
       spaceId: 'sp1',
       userDid: 'did:plc:listener',
@@ -211,7 +255,7 @@ describe('leaveStage', () => {
 describe('removeFromStage', () => {
   it('mints an audience token when the host removes a speaker', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     await stage.inviteToStage({
       spaceId: 'sp1',
       hostDid: 'did:plc:host123',
@@ -233,12 +277,12 @@ describe('removeFromStage', () => {
     expect(mockGenerateToken).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'audience', identity: 'did:plc:listener' })
     );
-    expect(stage.listActiveSpeakers('sp1')).not.toContain('did:plc:listener');
+    expect(await stage.listActiveSpeakers('sp1')).not.toContain('did:plc:listener');
   });
 
   it('throws 403 when the caller is not the host', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     await expect(
       stage.removeFromStage({
         spaceId: 'sp1',
@@ -250,7 +294,7 @@ describe('removeFromStage', () => {
 
   it('throws 400 when targetIdentity is missing', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     await expect(
       stage.removeFromStage({
         spaceId: 'sp1',
@@ -264,7 +308,7 @@ describe('removeFromStage', () => {
 describe('listPendingInvites', () => {
   it('returns invites for the requested space only', async () => {
     const stage = await import('@/lib/stage');
-    stage.__resetStageStoresForTests();
+    fakeDb.reset();
     // Second space.
     mockGetSpaceById.mockImplementation(async (id: string) => makeSpace({ id }));
 
@@ -279,11 +323,11 @@ describe('listPendingInvites', () => {
       targetIdentity: 'did:plc:listener2',
     });
 
-    const sp1Invites = stage.listPendingInvites('sp1');
+    const sp1Invites = await stage.listPendingInvites('sp1');
     expect(sp1Invites).toHaveLength(1);
     expect(sp1Invites[0].targetIdentity).toBe('did:plc:listener1');
 
-    const sp2Invites = stage.listPendingInvites('sp2');
+    const sp2Invites = await stage.listPendingInvites('sp2');
     expect(sp2Invites).toHaveLength(1);
     expect(sp2Invites[0].targetIdentity).toBe('did:plc:listener2');
   });

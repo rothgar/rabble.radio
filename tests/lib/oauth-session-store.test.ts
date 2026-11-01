@@ -54,7 +54,7 @@ describe('createPrismaSessionStore', () => {
   it('returns parsed session data from the database', async () => {
     mockFindUnique.mockResolvedValue({
       did: 'did:plc:abc123',
-      data: sampleSession,
+      data: JSON.stringify(sampleSession),
     });
 
     const store = createPrismaSessionStore();
@@ -71,8 +71,8 @@ describe('createPrismaSessionStore', () => {
 
     expect(mockUpsert).toHaveBeenCalledWith({
       where: { did: 'did:plc:abc123' },
-      create: { did: 'did:plc:abc123', data: sampleSession },
-      update: { data: sampleSession },
+      create: { did: 'did:plc:abc123', data: JSON.stringify(sampleSession) },
+      update: { data: JSON.stringify(sampleSession) },
     });
   });
 

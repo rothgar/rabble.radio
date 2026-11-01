@@ -21,6 +21,7 @@
 import { getLiveKitClient, generateToken, roomNameForSpace, muteParticipant, removeParticipant, type SpaceRole } from '@/lib/livekit';
 import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { recordLeave, recordStageChange } from '@/lib/metrics';
+import { prisma } from '@/lib/db';
 
 export interface StageParticipantSummary {
   identity: string;
@@ -43,42 +44,49 @@ export interface StageTokenResult {
   identity: string;
 }
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __bluesky_spaces_pending_invites__: Map<string, PendingInvite> | undefined;
-  // eslint-disable-next-line no-var
-  var __bluesky_spaces_active_speakers__: Map<string, Set<string>> | undefined;
-  // eslint-disable-next-line no-var
-  var __bluesky_spaces_blocked__: Map<string, Set<string>> | undefined;
+// Stage state lives in D1 (StageInvite, StageSpeaker, StageBlock) because
+// Workers isolates share no memory: the host's invite and the listener's
+// accept can land on different isolates.
+
+function toPendingInvite(row: {
+  spaceId: string;
+  roomName: string;
+  targetIdentity: string;
+  hostDid: string;
+  createdAt: Date;
+}): PendingInvite {
+  return {
+    spaceId: row.spaceId,
+    roomName: row.roomName,
+    targetIdentity: row.targetIdentity,
+    hostDid: row.hostDid,
+    createdAt: row.createdAt.getTime(),
+  };
 }
 
-function inviteKey(spaceId: string, identity: string): string {
-  return `${spaceId}:${identity}`;
+async function saveInvite(invite: PendingInvite): Promise<void> {
+  const data = {
+    hostDid: invite.hostDid,
+    roomName: invite.roomName,
+    createdAt: new Date(invite.createdAt),
+  };
+  await prisma.stageInvite.upsert({
+    where: { spaceId_targetIdentity: { spaceId: invite.spaceId, targetIdentity: invite.targetIdentity } },
+    create: { spaceId: invite.spaceId, targetIdentity: invite.targetIdentity, ...data },
+    update: data,
+  });
 }
 
-function getInviteStore(): Map<string, PendingInvite> {
-  if (!globalThis.__bluesky_spaces_pending_invites__) {
-    globalThis.__bluesky_spaces_pending_invites__ = new Map();
-  }
-  return globalThis.__bluesky_spaces_pending_invites__;
+async function deleteInvite(spaceId: string, identity: string): Promise<void> {
+  await prisma.stageInvite.deleteMany({ where: { spaceId, targetIdentity: identity } });
 }
 
-function getActiveSpeakers(): Map<string, Set<string>> {
-  if (!globalThis.__bluesky_spaces_active_speakers__) {
-    globalThis.__bluesky_spaces_active_speakers__ = new Map();
-  }
-  return globalThis.__bluesky_spaces_active_speakers__;
-}
-
-function getBlockedUsers(): Map<string, Set<string>> {
-  if (!globalThis.__bluesky_spaces_blocked__) {
-    globalThis.__bluesky_spaces_blocked__ = new Map();
-  }
-  return globalThis.__bluesky_spaces_blocked__;
-}
-
-export function isBlocked(spaceId: string, identity: string): boolean {
-  return Boolean(getBlockedUsers().get(spaceId)?.has(identity));
+export async function isBlocked(spaceId: string, identity: string): Promise<boolean> {
+  const row = await prisma.stageBlock.findUnique({
+    where: { spaceId_identity: { spaceId, identity } },
+    select: { spaceId: true },
+  });
+  return row !== null;
 }
 
 export class StageError extends Error {
@@ -218,19 +226,16 @@ async function broadcastData(
 /**
  * Add or remove an identity from the active speakers set for a space.
  */
-function markSpeaker(spaceId: string, identity: string): void {
-  const set = getActiveSpeakers().get(spaceId) ?? new Set<string>();
-  set.add(identity);
-  getActiveSpeakers().set(spaceId, set);
+async function markSpeaker(spaceId: string, identity: string): Promise<void> {
+  await prisma.stageSpeaker.upsert({
+    where: { spaceId_identity: { spaceId, identity } },
+    create: { spaceId, identity },
+    update: {},
+  });
 }
 
-function unmarkSpeaker(spaceId: string, identity: string): void {
-  const set = getActiveSpeakers().get(spaceId);
-  if (!set) return;
-  set.delete(identity);
-  if (set.size === 0) {
-    getActiveSpeakers().delete(spaceId);
-  }
+async function unmarkSpeaker(spaceId: string, identity: string): Promise<void> {
+  await prisma.stageSpeaker.deleteMany({ where: { spaceId, identity } });
 }
 
 /**
@@ -281,7 +286,7 @@ export async function inviteToStage(
     hostDid: input.hostDid,
     createdAt: Date.now(),
   };
-  getInviteStore().set(inviteKey(space.id, input.targetIdentity), invite);
+  await saveInvite(invite);
 
   await broadcastData(
     space.roomName,
@@ -306,9 +311,7 @@ export async function acceptStageInvite(
   input: AcceptStageInviteInput
 ): Promise<StageTokenResult> {
   const space = await resolveSpace(input.spaceId);
-  const key = inviteKey(space.id, input.userDid);
-  const store = getInviteStore();
-  const invite = store.get(key);
+  const invite = await getPendingInvite(space.id, input.userDid);
   if (!invite) {
     throw new StageError(
       'no_pending_invite',
@@ -317,8 +320,8 @@ export async function acceptStageInvite(
     );
   }
 
-  store.delete(key);
-  markSpeaker(space.id, input.userDid);
+  await deleteInvite(space.id, input.userDid);
+  await markSpeaker(space.id, input.userDid);
   await recordStageChange({ spaceId: space.id, identity: input.userDid, onStage: true });
 
   const { token, wsUrl } = await generateToken({
@@ -352,7 +355,7 @@ export async function leaveStage(
   input: LeaveStageInput
 ): Promise<StageTokenResult> {
   const space = await resolveSpace(input.spaceId);
-  unmarkSpeaker(space.id, input.userDid);
+  await unmarkSpeaker(space.id, input.userDid);
   await recordStageChange({ spaceId: space.id, identity: input.userDid, onStage: false });
 
   const { token, wsUrl } = await generateToken({
@@ -403,9 +406,9 @@ export async function removeFromStage(
     );
   }
 
-  unmarkSpeaker(space.id, input.targetIdentity);
+  await unmarkSpeaker(space.id, input.targetIdentity);
   // Clear any pending invite just in case.
-  getInviteStore().delete(inviteKey(space.id, input.targetIdentity));
+  await deleteInvite(space.id, input.targetIdentity);
   await recordStageChange({ spaceId: space.id, identity: input.targetIdentity, onStage: false });
 
   const { token, wsUrl } = await generateToken({
@@ -464,8 +467,8 @@ export async function kickFromSpace(
       'Only the space host can kick participants.'
     );
   }
-  unmarkSpeaker(space.id, input.targetIdentity);
-  getInviteStore().delete(inviteKey(space.id, input.targetIdentity));
+  await unmarkSpeaker(space.id, input.targetIdentity);
+  await deleteInvite(space.id, input.targetIdentity);
   await removeParticipant(space.roomName, input.targetIdentity);
   await recordLeave({ spaceId: space.id, identity: input.targetIdentity });
   await broadcastData(
@@ -511,11 +514,13 @@ export async function blockFromSpace(
       'Only the space host can block participants.'
     );
   }
-  const set = getBlockedUsers().get(space.id) ?? new Set<string>();
-  set.add(input.targetIdentity);
-  getBlockedUsers().set(space.id, set);
-  unmarkSpeaker(space.id, input.targetIdentity);
-  getInviteStore().delete(inviteKey(space.id, input.targetIdentity));
+  await prisma.stageBlock.upsert({
+    where: { spaceId_identity: { spaceId: space.id, identity: input.targetIdentity } },
+    create: { spaceId: space.id, identity: input.targetIdentity },
+    update: {},
+  });
+  await unmarkSpeaker(space.id, input.targetIdentity);
+  await deleteInvite(space.id, input.targetIdentity);
   await removeParticipant(space.roomName, input.targetIdentity);
   await recordLeave({ spaceId: space.id, identity: input.targetIdentity });
   return { ok: true };
@@ -559,30 +564,30 @@ export async function muteSpeaker(
 /**
  * Return the pending invite for an identity in a space, or null.
  */
-export function getPendingInvite(
+export async function getPendingInvite(
   spaceId: string,
   identity: string
-): PendingInvite | null {
-  return getInviteStore().get(inviteKey(spaceId, identity)) ?? null;
+): Promise<PendingInvite | null> {
+  const row = await prisma.stageInvite.findUnique({
+    where: { spaceId_targetIdentity: { spaceId, targetIdentity: identity } },
+  });
+  return row ? toPendingInvite(row) : null;
 }
 
 /**
  * Return all currently pending invites for a space.
  */
-export function listPendingInvites(spaceId: string): PendingInvite[] {
-  const out: PendingInvite[] = [];
-  for (const invite of getInviteStore().values()) {
-    if (invite.spaceId === spaceId) out.push(invite);
-  }
-  return out;
+export async function listPendingInvites(spaceId: string): Promise<PendingInvite[]> {
+  const rows = await prisma.stageInvite.findMany({ where: { spaceId }, orderBy: { createdAt: 'asc' } });
+  return rows.map(toPendingInvite);
 }
 
 /**
  * Return the set of identities currently considered "on stage" for a space.
  */
-export function listActiveSpeakers(spaceId: string): string[] {
-  const set = getActiveSpeakers().get(spaceId);
-  return set ? Array.from(set) : [];
+export async function listActiveSpeakers(spaceId: string): Promise<string[]> {
+  const rows = await prisma.stageSpeaker.findMany({ where: { spaceId }, select: { identity: true } });
+  return rows.map((r) => r.identity);
 }
 
 // ---------- Test helpers ----------
@@ -592,7 +597,5 @@ export function listActiveSpeakers(spaceId: string): string[] {
  * Not exported via the public route surface.
  */
 export function __resetStageStoresForTests(): void {
-  globalThis.__bluesky_spaces_pending_invites__ = undefined;
-  globalThis.__bluesky_spaces_active_speakers__ = undefined;
-  globalThis.__bluesky_spaces_blocked__ = undefined;
+  // Stage state is in the database now; tests reset their Prisma mock instead.
 }

@@ -1,13 +1,21 @@
-// Prisma schema for Bluesky Spaces MVP
-// Chunk 1: minimal User model only.
+// Prisma schema for Cloudflare D1 (SQLite).
+//
+// The client is generated without a Rust engine (`engineType = "client"`) and
+// talks to D1 through @prisma/adapter-d1 (see src/lib/db.ts). D1 has no
+// transactions, so `$transaction` calls run statement by statement; code that
+// uses them must stay idempotent.
+//
+// SQLite has no arrays or JSON columns: tags live in join tables and JSON
+// payloads are stored as text.
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "client"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -24,6 +32,7 @@ model User {
   @@index([handle])
 }
 
+/// A station: the durable thing a host creates and can go live on many times.
 model Space {
   id          String    @id @default(cuid())
   slug        String    @unique
@@ -31,45 +40,36 @@ model Space {
   description String?
   hostId      String
   isLive      Boolean   @default(false)
-  /// Scheduled start time. Null means "now/immediate" (already-active space).
   scheduledAt DateTime?
-  /// When an unscheduled empty space should be considered expired. Null for
-  /// scheduled spaces until after the scheduled time passes.
+  /// When an unscheduled empty space should be considered expired.
   expiresAt   DateTime?
-  /// The time the room was last observed empty (no LiveKit participants).
-  /// Null while the room is occupied or has never been observed empty.
-  /// Spaces empty for longer than EMPTY_SPACE_TTL_MS are expired by the
-  /// occupancy sweep.
+  /// Last time the room was observed empty; null while occupied.
   emptySince  DateTime?
-  /// One of "scheduled", "active", "live", "ended", "expired". Becomes the
-  /// source of truth over time; `isLive` is kept updated for backwards
-  /// compatibility.
+  /// One of "scheduled", "active", "live", "ended", "expired".
   status      String    @default("active")
-  /// Live occupancy metrics (snapshots refreshed by the metrics sweep).
-  /// `listenerCount`/`speakerCount` come from LiveKit participants;
-  /// `reactionCount` is incremented when participants react.
-  listenerCount Int       @default(0)
-  speakerCount  Int       @default(0)
-  reactionCount Int       @default(0)
-  /// Lifetime totals rolled up from ShowSession rows when a show ends, plus
-  /// the running like count (see src/lib/metrics.ts).
+  /// Live occupancy snapshots from LiveKit plus the running reaction count.
+  listenerCount Int @default(0)
+  speakerCount  Int @default(0)
+  reactionCount Int @default(0)
+  /// Lifetime totals rolled up from ShowSession rows plus the like count.
   likeCount      Int       @default(0)
   sessionCount   Int       @default(0)
   totalListeners Int       @default(0)
   hostedSeconds  Int       @default(0)
   lastLiveAt     DateTime?
-  /// Up to 3 category tags (from the YouTube video-category list) used to
-  /// group shows into stations.
-  tags        String[]  @default([])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  host        User         @relation(fields: [hostId], references: [did], onDelete: Cascade)
-  posts       SpacePost[]
-  recordings  Recording[]
-  sessions    ShowSession[]
-  reactions   ShowReaction[]
-  likes       ShowLike[]
+  host       User          @relation(fields: [hostId], references: [did], onDelete: Cascade)
+  tags       SpaceTag[]
+  posts      SpacePost[]
+  recordings Recording[]
+  sessions   ShowSession[]
+  reactions  ShowReaction[]
+  likes      ShowLike[]
+  invites    StageInvite[]
+  speakers   StageSpeaker[]
+  blocks     StageBlock[]
 
   @@index([hostId])
   @@index([isLive])
@@ -80,13 +80,22 @@ model Space {
   @@index([emptySince])
 }
 
-/// Per-session recording row. Created when the host goes live and an
-/// `EgressInfo` is returned from LiveKit. `expiresAt` is set 30 days out so
-/// the cleanup sweep can identify old rows deterministically.
+/// Up to 3 category tags per station (YouTube category list).
+model SpaceTag {
+  spaceId String
+  tag     String
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, tag])
+  @@index([tag])
+}
+
+/// Per-session recording row, created when the host goes live and LiveKit
+/// egress starts. `expiresAt` drives the cleanup sweep.
 model Recording {
   id          String    @id @default(cuid())
   spaceId     String
-  /// LiveKit Egress ID. Unique because one Egress maps to one recording.
   egressId    String    @unique
   /// One of "starting", "available", "failed", "expired".
   status      String    @default("starting")
@@ -116,7 +125,8 @@ model SpacePost {
   cid       String
   indexedAt DateTime
   authorDid String
-  embed     Json?
+  /// JSON text of the Bluesky embed, if any.
+  embed     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -127,17 +137,54 @@ model SpacePost {
   @@index([createdAt])
 }
 
-/// Persisted ATProto OAuth session data. The key is the user's DID. This
-/// allows the app to restore the OAuth session across server restarts and
-/// (eventually) across multiple replicas.
+/// Bluesky OAuth session, keyed by DID. `data` is the serialized session.
 model OAuthSession {
   id        String   @id @default(cuid())
   did       String   @unique
-  data      Json
+  data      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
-  @@index([did])
+/// In-flight OAuth authorization state (PKCE verifier, DPoP key, ...), keyed
+/// by the state parameter. Short-lived; rows are deleted on callback.
+model OAuthState {
+  key       String   @id
+  data      String
+  createdAt DateTime @default(now())
+}
+
+/// A host's invitation for a listener to come on stage.
+model StageInvite {
+  spaceId        String
+  targetIdentity String
+  hostDid        String
+  roomName       String
+  createdAt      DateTime @default(now())
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, targetIdentity])
+}
+
+/// Who currently holds a speaker token in a station's room.
+model StageSpeaker {
+  spaceId  String
+  identity String
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, identity])
+}
+
+/// Identities the host has blocked from a station.
+model StageBlock {
+  spaceId  String
+  identity String
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, identity])
 }
 
 /// One live run of a Space ("show"), from the host going live until they end
@@ -147,8 +194,6 @@ model ShowSession {
   id              String    @id @default(cuid())
   spaceId         String
   hostDid         String
-  /// Tags on the Space when the session started (a Space can be re-tagged).
-  tags            String[]  @default([])
   startedAt       DateTime  @default(now())
   endedAt         DateTime?
   durationSeconds Int       @default(0)
@@ -164,12 +209,24 @@ model ShowSession {
   updatedAt       DateTime  @updatedAt
 
   space          Space               @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  /// Tags on the Space when the session started (a Space can be re-tagged).
+  tags           ShowSessionTag[]
   participations ShowParticipation[]
   reactions      ShowReaction[]
 
   @@index([spaceId, startedAt])
   @@index([hostDid, startedAt])
   @@index([endedAt])
+}
+
+model ShowSessionTag {
+  sessionId String
+  tag       String
+
+  session ShowSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, tag])
+  @@index([tag])
 }
 
 /// One participant's presence in one ShowSession. `identity` is a DID or an

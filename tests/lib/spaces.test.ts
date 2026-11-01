@@ -207,7 +207,7 @@ describe('getSpaces', () => {
     const spaces = await getSpaces();
     expect(mockSpaceFindMany).toHaveBeenCalledWith({
       orderBy: { createdAt: 'desc' },
-      include: { host: true },
+      include: { host: true, tags: { select: { tag: true } } },
     });
     expect(spaces).toHaveLength(2);
     expect(spaces[0].id).toBe('sp2');
@@ -220,7 +220,7 @@ describe('getSpaceById / getSpaceBySlug', () => {
     const a = await getSpaceById('sp1');
     expect(mockSpaceFindUnique).toHaveBeenCalledWith({
       where: { id: 'sp1' },
-      include: { host: true },
+      include: { host: true, tags: { select: { tag: true } } },
     });
     expect(a?.id).toBe('sp1');
 
@@ -234,7 +234,7 @@ describe('getSpaceById / getSpaceBySlug', () => {
     const a = await getSpaceBySlug('my-room-abc12345');
     expect(mockSpaceFindUnique).toHaveBeenCalledWith({
       where: { slug: 'my-room-abc12345' },
-      include: { host: true },
+      include: { host: true, tags: { select: { tag: true } } },
     });
     expect(a?.slug).toBe('my-room-abc12345');
 

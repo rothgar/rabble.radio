@@ -129,6 +129,13 @@ export function getLiveKitPublicWsUrl(): string {
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     process.env.PUBLIC_URL?.trim() ||
     '';
+  // A hosted LiveKit project is reached at the same wss:// URL from the
+  // browser and the server, so a separate public URL is only needed when the
+  // SFU sits behind its own ingress.
+  const serverUrl = process.env.LIVEKIT_URL?.trim() || '';
+  if (/^wss:\/\//.test(serverUrl)) {
+    return normalizeWsUrl(serverUrl);
+  }
   if (derivedFrom) {
     return httpsToWss(derivedFrom);
   }

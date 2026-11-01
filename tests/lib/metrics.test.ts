@@ -147,7 +147,13 @@ describe('startShowSession', () => {
     m.sessionFindFirst.mockResolvedValueOnce(null);
     await startShowSession({ spaceId: 'sp1', hostDid: 'did:plc:host', tags: ['Music'], now: T0 });
     expect(m.sessionCreate).toHaveBeenCalledWith({
-      data: { spaceId: 'sp1', hostDid: 'did:plc:host', tags: ['Music'], startedAt: T0 },
+      data: {
+        spaceId: 'sp1',
+        hostDid: 'did:plc:host',
+        tags: { create: [{ tag: 'Music' }] },
+        startedAt: T0,
+      },
+      include: { tags: { select: { tag: true } } },
     });
   });
 
@@ -294,7 +300,7 @@ describe('recordReaction', () => {
 });
 
 describe('likeShow / unlikeShow', () => {
-  const spaceRow = { id: 'sp1', hostId: 'did:plc:host', tags: ['Music'], likeCount: 4 };
+  const spaceRow = { id: 'sp1', hostId: 'did:plc:host', tags: [{ tag: 'Music' }], likeCount: 4 };
 
   it('creates the like and increments the space and live session', async () => {
     m.spaceFindUnique.mockResolvedValueOnce(spaceRow);
@@ -441,7 +447,7 @@ describe('endShowSession', () => {
     expect(topicRows.map((o) => (o.args.where as { tag: string }).tag)).toEqual(['Music', 'Comedy']);
     expect(topicRows[0].args.update).toMatchObject({ shows: { increment: 1 }, listeners: { increment: 3 } });
 
-    expect(result).toEqual(sent[0]);
+    expect(result).toEqual({ ...sent[0], tags: ['Music', 'Comedy'] });
   });
 
   it('never throws when the roll-up fails', async () => {

@@ -21,20 +21,35 @@
 // replica; TODO: replace with Redis before scaling out.
 
 import {
-  NodeOAuthClient,
-  buildAtprotoLoopbackClientMetadata,
-  JoseKey,
-} from '@atproto/oauth-client-node';
-import type {
-  NodeSavedSession,
-  NodeSavedSessionStore,
-  NodeSavedState,
-  NodeSavedStateStore,
-  ClientMetadata,
-  OAuthClientMetadataInput,
-} from '@atproto/oauth-client-node';
-import { importPKCS8 } from 'jose';
+  OAuthClient,
+  atprotoLoopbackClientMetadata,
+  type ClientMetadata,
+  type OAuthClientMetadataInput,
+  type OAuthClientOptions,
+  type RuntimeImplementation,
+  type SessionStore,
+  type StateStore,
+} from '@atproto/oauth-client';
+import { JoseKey } from '@atproto/jwk-jose';
+import { exportJWK, importPKCS8 } from 'jose';
 import { createLogger } from '@/lib/logger';
+import { createPrismaSessionStore, createPrismaStateStore } from '@/lib/oauth-session-store';
+import { identityResolver, workerFetch } from '@/lib/atproto-runtime';
+
+// The runtime-agnostic atproto client needs a few primitives supplied by the
+// host; these are the WebCrypto versions, which work on Workers and Node.
+const runtimeImplementation: RuntimeImplementation = {
+  // jose-based keys: WebcryptoKey's instanceof CryptoKey check fails across
+  // realms inside the OpenNext bundle.
+  createKey: (algs) => JoseKey.generate(algs),
+  getRandomValues: (length) => crypto.getRandomValues(new Uint8Array(length)),
+  digest: async (data, { name }) =>
+    new Uint8Array(await crypto.subtle.digest(name.replace('sha', 'SHA-'), data)),
+};
+
+type NodeSavedStateStore = StateStore;
+type NodeSavedSessionStore = SessionStore;
+type IdentityResolverOption = OAuthClientOptions['identityResolver'];
 
 const APP_NAME = process.env.APP_NAME?.trim() || 'Rabble';
 const PUBLIC_URL = process.env.PUBLIC_URL?.trim() || '';
@@ -43,9 +58,12 @@ const SCOPE = 'atproto transition:generic';
 
 // Dev-only loopback metadata. The function derives a `client_id` from the
 // `redirect_uris` you pass in (or picks sensible defaults).
-const loopbackMetadata = buildAtprotoLoopbackClientMetadata({
-  scope: SCOPE,
-});
+// Loopback client for `next dev`: no key, no metadata document, redirect
+// back to the local server. See the atproto OAuth spec on localhost clients.
+const LOOPBACK_REDIRECT = 'http://127.0.0.1:3000/api/auth/bluesky/callback';
+const loopbackMetadata = atprotoLoopbackClientMetadata(
+  `http://localhost?redirect_uri=${encodeURIComponent(LOOPBACK_REDIRECT)}&scope=${encodeURIComponent(SCOPE)}`
+);
 
 interface OAuthSessionLike {
   sub: string;
@@ -98,47 +116,12 @@ declare global {
 
 const initLog = createLogger({ correlationId: 'oauth-init' });
 
-function createMemoryStateStore(): NodeSavedStateStore {
-  const map = new Map<string, NodeSavedState>();
-  return {
-    async get(key: string) {
-      return map.get(key);
-    },
-    async set(key: string, value: NodeSavedState) {
-      map.set(key, value);
-    },
-    async del(key: string) {
-      map.delete(key);
-    },
-    async clear() {
-      map.clear();
-    },
-  };
-}
 
-import { createPrismaSessionStore } from '@/lib/oauth-session-store';
 
-function createMemorySessionStore(): NodeSavedSessionStore {
-  const map = new Map<string, NodeSavedSession>();
-  return {
-    async get(key: string) {
-      return map.get(key);
-    },
-    async set(key: string, value: NodeSavedSession) {
-      map.set(key, value);
-    },
-    async del(key: string) {
-      map.delete(key);
-    },
-    async clear() {
-      map.clear();
-    },
-  };
-}
 
 function getStateStore(): NodeSavedStateStore {
   if (!globalThis.__bluesky_spaces_state_store__) {
-    globalThis.__bluesky_spaces_state_store__ = createMemoryStateStore();
+    globalThis.__bluesky_spaces_state_store__ = createPrismaStateStore() as StateStore;
   }
   return globalThis.__bluesky_spaces_state_store__;
 }
@@ -147,7 +130,7 @@ function getSessionStore(): NodeSavedSessionStore {
   if (!globalThis.__bluesky_spaces_session_store__) {
     // Persist OAuth sessions in Postgres so they survive server restarts
     // and can be shared across replicas.
-    globalThis.__bluesky_spaces_session_store__ = createPrismaSessionStore();
+    globalThis.__bluesky_spaces_session_store__ = createPrismaSessionStore() as SessionStore;
   }
   return globalThis.__bluesky_spaces_session_store__;
 }
@@ -230,8 +213,13 @@ async function loadPrivateKey(): Promise<JoseKey> {
 
   // JoseKey.fromImportable accepts a KeyLike (jose's CryptoKey) plus a kid.
   // We need extractable=true because JoseKey re-exports the JWK internally.
-  const cryptoKey = await importPKCS8(pem, 'ES256', { extractable: true });
-  return JoseKey.fromImportable(cryptoKey, kid);
+  // Secrets pasted through some tools arrive with literal "\n" sequences.
+  const normalizedPem = pem.includes('\\n') ? pem.replace(/\\n/g, '\n') : pem;
+  const cryptoKey = await importPKCS8(normalizedPem, 'ES256', { extractable: true });
+  // Go through a JWK so the key carries an explicit alg/use; the OAuth client
+  // only counts keys whose algorithms include ES256 as signing keys.
+  const jwk = await exportJWK(cryptoKey);
+  return JoseKey.fromJWK({ ...jwk, kid, alg: 'ES256', use: 'sig' });
 }
 
 /**
@@ -291,12 +279,15 @@ async function initPublicOAuth(): Promise<PublicInitResult> {
     keys: jwks.keys.length,
   });
 
-  const client = new NodeOAuthClient({
+  const client = new OAuthClient({
     clientMetadata: metadata,
     keyset: [joseKey],
     stateStore: getStateStore(),
     sessionStore: getSessionStore(),
     responseMode: 'query',
+    runtimeImplementation,
+    identityResolver: identityResolver as unknown as IdentityResolverOption,
+    fetch: workerFetch,
   });
 
   return {
@@ -308,11 +299,15 @@ async function initPublicOAuth(): Promise<PublicInitResult> {
 
 function initLoopbackOAuth(): OAuthClientLike {
   initLog.info('oauth.init.loopback');
-  const client = new NodeOAuthClient({
+  const client = new OAuthClient({
     clientMetadata: loopbackMetadata,
     stateStore: getStateStore(),
     sessionStore: getSessionStore(),
     responseMode: 'query',
+    runtimeImplementation,
+    identityResolver: identityResolver as unknown as IdentityResolverOption,
+    fetch: workerFetch,
+    allowHttp: true,
   });
   return client as unknown as OAuthClientLike;
 }

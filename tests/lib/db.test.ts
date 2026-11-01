@@ -1,44 +1,53 @@
+// tests/lib/db.test.ts
+//
+// The Prisma export is a proxy that binds to the D1 database from the
+// Cloudflare request context on first use.
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the PrismaClient constructor before importing db. db.ts imports
-// PrismaClient from `@prisma/client`, so we mock that module path.
-const mockPrisma = {
-  user: {
-    findMany: vi.fn(),
-    findUnique: vi.fn(),
-    create: vi.fn(),
+const { mockGetCloudflareContext, mockPrismaClient, mockAdapter } = vi.hoisted(() => ({
+  mockGetCloudflareContext: vi.fn(),
+  mockPrismaClient: vi.fn(),
+  mockAdapter: vi.fn(),
+}));
+
+vi.mock('@opennextjs/cloudflare', () => ({ getCloudflareContext: mockGetCloudflareContext }));
+vi.mock('@prisma/adapter-d1', () => ({
+  PrismaD1: class {
+    constructor(db: unknown) {
+      mockAdapter(db);
+    }
   },
-};
+}));
+vi.mock('@prisma/client', () => ({
+  PrismaClient: class {
+    user = { findMany: vi.fn(async () => ['row']) };
+    constructor(opts: unknown) {
+      mockPrismaClient(opts);
+    }
+  },
+}));
 
-vi.mock('@prisma/client', () => {
-  return {
-    // vitest 4+ mocks are only constructible when given a real function.
-    PrismaClient: vi.fn(function PrismaClient() {
-      return mockPrisma;
-    }),
-  };
-});
-
-describe('db singleton', () => {
+describe('db proxy', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
   });
 
-  it('exports a prisma client', async () => {
+  it('creates one client per D1 binding and delegates model access', async () => {
+    const DB = { name: 'd1' };
+    mockGetCloudflareContext.mockReturnValue({ env: { DB } });
     const { prisma } = await import('@/lib/db');
-    expect(prisma).toBeDefined();
-    expect(prisma).toBe(mockPrisma);
+    expect(await prisma.user.findMany()).toEqual(['row']);
+    await prisma.user.findMany();
+    expect(mockAdapter).toHaveBeenCalledTimes(1);
+    expect(mockAdapter).toHaveBeenCalledWith(DB);
+    expect(mockPrismaClient).toHaveBeenCalledTimes(1);
   });
 
-  it('reuses the same instance on repeated import in dev (HMR safety)', async () => {
-    const modA = await import('@/lib/db');
-    const modB = await import('@/lib/db');
-    expect(modA.prisma).toBe(modB.prisma);
-  });
-
-  it('default export equals named export', async () => {
-    const mod = await import('@/lib/db');
-    expect(mod.default).toBe(mod.prisma);
+  it('fails clearly when the DB binding is missing', async () => {
+    mockGetCloudflareContext.mockReturnValue({ env: {} });
+    const { prisma } = await import('@/lib/db');
+    expect(() => prisma.user).toThrow(/D1 binding "DB"/);
   });
 });

@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Development environment (rabble.rodeo). Production (rabble.radio) will be
+  // a second environment with its own database, bucket, secrets and domain.
+  "name": "rabble-dev",
+  "main": "custom-worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "rabble-dev" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rabble-dev",
+      "database_id": "b1415b00-28e3-4cd7-88de-93e089211cd5",
+      "migrations_dir": "prisma/d1"
+    }
+  ],
+  "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "rabble-dev-recordings" }],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "routes": [{ "pattern": "rabble.rodeo", "custom_domain": true }],
+  "observability": { "enabled": true },
+  // Plain config. Secrets (SESSION_SECRET, JWKS_PRIVATE_KEY, LIVEKIT_*, S3_*)
+  // are set with `wrangler secret put`.
+  "vars": {
+    "APP_NAME": "Rabble",
+    "PUBLIC_URL": "https://rabble.rodeo",
+    "NEXT_PUBLIC_APP_URL": "https://rabble.rodeo",
+    "LOGO_URL": "https://rabble.rodeo/logo.png",
+    "S3_REGION": "auto",
+    "RECORDING_BUCKET": "rabble-dev-recordings",
+    "LOG_LEVEL": "info"
+  }
+}

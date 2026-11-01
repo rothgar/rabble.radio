@@ -17,7 +17,7 @@ android {
         // Base URL of the rabble.radio deployment. Override for local dev with
         //   ./gradlew assembleDebug -PrabbleBaseUrl=http://10.0.2.2:3000
         val baseUrl = (project.findProperty("rabbleBaseUrl") as String?)
-            ?: "https://rabble.jgarr.net"
+            ?: "https://rabble.rodeo"
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
     }
 

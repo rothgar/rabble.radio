@@ -196,7 +196,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = radio.rabble.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				RABBLE_BASE_URL = "https://rabble.jgarr.net";
+				RABBLE_BASE_URL = "https://rabble.rodeo";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -218,7 +218,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = radio.rabble.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				RABBLE_BASE_URL = "https://rabble.jgarr.net";
+				RABBLE_BASE_URL = "https://rabble.rodeo";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

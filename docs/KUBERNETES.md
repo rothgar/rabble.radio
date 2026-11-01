@@ -239,7 +239,7 @@ The live deployment lives in the `homelab-flux` repo under
 
 3. `flux reconcile source git flux-system && flux reconcile kustomization flux-system`,
    then `kubectl -n rabble rollout status deploy/rabble-app` and
-   `curl https://rabble.jgarr.net/api/health`.
+   `curl https://rabble.rodeo/api/health`.
 
 Public hostnames are Cloudflare Tunnel public hostnames on the existing
 `cloudflared` tunnel (Zero Trust dashboard → Networks → Tunnels):

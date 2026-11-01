@@ -16,9 +16,23 @@ export interface SpacePostModel {
   cid: string;
   indexedAt: Date;
   authorDid: string;
-  embed: unknown | null;
+  /** JSON text of the embed (SQLite has no JSON column). */
+  embed: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+function serializeEmbed(embed: unknown): string | null {
+  return embed === null || embed === undefined ? null : JSON.stringify(embed);
+}
+
+function parseEmbed(raw: string | null): unknown | null {
+  if (raw === null || raw === '') return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 export interface CreateSpacePostInput {
@@ -61,7 +75,7 @@ export async function createSpacePost(
       cid: input.cid,
       indexedAt: input.indexedAt,
       authorDid: input.authorDid,
-      embed: (input.embed ?? null) as object | null,
+      embed: serializeEmbed(input.embed),
     },
     create: {
       spaceId: input.spaceId,
@@ -69,7 +83,7 @@ export async function createSpacePost(
       cid: input.cid,
       indexedAt: input.indexedAt,
       authorDid: input.authorDid,
-      embed: (input.embed ?? null) as object | null,
+      embed: serializeEmbed(input.embed),
     },
   })) as SpacePostModel;
   return toPublicSpacePost(row, view);
@@ -135,14 +149,14 @@ export function toPublicSpacePost(
     cid: row.cid,
     indexedAt: row.indexedAt.toISOString(),
     authorDid: row.authorDid,
-    embed: row.embed,
+    embed: parseEmbed(row.embed),
     view,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
 function deriveViewFromRow(row: SpacePostModel): PostView {
-  const embed = (row.embed as PostView['embed']) ?? undefined;
+  const embed = (parseEmbed(row.embed) as PostView['embed']) ?? undefined;
   return {
     uri: row.atUri,
     cid: row.cid,

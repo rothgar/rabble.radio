@@ -40,3 +40,10 @@ coverage/
 # Temporary uploads / local data (if mounted locally)
 *.tmp
 uploads/
+
+# Cloudflare
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts
+.vitest/

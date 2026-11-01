@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "Space" ADD COLUMN "tags" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

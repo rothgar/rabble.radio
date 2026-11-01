@@ -114,3 +114,30 @@ the next person can pick it up:
    routes and email sending.
 4. Optional: a `CLOUDFLARE_API_TOKEN` GitHub secret if deploys should move
    to GitHub Actions.
+
+## Status (2026-11-01)
+
+Done on the `cloudflare` branch: wrangler config, D1 `rabble-dev` (migrated),
+R2 `rabble-dev-recordings`, SQLite schema with join tables and JSON text,
+engine-less Prisma over the D1 adapter, stage state and OAuth state in D1,
+runtime-agnostic atproto OAuth client (with a Workers-safe identity resolver
+in `src/lib/atproto-runtime.ts`), OpenNext build, cron Worker entry, secrets
+uploaded. Verified locally on workerd: health, pages, API, expire sweep,
+OAuth metadata/JWKS, and an authorize request that reaches bsky.social.
+
+Findings worth keeping:
+- `@atproto/oauth-client-node` cannot run on Workers (Node-only fetch
+  guard); `@atproto/oauth-client` can, but its resolvers use
+  `redirect: "error"`, hence the custom identity resolver and fetch wrapper.
+- `@atproto/jwk-jose` depends on jose 5, whose Node build Next picks for the
+  server bundle; that build calls `node:crypto` signing that workerd rejects.
+  `pnpm.overrides` pins jose to v6 (universal WebCrypto build).
+- `WebcryptoKey.generate` fails its `instanceof CryptoKey` check inside the
+  OpenNext bundle; DPoP keys are generated with `JoseKey.generate` instead.
+- `@cloudflare/workers-types` must not be referenced from files in the
+  Next.js tsconfig program (it redefines `Response.json()` as `unknown`);
+  `custom-worker.ts` is excluded from tsconfig.
+
+Remaining: deploy, attach `rabble.rodeo`, LiveKit Cloud end-to-end test
+(join from the Android emulator off the LAN, recording to R2), then remove
+`clusters/wrtk8s/rabble` from homelab-flux and the jgarr.net tunnel hostnames.

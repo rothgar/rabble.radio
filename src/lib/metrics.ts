@@ -22,6 +22,18 @@ import { isAnonymousIdentity } from '@/lib/anonymous';
 import { logger } from '@/lib/logger';
 import type { Prisma, ShowSession } from '@prisma/client';
 
+/** An open session with its tag rows flattened to strings. */
+export type OpenSession = ShowSession & { tags: string[] };
+
+const sessionInclude = { tags: { select: { tag: true } } } as const;
+
+function flattenSession<T extends { tags?: Array<{ tag: string } | string> }>(
+  row: T
+): Omit<T, 'tags'> & { tags: string[] } {
+  const { tags, ...rest } = row;
+  return { ...rest, tags: (tags ?? []).map((t) => (typeof t === 'string' ? t : t.tag)) };
+}
+
 export type ParticipantRole = 'listener' | 'speaker' | 'host';
 
 /** Tag used for a host's all-topics HostTopicStats row. */
@@ -62,11 +74,13 @@ function swallow(event: string, fields: Record<string, unknown>): (err: unknown)
 // Sessions
 // ---------------------------------------------------------------------------
 
-export async function getOpenSession(spaceId: string): Promise<ShowSession | null> {
-  return prisma.showSession.findFirst({
+export async function getOpenSession(spaceId: string): Promise<OpenSession | null> {
+  const row = await prisma.showSession.findFirst({
     where: { spaceId, endedAt: null },
     orderBy: { startedAt: 'desc' },
+    include: sessionInclude,
   });
+  return row ? flattenSession(row) : null;
 }
 
 export interface StartShowSessionInput {
@@ -82,19 +96,21 @@ export interface StartShowSessionInput {
  */
 export async function startShowSession(
   input: StartShowSessionInput
-): Promise<ShowSession | undefined> {
+): Promise<OpenSession | undefined> {
   const now = input.now ?? new Date();
   return (async () => {
     const existing = await getOpenSession(input.spaceId);
     if (existing) return existing;
-    return prisma.showSession.create({
+    const created = await prisma.showSession.create({
       data: {
         spaceId: input.spaceId,
         hostDid: input.hostDid,
-        tags: [...input.tags],
+        tags: { create: input.tags.filter((t) => t.length > 0).map((tag) => ({ tag })) },
         startedAt: now,
       },
+      include: sessionInclude,
     });
+    return flattenSession(created);
   })().catch(swallow('metrics.session.start_failed', { spaceId: input.spaceId }));
 }
 
@@ -233,7 +249,7 @@ export async function endShowSession(
     }
 
     const [updated] = (await prisma.$transaction(ops)) as [ShowSession, ...unknown[]];
-    return updated;
+    return { ...updated, tags: session.tags };
   })().catch(swallow('metrics.session.end_failed', { spaceId: input.spaceId }));
 }
 
@@ -426,9 +442,10 @@ export async function likeShow(input: LikeInput): Promise<LikeResult> {
   const now = input.now ?? new Date();
   const space = await prisma.space.findUnique({
     where: { id: input.spaceId },
-    select: { id: true, hostId: true, tags: true, likeCount: true },
+    select: { id: true, hostId: true, tags: { select: { tag: true } }, likeCount: true },
   });
   if (!space) throw new Error('space_not_found');
+  const spaceTags = space.tags.map((t) => (typeof t === 'string' ? t : t.tag));
 
   try {
     await prisma.showLike.create({
@@ -456,7 +473,7 @@ export async function likeShow(input: LikeInput): Promise<LikeResult> {
     );
   } else {
     // Outside a live session the like still counts for the host's standing.
-    for (const tag of [ALL_TOPICS, ...space.tags]) {
+    for (const tag of [ALL_TOPICS, ...spaceTags]) {
       ops.push(
         prisma.hostTopicStats.upsert({
           where: { hostDid_tag: { hostDid: space.hostId, tag } },
@@ -465,7 +482,7 @@ export async function likeShow(input: LikeInput): Promise<LikeResult> {
         })
       );
     }
-    for (const tag of space.tags) {
+    for (const tag of spaceTags) {
       ops.push(
         prisma.topicStats.upsert({
           where: { tag },
@@ -483,9 +500,10 @@ export async function likeShow(input: LikeInput): Promise<LikeResult> {
 export async function unlikeShow(input: LikeInput): Promise<LikeResult> {
   const space = await prisma.space.findUnique({
     where: { id: input.spaceId },
-    select: { id: true, hostId: true, tags: true, likeCount: true },
+    select: { id: true, hostId: true, tags: { select: { tag: true } }, likeCount: true },
   });
   if (!space) throw new Error('space_not_found');
+  const spaceTags = space.tags.map((t) => (typeof t === 'string' ? t : t.tag));
 
   const removed = await prisma.showLike.deleteMany({
     where: { spaceId: space.id, did: input.did },
@@ -508,7 +526,7 @@ export async function unlikeShow(input: LikeInput): Promise<LikeResult> {
       })
     );
   } else {
-    for (const tag of [ALL_TOPICS, ...space.tags]) {
+    for (const tag of [ALL_TOPICS, ...spaceTags]) {
       ops.push(
         prisma.hostTopicStats.updateMany({
           where: { hostDid: space.hostId, tag, likes: { gt: 0 } },
@@ -516,7 +534,7 @@ export async function unlikeShow(input: LikeInput): Promise<LikeResult> {
         })
       );
     }
-    for (const tag of space.tags) {
+    for (const tag of spaceTags) {
       ops.push(
         prisma.topicStats.updateMany({
           where: { tag, likes: { gt: 0 } },
@@ -654,10 +672,10 @@ export async function getRecentSessions(query: RecentSessionsQuery = {}) {
     where: {
       endedAt: { not: null },
       ...(query.since ? { startedAt: { gte: query.since } } : {}),
-      ...(query.tag ? { tags: { has: query.tag } } : {}),
+      ...(query.tag ? { tags: { some: { tag: query.tag } } } : {}),
     },
     orderBy: [{ uniqueListeners: 'desc' }, { reactionCount: 'desc' }, { startedAt: 'desc' }],
     take: limit,
-    include: { space: { include: { host: true } } },
+    include: { tags: { select: { tag: true } }, space: { include: { host: true } } },
   });
 }

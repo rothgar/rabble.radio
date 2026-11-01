@@ -40,6 +40,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: radio.rabble.ios
-        RABBLE_BASE_URL: https://rabble.jgarr.net
+        RABBLE_BASE_URL: https://rabble.rodeo
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait

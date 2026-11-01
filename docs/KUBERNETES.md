@@ -250,10 +250,10 @@ manages nothing for them. The tunnel carries HTTP and WebSockets only.
 
 ### Media off the LAN
 
-LiveKit runs with `hostNetwork` on one node and `use_external_ip`, so it
-advertises both the node IP (works on the LAN) and the STUN-discovered WAN
-IP. Nothing is forwarded on the router, so off-LAN clients relay through
-Cloudflare TURN instead:
+LiveKit runs with `use_external_ip`, so it advertises the STUN-discovered
+WAN IP (the namespace's PodSecurity level rules out `hostNetwork`, and
+without it LiveKit can advertise only one address). Nothing is forwarded on
+the router, so every client, LAN included, relays through Cloudflare TURN:
 
 1. Create a TURN key in the Cloudflare dashboard (Realtime → TURN).
 2. Store it in the cluster; the app Deployment mounts this Secret as

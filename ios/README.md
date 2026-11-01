@@ -38,6 +38,8 @@ Point the app at another server by changing `RABBLE_BASE_URL` in
 `project.yml` (or passing `RABBLE_BASE_URL=http://localhost:3000` to
 xcodebuild).
 
-Note: LiveKit audio uses UDP to the MetalLB address on the homelab LAN, so a
-simulator or device off that network connects to the room but will not hear
-audio until a public TURN/UDP path exists.
+Note: on the homelab LAN the simulator reaches the LiveKit SFU directly over
+UDP. Off the LAN it relays audio through Cloudflare TURN using the per-join
+`iceServers` in the join response, which the app passes to the LiveKit SDK.
+If the server has no TURN key configured, off-LAN devices connect to the room
+but hear nothing.

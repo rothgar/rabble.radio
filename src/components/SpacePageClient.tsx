@@ -48,6 +48,8 @@ interface JoinResponse {
   avatarUrl?: string | null;
   /** True when joined without a session (listen-only). */
   anonymous?: boolean;
+  /** Per-join STUN/TURN servers; absent when no relay is configured. */
+  iceServers?: RTCIceServer[];
 }
 
 interface PostsListResponse {
@@ -285,6 +287,7 @@ export function SpacePageClient({
         avatarUrl={joined.avatarUrl ?? null}
         isHost={isHost}
         anonymous={joined.anonymous === true}
+        iceServers={joined.iceServers}
         hostActions={hostActions}
         onLeave={handleLeave}
         title={title}

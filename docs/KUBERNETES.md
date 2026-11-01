@@ -72,13 +72,17 @@ production requirements are:
    `spec.healthCheckNodePort` disabled and the UDP range forwarded to
    the pod via `externalTrafficPolicy: Local` or a node-port-per-pod
    mapping.
-2. **TURN server (coturn).** Browsers behind symmetric NATs cannot
-   establish direct UDP paths. Run a coturn instance reachable on UDP
-   `3478` and TLS `443` (or `5349`); pass the `turns:` URL into the
-   Next.js app via the LiveKit token-mint call (already done in
-   `src/lib/livekit.ts`). Sharing port 443 with the Ingress is the
-   common pattern — use a separate `Service` and a different
-   hostname (`turn.example.com`).
+2. **TURN relay.** Browsers behind symmetric NATs, and any client that
+   cannot reach the SFU's advertised address, need a relay. The app uses
+   Cloudflare's hosted TURN: set `CLOUDFLARE_TURN_KEY_ID` and
+   `CLOUDFLARE_TURN_API_TOKEN` (a TURN key from Cloudflare dashboard →
+   Realtime → TURN) and `POST /api/spaces/[id]/join` mints a 24h
+   credential per participant, returned as `iceServers`. The web app and
+   both mobile apps hand that list to the LiveKit SDK, which uses it
+   instead of the SFU's own ICE servers. Pricing is per GB relayed with
+   a free monthly allowance; see `src/lib/turn.ts`. Self-hosting coturn
+   or LiveKit's embedded TURN works too, but needs a public UDP/TLS port
+   and a certificate for the TURN hostname.
 3. **Auth.** Replace `--dev` with an explicit `livekit.yaml` mounted
    from a Secret that contains real `api_key` / `api_secret` pairs and
    the TURN configuration. Disable `--dev` entirely.
@@ -237,6 +241,33 @@ The live deployment lives in the `homelab-flux` repo under
    then `kubectl -n rabble rollout status deploy/rabble-app` and
    `curl https://rabble.jgarr.net/api/health`.
 
-Public hostnames are HTTPRoutes on the shared Traefik Gateway
-(`rabble.jgarr.net` for the app, `rabble-livekit.jgarr.net` for LiveKit
-signaling) published to Cloudflare by external-dns.
+Public hostnames are Cloudflare Tunnel public hostnames on the existing
+`cloudflared` tunnel (Zero Trust dashboard → Networks → Tunnels):
+`rabble.jgarr.net` → `http://rabble-app.rabble.svc.cluster.local:80` and
+`rabble-livekit.jgarr.net` → `http://livekit.rabble.svc.cluster.local:7880`.
+Cloudflare owns those DNS records; there is no HTTPRoute and external-dns
+manages nothing for them. The tunnel carries HTTP and WebSockets only.
+
+### Media off the LAN
+
+LiveKit runs with `hostNetwork` on one node and `use_external_ip`, so it
+advertises both the node IP (works on the LAN) and the STUN-discovered WAN
+IP. Nothing is forwarded on the router, so off-LAN clients relay through
+Cloudflare TURN instead:
+
+1. Create a TURN key in the Cloudflare dashboard (Realtime → TURN).
+2. Store it in the cluster; the app Deployment mounts this Secret as
+   optional env, so it can be created before or after the deploy:
+
+   ```bash
+   kubectl -n rabble create secret generic rabble-turn \
+     --from-literal=CLOUDFLARE_TURN_KEY_ID=<key id> \
+     --from-literal=CLOUDFLARE_TURN_API_TOKEN=<api token>
+   kubectl -n rabble rollout restart deploy/rabble-app
+   ```
+
+3. Confirm a join carries credentials: `POST /api/spaces/<id>/join` now
+   returns `iceServers` with `turn.cloudflare.com` entries.
+
+Forwarding UDP 7882 and TCP 7881 on the router to the LiveKit node would
+let most off-LAN clients skip the relay; TURN remains the fallback.

@@ -87,6 +87,26 @@ data class Me(
     }
 }
 
+/** One STUN/TURN entry from the join response (Cloudflare TURN credentials). */
+data class IceServer(
+    val urls: List<String>,
+    val username: String? = null,
+    val credential: String? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject): IceServer? {
+            val urls = o.optJSONArray("urls")?.let { arr -> List(arr.length()) { arr.getString(it) } }
+                ?: o.optString("urls", "").takeIf { it.isNotEmpty() }?.let { listOf(it) }
+                ?: return null
+            return IceServer(
+                urls = urls,
+                username = o.optNullableString("username"),
+                credential = o.optNullableString("credential"),
+            )
+        }
+    }
+}
+
 /** Mirror of the POST /api/spaces/[id]/join response. */
 data class JoinResponse(
     val token: String,
@@ -99,6 +119,11 @@ data class JoinResponse(
     val avatarUrl: String? = null,
     /** True when joined without a session (listen-only, never shown in the room). */
     val anonymous: Boolean = false,
+    /**
+     * Per-join STUN/TURN servers. Empty when the server offers no relay, in
+     * which case the LiveKit SDK uses the SFU's own list (LAN only).
+     */
+    val iceServers: List<IceServer> = emptyList(),
 ) {
     companion object {
         fun fromJson(o: JSONObject) = JoinResponse(
@@ -111,6 +136,9 @@ data class JoinResponse(
             displayName = o.optNullableString("displayName"),
             avatarUrl = o.optNullableString("avatarUrl"),
             anonymous = o.optBoolean("anonymous", false),
+            iceServers = o.optJSONArray("iceServers")?.let { arr ->
+                (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let(IceServer::fromJson) }
+            } ?: emptyList(),
         )
     }
 }

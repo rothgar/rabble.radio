@@ -31,6 +31,8 @@ adb shell am start -n radio.rabble.android/.MainActivity
 adb exec-out screencap -p > screen.png
 ```
 
-Note: LiveKit audio uses UDP to the MetalLB address on the homelab LAN, so an
-emulator or device off that network connects to the room but will not hear
-audio until a public TURN/UDP path exists.
+Note: on the homelab LAN the emulator reaches the LiveKit SFU directly over
+UDP. Off the LAN it relays audio through Cloudflare TURN using the per-join
+`iceServers` in the join response, which the app passes to the LiveKit SDK.
+If the server has no TURN key configured, off-LAN devices connect to the room
+but hear nothing.

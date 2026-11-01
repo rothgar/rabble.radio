@@ -139,7 +139,16 @@ final class RoomSession: ObservableObject, RoomDelegate {
         state = .joining
         do {
             let join = try await api.join(showId: showId)
-            try await room.connect(url: join.wsUrl, token: join.token)
+            // Relay credentials from the join response replace the SFU's own
+            // ICE list so devices off the homelab LAN can reach the room.
+            let iceServers = (join.iceServers ?? []).map {
+                IceServer(urls: $0.urls, username: $0.username, credential: $0.credential)
+            }
+            try await room.connect(
+                url: join.wsUrl,
+                token: join.token,
+                connectOptions: ConnectOptions(iceServers: iceServers)
+            )
             if join.role == "host" {
                 try await room.localParticipant.setMicrophone(enabled: true)
                 micOn = true

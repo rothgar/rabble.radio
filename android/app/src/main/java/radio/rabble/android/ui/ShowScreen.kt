@@ -41,10 +41,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import io.livekit.android.ConnectOptions
 import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import livekit.org.webrtc.PeerConnection
 import kotlinx.coroutines.launch
 import radio.rabble.android.RabbleApp
 import radio.rabble.android.data.ApiException
@@ -113,7 +115,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     fun connect(join: JoinResponse) {
         scope.launch {
             try {
-                lkRoom.connect(join.wsUrl, join.token)
+                lkRoom.connect(join.wsUrl, join.token, connectOptionsFor(join))
                 val isHost = join.role == "host"
                 if (isHost) {
                     lkRoom.localParticipant.setMicrophoneEnabled(true)
@@ -288,4 +290,20 @@ private fun RoomPanel(
             }
         }
     }
+}
+
+/**
+ * Relay credentials from the join response replace the SFU's own ICE list so
+ * devices off the homelab LAN can reach the room through Cloudflare TURN. The
+ * Android SDK only honours user ICE servers when an rtcConfig is supplied.
+ */
+private fun connectOptionsFor(join: JoinResponse): ConnectOptions {
+    if (join.iceServers.isEmpty()) return ConnectOptions()
+    val servers = join.iceServers.map { s ->
+        PeerConnection.IceServer.builder(s.urls).apply {
+            s.username?.let { setUsername(it) }
+            s.credential?.let { setPassword(it) }
+        }.createIceServer()
+    }
+    return ConnectOptions(rtcConfig = PeerConnection.RTCConfiguration(servers))
 }

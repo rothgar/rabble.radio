@@ -38,6 +38,13 @@ struct Me: Codable {
     var avatarUrl: String?
 }
 
+/// One STUN/TURN entry from the join response (Cloudflare TURN credentials).
+struct IceServerInfo: Codable {
+    let urls: [String]
+    var username: String?
+    var credential: String?
+}
+
 /// Mirror of the POST /api/spaces/[id]/join response.
 struct JoinResponse: Codable {
     let token: String
@@ -50,6 +57,9 @@ struct JoinResponse: Codable {
     var avatarUrl: String?
     /// True when joined without a session (listen-only, never shown in the room).
     var anonymous: Bool = false
+    /// Per-join STUN/TURN servers. Nil when the server offers no relay, in
+    /// which case the LiveKit SDK uses the SFU's own list (LAN only).
+    var iceServers: [IceServerInfo]?
 }
 
 struct APIErrorBody: Codable {

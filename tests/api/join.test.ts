@@ -14,6 +14,7 @@ const {
   mockGenerateToken,
   mockGetLiveKitClient,
   mockFindUserByDid,
+  mockGetIceServers,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockGetSpaceById: vi.fn(),
@@ -22,6 +23,11 @@ const {
   mockGenerateToken: vi.fn(),
   mockGetLiveKitClient: vi.fn(),
   mockFindUserByDid: vi.fn(),
+  mockGetIceServers: vi.fn(),
+}));
+
+vi.mock('@/lib/turn', () => ({
+  getIceServers: mockGetIceServers,
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -86,9 +92,62 @@ beforeEach(() => {
     displayName: 'Alice',
     avatarUrl: 'https://cdn.example/avatar.png',
   });
+  mockGetIceServers.mockResolvedValue(null);
 });
 
 describe('POST /api/spaces/[id]/join', () => {
+  it('omits iceServers when no TURN relay is configured', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(
+      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect('iceServers' in body).toBe(false);
+    expect(mockGetIceServers).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns per-join TURN credentials when the relay is configured', async () => {
+    const iceServers = [
+      { urls: ['stun:stun.cloudflare.com:3478'] },
+      {
+        urls: ['turns:turn.cloudflare.com:443?transport=tcp'],
+        username: 'u',
+        credential: 'p',
+      },
+    ];
+    mockGetIceServers.mockResolvedValueOnce(iceServers);
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(
+      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.iceServers).toEqual(iceServers);
+    expect(body.token).toBe('jwt.token.here');
+  });
+
+  it('still joins when the TURN credential request fails', async () => {
+    mockGetIceServers.mockRejectedValueOnce(new Error('cloudflare down'));
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(
+      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.token).toBe('jwt.token.here');
+    expect('iceServers' in body).toBe(false);
+  });
+
   it('issues an anonymous listen-only token without a session', async () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());

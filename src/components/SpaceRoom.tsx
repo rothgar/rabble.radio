@@ -64,6 +64,12 @@ export interface SpaceRoomProps {
    * as participants and cannot raise a hand.
    */
   anonymous?: boolean;
+  /**
+   * STUN/TURN servers minted for this join. When present they replace the
+   * SFU's own ICE server list so listeners outside the homelab LAN can relay
+   * media through Cloudflare TURN.
+   */
+  iceServers?: RTCIceServer[];
   hostActions?: {
     onInvite?: (identity: string) => Promise<void> | void;
     onMuteToggle?: (
@@ -657,6 +663,7 @@ export function SpaceRoom({
   stageSlot,
   isHost = false,
   anonymous = false,
+  iceServers,
   hostActions,
   title,
   host,
@@ -673,8 +680,11 @@ export function SpaceRoom({
     () => ({
       adaptiveStream: true,
       dynacast: true,
+      ...(iceServers && iceServers.length > 0
+        ? { rtcConfig: { iceServers } }
+        : {}),
     }),
-    []
+    [iceServers]
   );
 
   const room = useMemo(() => new Room(roomOptions), [roomOptions]);

@@ -26,6 +26,7 @@ import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/db';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 import { newAnonymousIdentity } from '@/lib/anonymous';
+import { getIceServers, type IceServer } from '@/lib/turn';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,6 +42,12 @@ interface JoinResponseBody {
   avatarUrl: string | null;
   /** True when the caller had no session and received a listen-only token. */
   anonymous: boolean;
+  /**
+   * STUN/TURN servers minted for this participant (Cloudflare TURN). Absent
+   * when no relay is configured or the credential request failed; clients
+   * then use the SFU's own ICE server list, which only works on the LAN.
+   */
+  iceServers?: IceServer[];
 }
 
 interface ErrorBody {
@@ -119,6 +126,15 @@ export async function POST(
     avatarUrl: profile?.avatarUrl ?? null,
   });
 
+  // Relay credentials are best-effort: a Cloudflare outage must not stop LAN
+  // listeners, who can reach the SFU without one.
+  let iceServers: IceServer[] | undefined;
+  try {
+    iceServers = (await getIceServers()) ?? undefined;
+  } catch (err) {
+    log.warn('turn.credentials_failed', { err, spaceId: space.id, did: user.did });
+  }
+
   try {
     const { token, wsUrl } = await generateToken({
       room: roomName,
@@ -131,6 +147,7 @@ export async function POST(
       did: user.did,
       role,
       anonymous,
+      relay: iceServers !== undefined,
     });
     return NextResponse.json(
       {
@@ -143,6 +160,7 @@ export async function POST(
         displayName: profile?.displayName ?? null,
         anonymous,
         avatarUrl: profile?.avatarUrl ?? null,
+        ...(iceServers ? { iceServers } : {}),
       } satisfies JoinResponseBody,
       { status: 200 }
     );

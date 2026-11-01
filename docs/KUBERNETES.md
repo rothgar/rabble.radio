@@ -1,5 +1,10 @@
 # Production Kubernetes deployment
 
+> **Superseded (2026-11-01).** The application now runs on Cloudflare (see
+> `docs/CLOUDFLARE-MIGRATION.md`). This document describes the retired
+> Kubernetes deployment and is kept for reference only.
+
+
 This guide covers deploying **Rabble** to a production-grade
 Kubernetes cluster (EKS, GKE, AKS, or a self-managed cluster). It assumes
 you already have:

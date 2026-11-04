@@ -95,7 +95,7 @@ describe('createPrismaSessionStore', () => {
     expect(read.dpopKey).toBeInstanceOf(JoseKey);
     // The rebuilt key can sign DPoP proofs, which is what the callback needs.
     expect(read.dpopKey?.algorithms).toContain('ES256');
-    expect(read.dpopKey?.privateJwk?.d).toBe(dpopKey.privateJwk?.d);
+    expect((read.dpopKey?.privateJwk as { d?: string }).d).toBe((dpopKey.privateJwk as { d?: string }).d);
   });
 
   it('deletes rows by DID', async () => {

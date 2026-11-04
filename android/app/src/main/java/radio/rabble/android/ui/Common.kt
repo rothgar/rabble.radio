@@ -1,6 +1,9 @@
 package radio.rabble.android.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,19 +52,32 @@ fun ErrorPanel(message: String, onRetry: () -> Unit) {
     }
 }
 
-/** Initials avatar placeholder; avatars are not downloaded in this basic app. */
+/** Round avatar: the Bluesky picture when there is one, initials otherwise. */
+@Composable
+fun Avatar(name: String, avatarUrl: String?, size: Int = 36, ring: androidx.compose.ui.graphics.Color? = null) {
+    val initials = name.trim().removePrefix("@").take(2).uppercase()
+    var base = Modifier
+        .size(size.dp)
+        .clip(CircleShape)
+        .background(RabbleColors.SurfaceRaised)
+    if (ring != null) base = base.border(2.dp, ring, CircleShape)
+    Box(base, contentAlignment = Alignment.Center) {
+        if (avatarUrl != null) {
+            AsyncImage(
+                model = avatarUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(initials, style = MaterialTheme.typography.labelSmall, color = RabbleColors.Text)
+        }
+    }
+}
+
 @Composable
 fun HostAvatar(host: PublicHost, size: Int = 36) {
-    val initials = (host.displayName ?: host.handle).trim().take(2).uppercase()
-    Box(
-        Modifier
-            .size(size.dp)
-            .clip(CircleShape)
-            .background(RabbleColors.SurfaceRaised),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(initials, style = MaterialTheme.typography.labelSmall, color = RabbleColors.Text)
-    }
+    Avatar(host.displayName ?: host.handle, host.avatarUrl, size)
 }
 
 @Composable

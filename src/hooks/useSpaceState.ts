@@ -73,6 +73,9 @@ export interface UseSpaceStateResult {
   reload: () => void;
 }
 
+/** How often the audience polls GET /api/spaces/[id]/stage for invites. */
+export const STAGE_POLL_MS = 5000;
+
 function parseDataMessage(bytes: Uint8Array): StageDataMessage | null {
   try {
     const text = new TextDecoder().decode(bytes);
@@ -132,6 +135,49 @@ export function useSpaceState(
   useEffect(() => {
     setInvites([]);
   }, [identity, spaceId]);
+
+  // Fallback for the audience: data messages are best-effort (and listeners
+  // waiting off air hold tokens without the subscribe grant), so poll the
+  // stage status while in the room and surface a pending invite from it.
+  useEffect(() => {
+    if (options.role !== 'audience' || !identity || identity.startsWith('anon:')) return;
+    let cancelled = false;
+    const tick = async (): Promise<void> => {
+      try {
+        const res = await fetch(`/api/spaces/${encodeURIComponent(spaceId)}/stage`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const body = (await res.json().catch(() => ({}))) as {
+          pendingInvite?: { hostDid: string; createdAt: number } | null;
+        };
+        if (cancelled || !body.pendingInvite) return;
+        const invite = body.pendingInvite;
+        setInvites((prev) =>
+          prev.some((p) => p.targetIdentity === identity)
+            ? prev
+            : [
+                ...prev,
+                {
+                  type: 'stage_invite',
+                  spaceId,
+                  hostDid: invite.hostDid,
+                  targetIdentity: identity,
+                  ts: invite.createdAt,
+                },
+              ]
+        );
+      } catch {
+        /* next tick */
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), STAGE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [identity, options.role, spaceId]);
 
   const hasPendingInvite = invites.some(
     (invite) => invite.targetIdentity === identity

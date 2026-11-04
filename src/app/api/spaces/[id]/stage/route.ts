@@ -11,18 +11,28 @@
 // Requires authentication. Returns:
 //   { token, wsUrl, role, roomName, identity } on accept/leave/remove
 //   { ok: true } on invite
+//
+// GET /api/spaces/[id]/stage
+//
+// The caller's own stage status: whether a stage invite is waiting for them,
+// whether they currently hold a speaker slot, and whether the show is on
+// air. Clients that cannot rely on LiveKit data messages (the mobile apps,
+// and the web room as a fallback) poll this while in the room.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   acceptStageInvite,
   blockFromSpace,
+  getPendingInvite,
   inviteToStage,
   kickFromSpace,
   leaveStage,
+  listActiveSpeakers,
   muteSpeaker,
   removeFromStage,
   StageError,
 } from '@/lib/stage';
+import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +58,42 @@ interface OkBody {
 interface ErrorBody {
   error: string;
   message?: string;
+}
+
+export interface StageStatusBody {
+  onAir: boolean;
+  onStage: boolean;
+  pendingInvite: { hostDid: string; createdAt: number } | null;
+}
+
+export async function GET(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse<StageStatusBody | ErrorBody>> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  const { id } = await context.params;
+  if (!id) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+  const space = (await getSpaceById(id)) ?? (await getSpaceBySlug(id));
+  if (!space) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+  const [invite, speakers] = await Promise.all([
+    getPendingInvite(space.id, user.did),
+    listActiveSpeakers(space.id),
+  ]);
+  return NextResponse.json(
+    {
+      onAir: space.isLive,
+      onStage: space.hostId === user.did || speakers.includes(user.did),
+      pendingInvite: invite ? { hostDid: invite.hostDid, createdAt: invite.createdAt } : null,
+    },
+    { status: 200 }
+  );
 }
 
 export async function POST(

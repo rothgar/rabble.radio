@@ -33,7 +33,20 @@ vi.mock('@/lib/session', () => ({
   getCurrentUser: mockGetCurrentUser,
 }));
 
+const { mockGetPendingInvite, mockListActiveSpeakers, mockGetSpaceById } = vi.hoisted(() => ({
+  mockGetPendingInvite: vi.fn(),
+  mockListActiveSpeakers: vi.fn(),
+  mockGetSpaceById: vi.fn(),
+}));
+
+vi.mock('@/lib/spaces', () => ({
+  getSpaceById: mockGetSpaceById,
+  getSpaceBySlug: vi.fn(async () => null),
+}));
+
 vi.mock('@/lib/stage', () => ({
+  getPendingInvite: mockGetPendingInvite,
+  listActiveSpeakers: mockListActiveSpeakers,
   inviteToStage: mockInviteToStage,
   acceptStageInvite: mockAcceptStageInvite,
   leaveStage: mockLeaveStage,
@@ -266,5 +279,58 @@ describe('POST /api/spaces/[id]/stage', () => {
       params: Promise.resolve({ id: '' }),
     });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/spaces/[id]/stage', () => {
+  const ctx = { params: Promise.resolve({ id: 'sp1' }) };
+  const get = () => new NextRequest('http://localhost/api/spaces/sp1/stage');
+
+  it('requires a session', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    const { GET } = await import('@/app/api/spaces/[id]/stage/route');
+    expect((await GET(get(), ctx)).status).toBe(401);
+  });
+
+  it('reports a pending invite, stage membership and on-air state', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:listener', handle: 'bob' });
+    mockGetSpaceById.mockResolvedValueOnce({ id: 'sp1', hostId: 'did:plc:host', isLive: true });
+    mockGetPendingInvite.mockResolvedValueOnce({
+      spaceId: 'sp1',
+      roomName: 'space-sp1',
+      targetIdentity: 'did:plc:listener',
+      hostDid: 'did:plc:host',
+      createdAt: 1700000000000,
+    });
+    mockListActiveSpeakers.mockResolvedValueOnce([]);
+    const { GET } = await import('@/app/api/spaces/[id]/stage/route');
+    const res = await GET(get(), ctx);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      onAir: true,
+      onStage: false,
+      pendingInvite: { hostDid: 'did:plc:host', createdAt: 1700000000000 },
+    });
+    expect(mockGetPendingInvite).toHaveBeenCalledWith('sp1', 'did:plc:listener');
+  });
+
+  it('marks speakers and the host as on stage', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:speaker', handle: 'carol' });
+    mockGetSpaceById.mockResolvedValueOnce({ id: 'sp1', hostId: 'did:plc:host', isLive: false });
+    mockGetPendingInvite.mockResolvedValueOnce(null);
+    mockListActiveSpeakers.mockResolvedValueOnce(['did:plc:speaker']);
+    const { GET } = await import('@/app/api/spaces/[id]/stage/route');
+    expect(await (await GET(get(), ctx)).json()).toEqual({
+      onAir: false,
+      onStage: true,
+      pendingInvite: null,
+    });
+  });
+
+  it('404s for an unknown show', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:listener', handle: 'bob' });
+    mockGetSpaceById.mockResolvedValueOnce(null);
+    const { GET } = await import('@/app/api/spaces/[id]/stage/route');
+    expect((await GET(get(), ctx)).status).toBe(404);
   });
 });

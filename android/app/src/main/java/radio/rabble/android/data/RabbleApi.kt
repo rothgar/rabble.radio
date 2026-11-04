@@ -56,6 +56,33 @@ class RabbleApi(
             )
         )
 
+    /** The caller's stage status: pending invite, on-stage flag, on-air flag. */
+    suspend fun stageStatus(showId: String): StageStatus =
+        StageStatus.fromJson(request(get("/api/spaces/$showId/stage")))
+
+    /**
+     * Stage actions. `accept` and `leave` return a fresh LiveKit token with the
+     * new role; the room must be reconnected with it.
+     */
+    suspend fun stageAction(showId: String, action: String): StageActionResponse =
+        StageActionResponse.fromJson(request(post("/api/spaces/$showId/stage", JSONObject().put("action", action))))
+
+    /** Record a reaction tap; the emoji itself is only shown locally. */
+    suspend fun react(showId: String) {
+        request(post("/api/spaces/$showId/reactions", JSONObject()))
+    }
+
+    /** Resolve DIDs to handles and avatars for the people in a room. */
+    suspend fun users(identities: Collection<String>): List<UserSummary> {
+        if (identities.isEmpty()) return emptyList()
+        val q = java.net.URLEncoder.encode(identities.joinToString(","), "UTF-8")
+        val arr = request(get("/api/users?identities=$q")).optJSONArray("users") ?: return emptyList()
+        return (0 until arr.length()).map { UserSummary.fromJson(arr.getJSONObject(it)) }
+    }
+
+    private fun post(path: String, body: JSONObject): Request =
+        Request.Builder().url("$baseUrl$path").post(body.toString().toRequestBody(jsonType)).withSession().build()
+
     private fun get(path: String): Request =
         Request.Builder().url("$baseUrl$path").get().withSession().build()
 

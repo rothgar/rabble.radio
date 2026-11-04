@@ -157,3 +157,50 @@ data class Station(val tag: String, val shows: List<Show>) {
     val hosts: List<PublicHost> get() = shows.map { it.host }.distinctBy { it.did }
     val liveCount: Int get() = shows.count { it.isLive }
 }
+
+/** Mirror of GET /api/spaces/[id]/stage. */
+data class StageStatus(
+    val onAir: Boolean,
+    val onStage: Boolean,
+    val pendingInviteFrom: String?,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = StageStatus(
+            onAir = o.optBoolean("onAir", false),
+            onStage = o.optBoolean("onStage", false),
+            pendingInviteFrom = o.optJSONObject("pendingInvite")?.optString("hostDid"),
+        )
+    }
+}
+
+/** Mirror of the accept/leave/remove responses from POST /api/spaces/[id]/stage. */
+data class StageActionResponse(
+    val token: String? = null,
+    val wsUrl: String? = null,
+    val role: String? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = StageActionResponse(
+            token = o.optNullableString("token"),
+            wsUrl = o.optNullableString("wsUrl"),
+            role = o.optNullableString("role"),
+        )
+    }
+}
+
+/** One row of GET /api/users. */
+data class UserSummary(
+    val did: String,
+    val handle: String,
+    val displayName: String? = null,
+    val avatarUrl: String? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = UserSummary(
+            did = o.getString("did"),
+            handle = o.optString("handle", ""),
+            displayName = o.optNullableString("displayName"),
+            avatarUrl = o.optNullableString("avatarUrl"),
+        )
+    }
+}

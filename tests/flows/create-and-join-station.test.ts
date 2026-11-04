@@ -136,6 +136,9 @@ vi.mock('@/lib/livekit', () => ({
   })),
   roomNameForSpace: (id: string) => `space-${id}`,
   startRecording: vi.fn(async () => null),
+  stopRecording: vi.fn(async () => false),
+  setAudienceSubscriptions: vi.fn(async () => 0),
+  broadcastRoomData: vi.fn(async () => true),
   LiveKitConfigError: class LiveKitConfigError extends Error {},
 }));
 

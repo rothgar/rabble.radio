@@ -70,7 +70,7 @@ function statusBadge(view: {
       };
     case 'active':
       return {
-        label: 'Active',
+        label: 'Off air',
         className: 'bg-[var(--color-success-muted)] text-[var(--color-success)]',
       };
     case 'ended':
@@ -405,6 +405,8 @@ export default function SpacePage(): ReactElement {
           status={view.status}
           scheduledAt={view.scheduledAt}
           title={view.title}
+          description={view.description}
+          tags={view.tags}
           host={{
             handle: view.host.handle,
             displayName: view.host.displayName ?? null,

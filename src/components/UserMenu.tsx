@@ -62,6 +62,14 @@ export function UserMenu({
             <p className="truncate text-xs text-slate-400">@{handle}</p>
           </div>
           <Link
+            href="/me"
+            role="menuitem"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800"
+            data-testid="user-menu-shows"
+          >
+            My shows
+          </Link>
+          <Link
             href="/logout"
             role="menuitem"
             className="block w-full rounded-md px-2 py-1.5 text-left text-red-300 hover:bg-slate-800"

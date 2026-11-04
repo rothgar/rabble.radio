@@ -658,6 +658,83 @@ export async function getTopicStats(): Promise<TopicSummary[]> {
   }));
 }
 
+export interface JoinedShow {
+  sessionId: string;
+  role: ParticipantRole;
+  joinedAt: Date;
+  leftAt: Date | null;
+  stageSeconds: number;
+  session: {
+    startedAt: Date;
+    endedAt: Date | null;
+    durationSeconds: number;
+    uniqueListeners: number;
+  };
+  space: {
+    id: string;
+    title: string;
+    status: string;
+    isLive: boolean;
+    tags: string[];
+    host: { did: string; handle: string; displayName: string | null; avatarUrl: string | null };
+  };
+}
+
+/**
+ * Shows a signed-in user took part in as a listener or guest (their own
+ * hosted shows are excluded), newest first. Backs the account page.
+ */
+export async function getJoinedShows(
+  did: string,
+  limit: number = 50
+): Promise<JoinedShow[]> {
+  const rows = await prisma.showParticipation.findMany({
+    where: { identity: did, anonymous: false, session: { hostDid: { not: did } } },
+    orderBy: { joinedAt: 'desc' },
+    take: Math.min(Math.max(limit, 1), 200),
+    include: {
+      session: {
+        include: {
+          tags: { select: { tag: true } },
+          space: { include: { host: true } },
+        },
+      },
+    },
+  });
+  return rows.map((p) => {
+    const session = p.session;
+    const space = session.space;
+    return {
+      sessionId: p.sessionId,
+      role: asRole(p.role),
+      joinedAt: p.joinedAt,
+      leftAt: p.leftAt,
+      stageSeconds: p.stageSeconds,
+      session: {
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        durationSeconds: session.durationSeconds,
+        uniqueListeners: session.uniqueListeners,
+      },
+      space: {
+        id: space.id,
+        title: space.title,
+        status: space.status,
+        isLive: space.isLive,
+        tags: (session.tags ?? []).map((t: { tag: string } | string) =>
+          typeof t === 'string' ? t : t.tag
+        ),
+        host: {
+          did: space.host.did,
+          handle: space.host.handle,
+          displayName: space.host.displayName ?? null,
+          avatarUrl: space.host.avatarUrl ?? null,
+        },
+      },
+    };
+  });
+}
+
 export interface RecentSessionsQuery {
   /** Only sessions whose tags include this topic. */
   tag?: string;

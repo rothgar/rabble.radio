@@ -76,4 +76,41 @@ describe('<BottomControlBar />', () => {
     expect(link.className).toContain('min-h-touch');
     expect(screen.getByTestId('bottom-bar-leave')).toBeInTheDocument();
   });
+
+  it('shows the on-air toggle to the host and reflects the state', () => {
+    const onToggleOnAir = vi.fn();
+    const { rerender } = render(
+      <BottomControlBar role="host" {...baseProps()} onAir={false} onToggleOnAir={onToggleOnAir} />
+    );
+    const btn = screen.getByTestId('bottom-bar-on-air');
+    expect(btn).toHaveTextContent('On air');
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    expect(btn.className).toContain('min-h-touch');
+    btn.click();
+    expect(onToggleOnAir).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <BottomControlBar role="host" {...baseProps()} onAir onToggleOnAir={onToggleOnAir} />
+    );
+    expect(screen.getByTestId('bottom-bar-on-air')).toHaveTextContent('Go off air');
+    expect(screen.getByTestId('bottom-control-bar')).toHaveAttribute('data-on-air', 'true');
+  });
+
+  it('disables the on-air toggle while a request is in flight', () => {
+    render(
+      <BottomControlBar role="host" {...baseProps()} onAir={false} onToggleOnAir={vi.fn()} onAirBusy />
+    );
+    expect(screen.getByTestId('bottom-bar-on-air')).toBeDisabled();
+  });
+
+  it('never shows the on-air toggle to speakers or the audience', () => {
+    const { rerender } = render(
+      <BottomControlBar role="speaker" {...baseProps()} onAir={false} onToggleOnAir={vi.fn()} />
+    );
+    expect(screen.queryByTestId('bottom-bar-on-air')).toBeNull();
+    rerender(
+      <BottomControlBar role="audience" {...baseProps()} onAir={false} onToggleOnAir={vi.fn()} />
+    );
+    expect(screen.queryByTestId('bottom-bar-on-air')).toBeNull();
+  });
 });

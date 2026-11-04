@@ -118,6 +118,38 @@ tests/                       # Vitest unit + API tests
 
 UNLICENSED — internal MVP.
 
+## Show lifecycle: start, invite, go on air
+
+A signed-in user starts a show with one tap (the **Start a show** button in
+the header, on `/stations` and on `/me`). `POST /api/spaces` with
+`{ startNow: true }` creates the station with a default title, mints the host
+token and the browser lands straight in the room. The show is **off air**:
+nothing is posted to Bluesky and nothing is recorded yet. In this green room
+only the host and the co-hosts on stage can hear each other; listeners who
+join hold LiveKit tokens without the subscribe grant (`canSubscribe: false`)
+and see a "the show hasn't started yet" banner. The host names the show,
+adds a description and picks up to three station topics from the sidebar
+(`PATCH /api/spaces/[id]`); the room gets a `space_updated` data message.
+
+Pressing **On air** (`POST /api/spaces/[id]/live`, action `start`) flips
+`Space.isLive`, opens the audience's subscribe permission on every listener
+already in the room (`setAudienceSubscriptions`), publishes the Bluesky live
+status, opens a `ShowSession` and starts the recording. **Go off air**
+reverses all of it. Every participant receives an `on_air_changed` data
+message so their UI follows without a reload; listeners also react to the
+LiveKit permission change itself.
+
+## Account page and podcast feeds
+
+`/me` lists the stations a user hosts (status, lifetime numbers and every
+recording, each with a **Publish episode** toggle) and the shows they joined
+as a listener or guest (from `ShowParticipation`). Publishing
+(`POST /api/recordings/[id]/publish`) adds a finished recording to the host's
+RSS feed at `/podcast/[handle]/feed.xml`; enclosures point at
+`/api/recordings/[id]/audio`, which redirects to a fresh signed object URL
+(public once published, host-only otherwise). Published recordings are
+skipped by the 30-day expiry sweep.
+
 ## Show metrics
 
 Every time a station goes live a `ShowSession` row is opened and closed with

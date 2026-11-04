@@ -25,6 +25,9 @@ interface AccessTokenOptions {
 
 interface FakeRoomServiceClient {
   createRoom: ReturnType<typeof vi.fn>;
+  listParticipants: ReturnType<typeof vi.fn>;
+  updateParticipant: ReturnType<typeof vi.fn>;
+  sendData: ReturnType<typeof vi.fn>;
 }
 
 const tokenInstances: FakeAccessToken[] = [];
@@ -57,6 +60,9 @@ vi.mock('livekit-server-sdk', () => {
 
   function RoomServiceClient(this: FakeRoomServiceClient) {
     this.createRoom = vi.fn().mockResolvedValue(undefined);
+    this.listParticipants = vi.fn().mockResolvedValue([]);
+    this.updateParticipant = vi.fn().mockResolvedValue(undefined);
+    this.sendData = vi.fn().mockResolvedValue(undefined);
     roomClients.push(this);
   }
 
@@ -75,9 +81,11 @@ vi.mock('livekit-server-sdk', () => {
 
 import {
   __resetLiveKitCacheForTests,
+  broadcastRoomData,
   createHostToken,
   createRoom,
   generateToken,
+  setAudienceSubscriptions,
   getLiveKitClient,
   getLiveKitConfig,
   getLiveKitWsUrl,
@@ -335,5 +343,91 @@ describe('createHostToken', () => {
       canSubscribe: true,
       canPublishData: true,
     });
+  });
+});
+
+describe('generateToken canSubscribe override', () => {
+  it('audience tokens can be minted without the subscribe grant (off air)', async () => {
+    await generateToken({
+      room: 'space-x',
+      identity: 'did:plc:listener',
+      role: 'audience',
+      canSubscribe: false,
+    });
+    expect(lastToken().grants[0]).toMatchObject({
+      canPublish: false,
+      canSubscribe: false,
+    });
+  });
+
+  it('defaults to the role grant when no override is given', async () => {
+    await generateToken({ room: 'space-x', identity: 'did:plc:listener', role: 'audience' });
+    expect(lastToken().grants[0]).toMatchObject({ canSubscribe: true });
+  });
+});
+
+describe('setAudienceSubscriptions', () => {
+  it('updates only listeners whose subscribe flag differs', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listParticipants.mockResolvedValueOnce([
+      { identity: 'did:plc:host', permission: { canPublish: true, canSubscribe: true } },
+      { identity: 'did:plc:a', permission: { canPublish: false, canSubscribe: false } },
+      { identity: 'anon:1', permission: { canPublish: false, canSubscribe: false } },
+      { identity: 'did:plc:already', permission: { canPublish: false, canSubscribe: true } },
+    ]);
+    const updated = await setAudienceSubscriptions('space-x', true);
+    expect(updated).toBe(2);
+    expect(client.updateParticipant).toHaveBeenCalledTimes(2);
+    expect(client.updateParticipant).toHaveBeenCalledWith('space-x', 'did:plc:a', undefined, {
+      canPublish: false,
+      canSubscribe: true,
+      canPublishData: false,
+    });
+    expect(client.updateParticipant).not.toHaveBeenCalledWith(
+      'space-x',
+      'did:plc:host',
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('returns -1 when LiveKit cannot be reached', async () => {
+    getLiveKitClient();
+    lastRoomClient().listParticipants.mockRejectedValueOnce(new Error('down'));
+    expect(await setAudienceSubscriptions('space-x', false)).toBe(-1);
+  });
+
+  it('keeps going when one participant update fails', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listParticipants.mockResolvedValueOnce([
+      { identity: 'did:plc:a', permission: { canPublish: false, canSubscribe: true } },
+      { identity: 'did:plc:b', permission: { canPublish: false, canSubscribe: true } },
+    ]);
+    client.updateParticipant.mockRejectedValueOnce(new Error('gone'));
+    expect(await setAudienceSubscriptions('space-x', false)).toBe(1);
+  });
+});
+
+describe('broadcastRoomData', () => {
+  it('sends a reliable JSON payload to the room', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    const ok = await broadcastRoomData('space-x', { type: 'on_air_changed', onAir: true });
+    expect(ok).toBe(true);
+    const [room, data, opts] = client.sendData.mock.calls[0];
+    expect(room).toBe('space-x');
+    expect(JSON.parse(new TextDecoder().decode(data as Uint8Array))).toEqual({
+      type: 'on_air_changed',
+      onAir: true,
+    });
+    expect(opts).toMatchObject({ reliable: true });
+  });
+
+  it('returns false when the SDK call fails', async () => {
+    getLiveKitClient();
+    lastRoomClient().sendData.mockRejectedValue(new Error('nope'));
+    expect(await broadcastRoomData('space-x', { type: 'x' })).toBe(false);
   });
 });

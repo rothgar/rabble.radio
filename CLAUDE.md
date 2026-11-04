@@ -24,7 +24,7 @@ Always prefix shell commands with `rtk` (see ~/CLAUDE.md).
 ## Conventions
 
 - Design system: 4px grid tokens in `src/app/globals.css`, exposed through Tailwind aliases. Use `var(--color-*)` tokens and the `ui/` primitives. No hardcoded colors. Min 44px touch targets. Mobile-first.
-- Any `prisma/schema.prisma` change needs a migration in `prisma/migrations/<timestamp>_<name>/migration.sql`.
+- Any `prisma/schema.prisma` change needs a D1 migration in `prisma/d1/<nnnn>_<name>.sql` (apply with `pnpm d1:migrate:local` / `pnpm d1:migrate:remote`) and `pnpm prisma:generate`.
 - Every new lib function or API route gets a test in the matching `tests/` folder.
 - Commit straight to `main` is the repo convention.
 

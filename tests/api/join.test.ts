@@ -250,6 +250,7 @@ describe('POST /api/spaces/[id]/join', () => {
       identity: 'did:plc:host123',
       role: 'host',
       name: 'alice.bsky.social',
+      canSubscribe: true,
     });
     expect(mockFindUserByDid).toHaveBeenCalledWith({
       where: { did: 'did:plc:host123' },
@@ -276,12 +277,35 @@ describe('POST /api/spaces/[id]/join', () => {
     expect(body.role).toBe('audience');
     expect(body.identity).toBe('did:plc:listener');
     expect(body.handle).toBe('bob.bsky.social');
+    // The fixture space is off air, so the listener may not subscribe yet.
     expect(mockGenerateToken).toHaveBeenCalledWith({
       room: 'space-sp1',
       identity: 'did:plc:listener',
       role: 'audience',
       name: 'bob.bsky.social',
+      canSubscribe: false,
     });
+    expect(body.onAir).toBe(false);
+  });
+
+  it('lets the audience subscribe once the show is on air', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:listener',
+      handle: 'bob.bsky.social',
+    });
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace({ isLive: true, status: 'live' }));
+
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(
+      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.onAir).toBe(true);
+    expect(mockGenerateToken).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'audience', canSubscribe: true })
+    );
   });
 
   it('falls back to slug lookup when id does not match', async () => {

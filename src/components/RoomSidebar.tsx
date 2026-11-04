@@ -1,8 +1,8 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { LiveBannerButton } from '@/components/LiveBannerButton';
 import { DeleteSpaceButton } from '@/components/DeleteSpaceButton';
+import { ShowDetailsForm, type ShowDetails } from '@/components/ShowDetailsForm';
 import { AddPostForm } from '@/components/AddPostForm';
 import { PostCarousel } from '@/components/PostCarousel';
 import { RecordingDownload } from '@/components/RecordingDownload';
@@ -18,13 +18,17 @@ export interface PublicRecording {
   sizeBytes: number | null;
   downloadUrl: string | null;
   contentType: string;
+  published?: boolean;
+  publishedAt?: string | null;
 }
 
 export interface RoomSidebarProps {
   spaceId: string;
   isHost: boolean;
-  isLive: boolean;
-  onLiveChange: (next: boolean) => void;
+  title: string;
+  description?: string | null;
+  tags?: string[];
+  onSpaceUpdated?: (details: ShowDetails) => void;
   posts: PublicSpacePost[];
   postsError: string | null;
   onPostAdded: () => void;
@@ -34,8 +38,10 @@ export interface RoomSidebarProps {
 export function RoomSidebar({
   spaceId,
   isHost,
-  isLive,
-  onLiveChange,
+  title,
+  description,
+  tags,
+  onSpaceUpdated,
   posts,
   postsError,
   onPostAdded,
@@ -44,10 +50,13 @@ export function RoomSidebar({
   return (
     <div className="flex flex-col gap-4" data-testid="room-sidebar">
       {isHost ? (
-        <LiveBannerButton
+        <ShowDetailsForm
+          key={`${title}|${description ?? ''}|${(tags ?? []).join(',')}`}
           spaceId={spaceId}
-          isLive={isLive}
-          onChange={(next) => onLiveChange(next.isLive)}
+          title={title}
+          description={description}
+          tags={tags}
+          onSaved={onSpaceUpdated}
         />
       ) : null}
 

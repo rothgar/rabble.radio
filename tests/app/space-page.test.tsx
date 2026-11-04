@@ -29,6 +29,7 @@ import type { PublicSpace, PublicUser } from '@/types';
 // Stub next/navigation so we can drive the id via a mocked useParams.
 vi.mock('next/navigation', () => ({
   useParams: vi.fn(),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 import { useParams } from 'next/navigation';

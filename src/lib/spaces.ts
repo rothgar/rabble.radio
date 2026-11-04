@@ -237,6 +237,65 @@ export async function createSpace(
   return withTags(row);
 }
 
+export interface UpdateSpaceInput {
+  title?: string;
+  description?: string | null;
+  tags?: string[];
+}
+
+/**
+ * Edit a station's title, description and tags. Hosts do this from inside
+ * the room after an instant "Start a show", so every field is optional and
+ * only the supplied ones change. Tags are replaced as a set.
+ */
+export async function updateSpace(
+  id: string,
+  input: UpdateSpaceInput
+): Promise<SpaceWithHost> {
+  const data: Record<string, unknown> = {};
+  if (input.title !== undefined) {
+    const title = input.title.trim();
+    if (!title) throw new Error('Title is required.');
+    data.title = title;
+  }
+  if (input.description !== undefined) {
+    const description = input.description?.trim() ?? '';
+    data.description = description.length > 0 ? description : null;
+  }
+  if (input.tags !== undefined) {
+    const tags = normalizeTags(input.tags);
+    data.tags = { deleteMany: {}, create: tags.map((tag) => ({ tag })) };
+  }
+  const row = await prisma.space.update({
+    where: { id },
+    data,
+    include: spaceInclude,
+  });
+  return withTags(row);
+}
+
+/**
+ * Every station a user hosts, regardless of status, most recently live
+ * first (never-live stations fall back to creation time). Used by the
+ * account page.
+ */
+export async function getHostedSpaces(hostDid: string): Promise<SpaceWithHost[]> {
+  const rows = await prisma.space.findMany({
+    where: { hostId: hostDid },
+    orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
+    include: spaceInclude,
+  });
+  return rows.map(withTags);
+}
+
+/**
+ * The default title for a show started without one.
+ */
+export function defaultShowTitle(handle: string): string {
+  const name = handle.trim() || 'A new';
+  return `${name.startsWith('@') ? name : `@${name}`}'s show`;
+}
+
 /**
  * List spaces ordered by creation time descending. Includes the host profile.
  */

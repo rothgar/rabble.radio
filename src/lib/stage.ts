@@ -138,6 +138,8 @@ async function resolveSpace(spaceId: string): Promise<{
   id: string;
   hostId: string;
   roomName: string;
+  /** True while the show is on air; audience tokens may subscribe only then. */
+  isLive: boolean;
 }> {
   let space = await getSpaceById(spaceId);
   if (!space) {
@@ -154,6 +156,7 @@ async function resolveSpace(spaceId: string): Promise<{
     id: space.id,
     hostId: space.hostId,
     roomName: roomNameForSpace(space.id),
+    isLive: space.isLive === true,
   };
 }
 
@@ -363,6 +366,7 @@ export async function leaveStage(
     identity: input.userDid,
     role: 'audience',
     name: input.displayName,
+    canSubscribe: space.isLive,
   });
 
   await broadcastData(space.roomName, {
@@ -415,6 +419,7 @@ export async function removeFromStage(
     room: space.roomName,
     identity: input.targetIdentity,
     role: 'audience',
+    canSubscribe: space.isLive,
   });
 
   await broadcastData(

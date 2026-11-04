@@ -31,7 +31,8 @@ import {
   useParticipants,
 } from '@livekit/components-react';
 import type { Participant } from 'livekit-client';
-import { Room } from 'livekit-client';
+import { Room, RoomEvent } from 'livekit-client';
+import { useRoomContext } from '@livekit/components-react';
 import { NocturneShell } from '@/components/NocturneShell';
 import { RoomHeader } from '@/components/RoomHeader';
 import { SpeakerCard } from '@/components/SpeakerCard';
@@ -43,6 +44,7 @@ import { ShareButtons } from '@/components/ShareButtons';
 import { FloatingReaction } from '@/components/FloatingReaction';
 import { StageInviteToast } from '@/components/StageInviteToast';
 import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
+import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
 import { isAnonymousIdentity } from '@/lib/anonymous';
 
@@ -89,6 +91,11 @@ export interface SpaceRoomProps {
   stageSlot?: ReactNode;
   /** Title shown in the room header. */
   title: string;
+  /** Description and station topics; editable by the host from the sidebar. */
+  description?: string | null;
+  tags?: string[];
+  /** Called when the host saves new details, or another client broadcasts them. */
+  onSpaceUpdated?: (details: ShowDetails) => void;
   /** Host metadata shown in the header. */
   host: {
     handle: string;
@@ -225,6 +232,69 @@ function HostAutoUnmute({
 }
 
 /**
+ * RoomSync: keeps the room UI in step with server-side state changes.
+ *
+ *  - `on_air_changed` data messages (sent by POST /api/spaces/[id]/live)
+ *    flip the on-air flag for everyone without a reload.
+ *  - `space_updated` data messages (PATCH /api/spaces/[id]) carry the new
+ *    title / description / tags.
+ *  - As a fallback for listeners, a local permission change that grants
+ *    `canSubscribe` means the host went on air (and vice versa).
+ */
+function RoomSync({
+  spaceId,
+  isHost,
+  onLiveChange,
+  onSpaceUpdated,
+}: {
+  spaceId: string;
+  isHost: boolean;
+  onLiveChange: (next: boolean) => void;
+  onSpaceUpdated?: (details: ShowDetails) => void;
+}): null {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    if (!room) return;
+    const onData = (payload: Uint8Array): void => {
+      let parsed: { type?: string; spaceId?: string; onAir?: boolean } & Partial<ShowDetails>;
+      try {
+        parsed = JSON.parse(new TextDecoder().decode(payload));
+      } catch {
+        return;
+      }
+      if (!parsed || parsed.spaceId !== spaceId) return;
+      if (parsed.type === 'on_air_changed' && typeof parsed.onAir === 'boolean') {
+        onLiveChange(parsed.onAir);
+      } else if (parsed.type === 'space_updated' && typeof parsed.title === 'string') {
+        onSpaceUpdated?.({
+          title: parsed.title,
+          description: parsed.description ?? null,
+          tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        });
+      }
+    };
+    const onPermissions = (
+      _prev: unknown,
+      participant: { isLocal?: boolean; permissions?: { canSubscribe?: boolean; canPublish?: boolean } }
+    ): void => {
+      if (isHost || !participant?.isLocal) return;
+      const perms = participant.permissions;
+      if (!perms || perms.canPublish) return; // stage members always subscribe
+      if (typeof perms.canSubscribe === 'boolean') onLiveChange(perms.canSubscribe);
+    };
+    room.on(RoomEvent.DataReceived, onData);
+    room.on(RoomEvent.ParticipantPermissionsChanged, onPermissions);
+    return () => {
+      room.off(RoomEvent.DataReceived, onData);
+      room.off(RoomEvent.ParticipantPermissionsChanged, onPermissions);
+    };
+  }, [isHost, onLiveChange, onSpaceUpdated, room, spaceId]);
+
+  return null;
+}
+
+/**
  * Inner content rendered inside `LiveKitRoom`. Has access to room
  * context hooks and renders the redesigned grid + bottom bar.
  */
@@ -245,6 +315,12 @@ interface InnerProps {
   onPostAdded: () => void;
   isLive: boolean;
   onLiveChange: (next: boolean) => void;
+  description: string | null;
+  tags: string[];
+  onSpaceUpdated?: (details: ShowDetails) => void;
+  onAirBusy: boolean;
+  onAirError: string | null;
+  onToggleOnAir: () => void;
   spaceId: string;
   recording: PublicRecording | null;
   handRaised: boolean;
@@ -278,6 +354,12 @@ function Inner({
   onPostAdded,
   isLive,
   onLiveChange,
+  description,
+  tags,
+  onSpaceUpdated,
+  onAirBusy,
+  onAirError,
+  onToggleOnAir,
   spaceId,
   recording,
   handRaised,
@@ -573,10 +655,52 @@ function Inner({
     </section>
   );
 
+  const preShowBanner = isLive ? null : (
+    <section
+      className="flex flex-col gap-2 rounded-md border border-[var(--color-accent-700)] bg-[var(--color-accent-muted)] p-4"
+      data-testid="pre-show-banner"
+      data-role={bottomRole}
+    >
+      {bottomRole === 'host' ? (
+        <>
+          <p className="text-title font-semibold text-[var(--color-text)]">You&apos;re off air</p>
+          <p className="text-body text-[var(--color-text-secondary)]">
+            Right now only you and your co-hosts can hear each other. Share the
+            link to invite people, bring co-hosts on stage from the Listening
+            list, then press <span className="font-semibold text-[var(--color-text)]">On air</span> when
+            you&apos;re ready to broadcast.
+          </p>
+        </>
+      ) : bottomRole === 'speaker' ? (
+        <>
+          <p className="text-title font-semibold text-[var(--color-text)]">You&apos;re on stage, off air</p>
+          <p className="text-body text-[var(--color-text-secondary)]">
+            You and the host can hear each other. Listeners will hear you once
+            the show goes on air.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-title font-semibold text-[var(--color-text)]">The show hasn&apos;t started yet</p>
+          <p className="text-body text-[var(--color-text-secondary)]">
+            The host is getting ready. You&apos;ll hear audio as soon as they go
+            on air, so stick around.
+          </p>
+        </>
+      )}
+    </section>
+  );
+
   return (
     <>
       <HostAutoUnmute role={role} onError={onMicError} />
       <StageControls {...stageControlsProps} />
+      <RoomSync
+        spaceId={spaceId}
+        isHost={isHost}
+        onLiveChange={onLiveChange}
+        onSpaceUpdated={onSpaceUpdated}
+      />
       {stageSlot}
       <NocturneShell
         navAvatar={navAvatar}
@@ -585,10 +709,21 @@ function Inner({
             title={title}
             host={host}
             listenerCount={listenerCount}
+            onAir={isLive}
           />
         }
         main={
           <div className="flex flex-col gap-6">
+            {onAirError ? (
+              <p
+                role="alert"
+                className="rounded-sm border border-[var(--color-live-border)] bg-[var(--color-live-muted)] px-3 py-2 text-label text-[var(--color-live)]"
+                data-testid="on-air-error"
+              >
+                {onAirError}
+              </p>
+            ) : null}
+            {preShowBanner}
             {pendingInvite ? (
               <StageInviteToast
                 hostName={pendingInvite.hostName}
@@ -604,7 +739,7 @@ function Inner({
               data-testid="room-share-card"
             >
               <p className="text-sm font-semibold text-[var(--color-neutral-400)]">
-                Share this show
+                {isHost && !isLive ? 'Invite people' : 'Share this show'}
               </p>
               <ShareButtons shareableUrl={shareableUrl} title={title} />
             </div>
@@ -614,8 +749,10 @@ function Inner({
           <RoomSidebar
             spaceId={spaceId}
             isHost={isHost}
-            isLive={isLive}
-            onLiveChange={onLiveChange}
+            title={title}
+            description={description}
+            tags={tags}
+            onSpaceUpdated={onSpaceUpdated}
             posts={posts}
             postsError={postsError}
             onPostAdded={onPostAdded}
@@ -634,6 +771,9 @@ function Inner({
             onReact={onReact}
             handRaised={handRaised}
             onToggleHand={toggleHand}
+            onAir={isLive}
+            onToggleOnAir={isHost ? onToggleOnAir : undefined}
+            onAirBusy={onAirBusy}
           />
         }
       />
@@ -673,6 +813,9 @@ export function SpaceRoom({
   onPostAdded,
   isLive,
   onLiveChange,
+  description = null,
+  tags = [],
+  onSpaceUpdated,
   spaceId,
   recording,
 }: SpaceRoomProps): ReactElement {
@@ -779,6 +922,38 @@ export function SpaceRoom({
     return next;
   }, [identity, profiles, seededProfiles]);
 
+  // On-air toggle (host only). POSTs to the live route; the server flips the
+  // audience's subscribe permission and broadcasts `on_air_changed`, but we
+  // also update locally so the host's UI responds immediately.
+  const [onAirBusy, setOnAirBusy] = useState(false);
+  const [onAirError, setOnAirError] = useState<string | null>(null);
+  const handleToggleOnAir = useCallback(async () => {
+    if (onAirBusy) return;
+    setOnAirBusy(true);
+    setOnAirError(null);
+    try {
+      const res = await fetch(`/api/spaces/${encodeURIComponent(spaceId)}/live`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: isLive ? 'end' : 'start' }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || body.ok === false) {
+        setOnAirError(body.message || body.error || `HTTP ${res.status}`);
+        return;
+      }
+      onLiveChange(!isLive);
+    } catch (err) {
+      setOnAirError(err instanceof Error ? err.message : 'Could not change on-air state.');
+    } finally {
+      setOnAirBusy(false);
+    }
+  }, [isLive, onAirBusy, onLiveChange, spaceId]);
+
   const removeFloatingReaction = useCallback((id: string) => {
     setFloatingReactions((prev) => prev.filter((r) => r.id !== id));
   }, []);
@@ -855,6 +1030,7 @@ export function SpaceRoom({
       data-testid="space-room"
       data-role={role}
       data-anonymous={anonymous ? 'true' : 'false'}
+      data-on-air={isLive ? 'true' : 'false'}
     >
       {connectionError ? (
         <div
@@ -896,6 +1072,14 @@ export function SpaceRoom({
           onPostAdded={onPostAdded}
           isLive={isLive}
           onLiveChange={onLiveChange}
+          description={description}
+          tags={tags}
+          onSpaceUpdated={onSpaceUpdated}
+          onAirBusy={onAirBusy}
+          onAirError={onAirError}
+          onToggleOnAir={() => {
+            void handleToggleOnAir();
+          }}
           spaceId={spaceId}
           recording={recording ?? null}
           handRaised={handRaised}

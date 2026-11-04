@@ -9,6 +9,11 @@
 // `anon:<uuid>` identity that counts toward the room's listener total but is
 // never rendered as an active participant and cannot be invited to stage.
 //
+// While the show is off air (space.isLive === false) audience tokens carry
+// `canSubscribe: false`, so only the host and the co-hosts on stage can hear
+// each other. The live route flips the permission for everyone in the room
+// when the host goes on air.
+//
 // Returns:
 //   { token, wsUrl, role, roomName, identity, handle, displayName, avatarUrl, anonymous }
 
@@ -43,6 +48,8 @@ interface JoinResponseBody {
   avatarUrl: string | null;
   /** True when the caller had no session and received a listen-only token. */
   anonymous: boolean;
+  /** True while the show is on air. Off air, audience tokens cannot subscribe. */
+  onAir: boolean;
   /**
    * STUN/TURN servers minted for this participant (Cloudflare TURN). Absent
    * when no relay is configured or the credential request failed; clients
@@ -142,6 +149,7 @@ export async function POST(
       identity: user.did,
       role,
       name: anonymous ? 'Listener' : user.handle,
+      canSubscribe: role === 'host' ? true : space.isLive,
     });
     await recordJoin({
       spaceId: space.id,
@@ -166,6 +174,7 @@ export async function POST(
         displayName: profile?.displayName ?? null,
         anonymous,
         avatarUrl: profile?.avatarUrl ?? null,
+        onAir: space.isLive,
         ...(iceServers ? { iceServers } : {}),
       } satisfies JoinResponseBody,
       { status: 200 }

@@ -2,11 +2,18 @@
 //
 // POST /api/spaces/[id]/live
 //
-// Toggle the host's "live" state. Requires authentication and host role.
-//   action: 'start' -> set Space.isLive=true and publish the
+// Toggle the host's "on air" state. Requires authentication and host role.
+//   action: 'start' -> set Space.isLive=true, open the audience's subscribe
+//                      permission so listeners hear the stage, publish the
 //                      app.bsky.actor.status/self record with an external
-//                      embed pointing at the space URL.
-//   action: 'end'   -> set Space.isLive=false and delete the same record.
+//                      embed pointing at the space URL, open a ShowSession
+//                      and start the recording.
+//   action: 'end'   -> set Space.isLive=false, close the audience's
+//                      subscribe permission again, delete the record, end
+//                      the session and stop the recording.
+//
+// Every participant in the room gets an `on_air_changed` data message so
+// their UI follows without a reload.
 //
 // Response:
 //   { ok: true, space: PublicSpace, record?: unknown }
@@ -27,7 +34,9 @@ import {
   buildRecordingKey,
 } from '@/lib/recording';
 import {
+  broadcastRoomData,
   roomNameForSpace,
+  setAudienceSubscriptions,
   startRecording,
   stopRecording,
 } from '@/lib/livekit';
@@ -133,6 +142,8 @@ export async function POST(
       ? body.thumb
       : undefined;
 
+  const roomName = roomNameForSpace(space.id);
+
   try {
     if (action === 'start') {
       const updated = await setSpaceLive(space.id, true);
@@ -162,6 +173,19 @@ export async function POST(
         );
       }
 
+      // Let the audience hear the stage. Listeners who joined during the
+      // pre-show hold tokens without the subscribe grant; flipping it here
+      // makes LiveKit subscribe them to the published tracks.
+      const opened = await setAudienceSubscriptions(roomName, true);
+      if (opened < 0) {
+        logger.warn('live.start.audience_subscriptions_failed', { spaceId: space.id });
+      }
+      await broadcastRoomData(roomName, {
+        type: 'on_air_changed',
+        spaceId: space.id,
+        onAir: true,
+      });
+
       // Recording is best-effort: if the Egress service is unreachable or
       // misconfigured we still want the host to be live. We only return an
       // error in the JSON envelope when startRecording fails; the space
@@ -170,7 +194,6 @@ export async function POST(
       try {
         const existing = await findActiveRecordingForSpace(space.id);
         if (!existing) {
-          const roomName = roomNameForSpace(space.id);
           const startedAt = new Date();
           const s3Key = buildRecordingKey(roomName, startedAt);
           const started = await startRecording(roomName, { filepath: s3Key });
@@ -212,6 +235,14 @@ export async function POST(
     const updated = await setSpaceLive(space.id, false);
     await endShowSession({ spaceId: space.id });
     const result = await deleteLiveStatus({ session });
+
+    // Back to the green room: only the stage hears itself.
+    await setAudienceSubscriptions(roomName, false);
+    await broadcastRoomData(roomName, {
+      type: 'on_air_changed',
+      spaceId: space.id,
+      onAir: false,
+    });
 
     // Stop any active recording for this space. Best-effort.
     try {

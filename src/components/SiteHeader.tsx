@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
+import { StartShowButton } from '@/components/StartShowButton';
 import { Button } from '@/components/ui';
 
 interface Me {
@@ -64,11 +65,14 @@ export function SiteHeader(): ReactElement {
 
       <nav className="flex items-center gap-3">
         {me ? (
-          <UserMenu
-            handle={me.handle}
-            displayName={me.displayName ?? null}
-            avatarUrl={me.avatarUrl ?? null}
-          />
+          <>
+            <StartShowButton size="sm" />
+            <UserMenu
+              handle={me.handle}
+              displayName={me.displayName ?? null}
+              avatarUrl={me.avatarUrl ?? null}
+            />
+          </>
         ) : (
           <Button href="/login" size="md" data-testid="site-signin">
             Sign in

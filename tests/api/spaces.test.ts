@@ -54,6 +54,7 @@ const {
 
 vi.mock('@/lib/spaces', () => ({
   createSpace: mockCreateSpace,
+  defaultShowTitle: (handle: string) => `@${handle}'s show`,
   getSpaces: mockGetSpaces,
   getSpacesForUser: mockGetSpacesForUser,
   getSpaceById: mockGetSpaceById,
@@ -425,7 +426,7 @@ describe('POST /api/spaces', () => {
     });
   });
 
-  it('startNow: true creates a live space and returns token fields', async () => {
+  it('startNow: true creates an off-air space and returns the host token', async () => {
     mockGetCurrentUser.mockResolvedValueOnce({
       did: 'did:plc:host123',
       handle: 'alice.bsky.social',
@@ -439,13 +440,6 @@ describe('POST /api/spaces', () => {
       roomName: 'space-sp1',
       identity: 'did:plc:host123',
     });
-    mockSetSpaceLive.mockResolvedValueOnce(
-      makeSpaceRow({ status: 'live', isLive: true })
-    );
-    mockPublishLiveStatus.mockResolvedValueOnce({
-      ok: true,
-      uri: 'at://did:plc:host123/app.bsky.actor.status/self',
-    });
 
     const { POST } = await import('@/app/api/spaces/route');
     const req = new NextRequest('http://localhost/api/spaces', {
@@ -457,6 +451,7 @@ describe('POST /api/spaces', () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.startNow).toBe(true);
+    expect(body.onAir).toBe(false);
     expect(body.token).toBe('jwt.host.token');
     expect(body.wsUrl).toBe('ws://livekit:7880');
     expect(body.role).toBe('host');
@@ -465,7 +460,7 @@ describe('POST /api/spaces', () => {
     expect(body.handle).toBe('alice.bsky.social');
     expect(body.displayName).toBe('Alice');
     expect(body.avatarUrl).toBe('https://cdn.example/avatar.png');
-    expect(body.space.status).toBe('live');
+    expect(body.space.status).toBe('active');
 
     // createSpace must be called with scheduledAt: null.
     expect(mockCreateSpace).toHaveBeenCalledWith({
@@ -479,29 +474,24 @@ describe('POST /api/spaces', () => {
       did: 'did:plc:host123',
       handle: 'alice.bsky.social',
     });
-    expect(mockSetSpaceLive).toHaveBeenCalledWith('sp1', true);
     expect(mockFindUserByDid).toHaveBeenCalledWith({
       where: { did: 'did:plc:host123' },
       select: { displayName: true, avatarUrl: true },
     });
-    expect(mockPublishLiveStatus).toHaveBeenCalledTimes(1);
-    expect(mockPublishLiveStatus.mock.calls[0][0]).toMatchObject({
-      spaceUrl: 'http://localhost/show/sp1',
-      title: 'My room',
-      session: {
-        did: 'did:plc:host123',
-        handle: 'alice.bsky.social',
-      },
-    });
+    // Going on air is a separate step (POST /api/spaces/[id]/live): the
+    // instant start publishes nothing and records nothing.
+    expect(mockSetSpaceLive).not.toHaveBeenCalled();
+    expect(mockPublishLiveStatus).not.toHaveBeenCalled();
+    expect(mockStartRecording).not.toHaveBeenCalled();
   });
 
-  it('startNow: true rolls back live when ATProto publish fails', async () => {
+  it('startNow: true without a title uses a default built from the handle', async () => {
     mockGetCurrentUser.mockResolvedValueOnce({
       did: 'did:plc:host123',
       handle: 'alice.bsky.social',
     });
     mockCreateSpace.mockResolvedValueOnce(
-      makeSpaceRow({ status: 'active', isLive: false })
+      makeSpaceRow({ status: 'active', isLive: false, title: "@alice.bsky.social's show" })
     );
     mockCreateHostToken.mockResolvedValueOnce({
       token: 'jwt.host.token',
@@ -509,67 +499,34 @@ describe('POST /api/spaces', () => {
       roomName: 'space-sp1',
       identity: 'did:plc:host123',
     });
-    mockSetSpaceLive
-      .mockResolvedValueOnce(makeSpaceRow({ status: 'live', isLive: true }))
-      .mockResolvedValueOnce(
-        makeSpaceRow({ status: 'active', isLive: false })
-      );
-    mockPublishLiveStatus.mockResolvedValueOnce({
-      ok: false,
-      error: 'PDS unavailable',
-    });
 
     const { POST } = await import('@/app/api/spaces/route');
     const req = new NextRequest('http://localhost/api/spaces', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Now', startNow: true }),
-    });
-    const res = await POST(req);
-    expect(res.status).toBe(502);
-    const body = await res.json();
-    expect(body.error).toBe('atproto_failed');
-    // setSpaceLive(true) then setSpaceLive(false) — rollback.
-    expect(mockSetSpaceLive).toHaveBeenNthCalledWith(1, 'sp1', true);
-    expect(mockSetSpaceLive).toHaveBeenNthCalledWith(2, 'sp1', false);
-  });
-
-  it('startNow: true with a recording error still returns the token envelope', async () => {
-    mockGetCurrentUser.mockResolvedValueOnce({
-      did: 'did:plc:host123',
-      handle: 'alice.bsky.social',
-    });
-    mockCreateSpace.mockResolvedValueOnce(
-      makeSpaceRow({ status: 'active', isLive: false })
-    );
-    mockCreateHostToken.mockResolvedValueOnce({
-      token: 'jwt.host.token',
-      wsUrl: 'ws://livekit:7880',
-      roomName: 'space-sp1',
-      identity: 'did:plc:host123',
-    });
-    mockSetSpaceLive.mockResolvedValueOnce(
-      makeSpaceRow({ status: 'live', isLive: true })
-    );
-    mockPublishLiveStatus.mockResolvedValueOnce({ ok: true });
-    mockFindActiveRecordingForSpace.mockResolvedValueOnce(null);
-    mockStartRecording.mockResolvedValueOnce({
-      egressId: 'eg_start_now',
-    });
-    mockCreateRecording.mockRejectedValueOnce(new Error('db insert failed'));
-
-    const { POST } = await import('@/app/api/spaces/route');
-    const req = new NextRequest('http://localhost/api/spaces', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Now', startNow: true }),
+      body: JSON.stringify({ startNow: true }),
     });
     const res = await POST(req);
     expect(res.status).toBe(201);
-    const body = await res.json();
-    expect(body.startNow).toBe(true);
-    expect(body.token).toBe('jwt.host.token');
-    expect(body.recordingError).toBe('db insert failed');
+    expect(mockCreateSpace).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "@alice.bsky.social's show", hostId: 'did:plc:host123' })
+    );
+  });
+
+  it('a title is still required when not starting now', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+    });
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: '   ' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(mockCreateSpace).not.toHaveBeenCalled();
   });
 
   it('startNow: token-generation failure leaves space active and returns 500', async () => {

@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { SpaceRoom, type SpaceRole } from '@/components/SpaceRoom';
+import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
 import type { PublicRecording } from '@/components/RoomSidebar';
 
@@ -22,6 +23,8 @@ export interface SpacePageClientProps {
   status?: string;
   scheduledAt?: string | null;
   title: string;
+  description?: string | null;
+  tags?: string[];
   host: {
     handle: string;
     displayName?: string | null;
@@ -48,6 +51,8 @@ interface JoinResponse {
   avatarUrl?: string | null;
   /** True when joined without a session (listen-only). */
   anonymous?: boolean;
+  /** Server-side on-air state at join time. */
+  onAir?: boolean;
   /** Per-join STUN/TURN servers; absent when no relay is configured. */
   iceServers?: RTCIceServer[];
 }
@@ -65,6 +70,8 @@ export function SpacePageClient({
   status,
   scheduledAt,
   title,
+  description = null,
+  tags = [],
   host,
   shareableUrl,
   recording,
@@ -74,6 +81,9 @@ export function SpacePageClient({
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState<JoinResponse | null>(null);
   const [live, setLive] = useState<boolean>(isLive);
+  // Show details can change while in the room (the host renames the show
+  // or picks topics), so they live in state seeded from the page props.
+  const [details, setDetails] = useState<ShowDetails>({ title, description, tags });
   const [posts, setPosts] = useState<PublicSpacePost[]>([]);
   const [postsError, setPostsError] = useState<string | null>(null);
 
@@ -265,7 +275,9 @@ export function SpacePageClient({
         displayName: body.displayName ?? null,
         avatarUrl: body.avatarUrl ?? null,
         anonymous: body.anonymous === true,
+        iceServers: body.iceServers,
       });
+      if (typeof body.onAir === 'boolean') setLive(body.onAir);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Unexpected error joining space.'
@@ -290,7 +302,10 @@ export function SpacePageClient({
         iceServers={joined.iceServers}
         hostActions={hostActions}
         onLeave={handleLeave}
-        title={title}
+        title={details.title}
+        description={details.description}
+        tags={details.tags}
+        onSpaceUpdated={setDetails}
         host={host}
         shareableUrl={shareableUrl}
         posts={posts}

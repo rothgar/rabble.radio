@@ -108,6 +108,10 @@ model Recording {
   sizeBytes   Int?
   downloadUrl String?
   hostDid     String
+  /// True once the host has published this recording as a podcast episode.
+  /// Published recordings are skipped by the expiry sweep.
+  published   Boolean   @default(false)
+  publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -116,6 +120,7 @@ model Recording {
   @@index([spaceId])
   @@index([expiresAt])
   @@index([status])
+  @@index([hostDid, published])
 }
 
 model SpacePost {

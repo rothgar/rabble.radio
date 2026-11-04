@@ -60,6 +60,9 @@ vi.mock('@/lib/livekit', () => ({
 import {
   buildSpaceSlug,
   createSpace,
+  defaultShowTitle,
+  getHostedSpaces,
+  updateSpace,
   expireStaleSpaces,
   getSpaces,
   getSpaceById,
@@ -359,5 +362,65 @@ describe('incrementSpaceReactions', () => {
     mockSpaceUpdate.mockRejectedValueOnce(new Error('boom'));
     const count = await incrementSpaceReactions('sp1');
     expect(count).toBeNull();
+  });
+});
+
+describe('updateSpace', () => {
+  it('trims the title, nulls an empty description and replaces the tag set', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({
+      id: 'sp1',
+      title: 'Morning show',
+      description: null,
+      tags: [{ tag: 'Music' }],
+      host: { did: 'did:plc:host' },
+    });
+    const updated = await updateSpace('sp1', {
+      title: '  Morning show ',
+      description: '   ',
+      tags: ['Music', 'not-a-category'],
+    });
+    expect(updated.tags).toEqual(['Music']);
+    const args = mockSpaceUpdate.mock.calls[0][0];
+    expect(args.where).toEqual({ id: 'sp1' });
+    expect(args.data.title).toBe('Morning show');
+    expect(args.data.description).toBeNull();
+    expect(args.data.tags).toEqual({ deleteMany: {}, create: [{ tag: 'Music' }] });
+  });
+
+  it('only touches the fields that were supplied', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
+    await updateSpace('sp1', { tags: ['Gaming'] });
+    const args = mockSpaceUpdate.mock.calls[0][0];
+    expect(args.data).toEqual({ tags: { deleteMany: {}, create: [{ tag: 'Gaming' }] } });
+  });
+
+  it('rejects an empty title', async () => {
+    await expect(updateSpace('sp1', { title: '  ' })).rejects.toThrow(/Title is required/);
+    expect(mockSpaceUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('getHostedSpaces', () => {
+  it('lists every status for the host, most recently live first', async () => {
+    mockSpaceFindMany.mockResolvedValueOnce([
+      { id: 'a', tags: [{ tag: 'Music' }], host: {} },
+      { id: 'b', tags: [], host: {} },
+    ]);
+    const rows = await getHostedSpaces('did:plc:host');
+    expect(rows.map((r) => r.id)).toEqual(['a', 'b']);
+    expect(rows[0].tags).toEqual(['Music']);
+    expect(mockSpaceFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { hostId: 'did:plc:host' },
+        orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
+      })
+    );
+  });
+});
+
+describe('defaultShowTitle', () => {
+  it('builds a title from the handle', () => {
+    expect(defaultShowTitle('alice.bsky.social')).toBe("@alice.bsky.social's show");
+    expect(defaultShowTitle('@bob')).toBe("@bob's show");
   });
 });

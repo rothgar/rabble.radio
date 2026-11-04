@@ -26,6 +26,8 @@ const {
   mockPublishLiveStatus,
   mockDeleteLiveStatus,
   mockToPublicSpace,
+  mockSetAudienceSubscriptions,
+  mockBroadcastRoomData,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockResolveSpaceForUser: vi.fn(),
@@ -33,6 +35,16 @@ const {
   mockPublishLiveStatus: vi.fn(),
   mockDeleteLiveStatus: vi.fn(),
   mockToPublicSpace: vi.fn(),
+  mockSetAudienceSubscriptions: vi.fn(async () => 0),
+  mockBroadcastRoomData: vi.fn(async () => true),
+}));
+
+vi.mock('@/lib/livekit', () => ({
+  roomNameForSpace: (id: string) => `space-${id}`,
+  startRecording: vi.fn(async () => null),
+  stopRecording: vi.fn(async () => false),
+  setAudienceSubscriptions: mockSetAudienceSubscriptions,
+  broadcastRoomData: mockBroadcastRoomData,
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -180,6 +192,38 @@ describe('POST /api/spaces/[id]/live', () => {
     expect(mockPublishLiveStatus.mock.calls[0][0].spaceUrl).toBe(
       'http://localhost/show/sp1'
     );
+    // Going on air lets the audience hear the stage and tells the room.
+    expect(mockSetAudienceSubscriptions).toHaveBeenCalledWith('space-sp1', true);
+    expect(mockBroadcastRoomData).toHaveBeenCalledWith('space-sp1', {
+      type: 'on_air_changed',
+      spaceId: 'sp1',
+      onAir: true,
+    });
+  });
+
+  it('end: closes the audience subscriptions again', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+    });
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace({ isLive: true }),
+      isHost: true,
+    });
+    mockSetSpaceLive.mockResolvedValueOnce(makeSpace({ isLive: false }));
+    mockDeleteLiveStatus.mockResolvedValueOnce({ ok: true });
+
+    const { POST } = await import('@/app/api/spaces/[id]/live/route');
+    const res = await POST(makeRequest({ action: 'end' }), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockSetAudienceSubscriptions).toHaveBeenCalledWith('space-sp1', false);
+    expect(mockBroadcastRoomData).toHaveBeenCalledWith('space-sp1', {
+      type: 'on_air_changed',
+      spaceId: 'sp1',
+      onAir: false,
+    });
   });
 
   it('start: rolls back isLive when publish fails', async () => {

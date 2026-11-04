@@ -9,28 +9,22 @@
 //   - Immediate  (no startNow, no scheduledAt): creates an `active` space.
 //   - Scheduled  (scheduledAt: <ISO string>): creates a `scheduled` space.
 //   - Start now  (startNow: true): creates an `active` space, mints a host
-//                 LiveKit token, transitions to `live`, publishes the
-//                 ATProto live banner, and starts a recording (best-effort).
+//                 LiveKit token and returns it so the host lands straight in
+//                 the room. The show stays OFF AIR: nothing is published to
+//                 Bluesky and no recording starts until the host presses
+//                 "On air" (POST /api/spaces/[id]/live). The title is
+//                 optional in this flow; a default is used and the host can
+//                 rename the show from inside the room.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   createSpace,
+  defaultShowTitle,
   getSpacesForUser,
-  setSpaceLive,
   toPublicSpace,
   tryExpireStaleSpaces,
 } from '@/lib/spaces';
-import { publishLiveStatus } from '@/lib/atproto';
-import {
-  createRecording,
-  findActiveRecordingForSpace,
-  buildRecordingKey,
-} from '@/lib/recording';
-import {
-  createHostToken,
-  roomNameForSpace,
-  startRecording,
-} from '@/lib/livekit';
+import { createHostToken } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
 import { normalizeTags } from '@/lib/tags';
 import { prisma } from '@/lib/db';
@@ -120,7 +114,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  // ---- startNow validation (first, because it relaxes the title rule) ---
+  let startNow = false;
+  if (body.startNow !== undefined) {
+    if (typeof body.startNow !== 'boolean') {
+      return NextResponse.json(
+        {
+          error: 'validation_error',
+          message: 'startNow must be a boolean.',
+        },
+        { status: 400 }
+      );
+    }
+    startNow = body.startNow;
+  }
+
+  const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
+  const title = rawTitle || (startNow ? defaultShowTitle(user.handle) : '');
   if (!title) {
     return NextResponse.json(
       { error: 'validation_error', message: 'Title is required.' },
@@ -161,21 +171,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       { status: 400 }
     );
-  }
-
-  // ---- startNow validation -----------------------------------------------
-  let startNow = false;
-  if (body.startNow !== undefined) {
-    if (typeof body.startNow !== 'boolean') {
-      return NextResponse.json(
-        {
-          error: 'validation_error',
-          message: 'startNow must be a boolean.',
-        },
-        { status: 400 }
-      );
-    }
-    startNow = body.startNow;
   }
 
   // `scheduledAt` is "provided" only when it is a non-empty string. Anything
@@ -288,17 +283,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       where: { did: user.did },
       select: { displayName: true, avatarUrl: true },
     });
-    // Diagnostic: log the resolved host avatarUrl at debug level so we can
-    // confirm whether the database has the value before the response
-    // leaves the server. Temporary aid; remove once avatar rendering is
-    // verified end-to-end.
-    logger.debug('spaces.start_now.profile_resolved', {
-      did: user.did,
-      avatarUrl: hostProfile?.avatarUrl ?? null,
-    });
-    // Generate the host token first. If this fails we leave the freshly
-    // created space in its `active` status — the spec is explicit that we
-    // do NOT transition it to live when token minting fails.
+    // The space stays `active` (off air). If token minting fails the row is
+    // left as a plain active space the host can still open from Stations.
     let hostToken;
     try {
       hostToken = await createHostToken(space.id, {
@@ -322,102 +308,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    try {
-      const liveSpace = await setSpaceLive(space.id, true);
-      const spaceUrl = `${origin}/show/${liveSpace.id}`;
-      const session = { did: user.did, handle: user.handle };
-      const atproto = await publishLiveStatus({
-        session,
-        spaceUrl,
-        title: liveSpace.title,
-      });
-      if (!atproto.ok) {
-        // Roll back the live flag so the UI does not believe the space is
-        // live while the ATProto banner is missing.
-        await setSpaceLive(space.id, false).catch((rollbackErr) => {
-          logger.error('spaces.start_now.rollback_failed', {
-            err: rollbackErr,
-            spaceId: space.id,
-          });
-        });
-        return NextResponse.json(
-          {
-            error: 'atproto_failed',
-            message: atproto.error ?? 'Failed to publish live status.',
-          },
-          { status: 502 }
-        );
-      }
-
-      // Recording is best-effort. If the Egress service is unreachable or
-      // misconfigured the host is still live; we surface a `recordingError`
-      // field in the response envelope so the client can warn the host.
-      let recordingError: string | undefined;
-      try {
-        const existing = await findActiveRecordingForSpace(liveSpace.id);
-        if (!existing) {
-          const roomName = roomNameForSpace(liveSpace.id);
-          const startedAt = new Date();
-          const s3Key = buildRecordingKey(roomName, startedAt);
-          const started = await startRecording(roomName, { filepath: s3Key });
-          if (started) {
-            await createRecording({
-              spaceId: liveSpace.id,
-              hostDid: user.did,
-              egressId: started.egressId,
-              s3Key,
-              contentType: 'video/mp4',
-              now: startedAt,
-            });
-          } else {
-            recordingError = 'recording_unavailable';
-            logger.warn('recording.start.unavailable', {
-              spaceId: liveSpace.id,
-            });
-          }
-        }
-      } catch (err) {
-        recordingError =
-          err instanceof Error ? err.message : 'recording_failed';
-        logger.error('recording.start.failed', { err, spaceId: space.id });
-      }
-
-      return NextResponse.json(
-        {
-          space: toPublicSpace(liveSpace, origin),
-          startNow: true,
-          token: hostToken.token,
-          wsUrl: hostToken.wsUrl,
-          role: 'host',
-          roomName: hostToken.roomName,
-          identity: hostToken.identity,
-          handle: user.handle,
-          displayName: hostProfile?.displayName ?? null,
-          avatarUrl: hostProfile?.avatarUrl ?? null,
-          ...(recordingError ? { recordingError } : {}),
-        },
-        { status: 201 }
-      );
-    } catch (err) {
-      // Any unexpected error after we transitioned the space to live must
-      // roll the row back to `active` so it does not look permanently
-      // live to viewers.
-      await setSpaceLive(space.id, false).catch((rollbackErr) => {
-        logger.error('spaces.start_now.rollback_failed', {
-          err: rollbackErr,
-          spaceId: space.id,
-        });
-      });
-      logger.error('spaces.start_now.failed', { err, spaceId: space.id });
-      return NextResponse.json(
-        {
-          error: 'start_now_failed',
-          message:
-            err instanceof Error ? err.message : 'Failed to start space.',
-        },
-        { status: 500 }
-      );
-    }
+    logger.info('spaces.start_now.created', { spaceId: space.id, did: user.did });
+    return NextResponse.json(
+      {
+        space: toPublicSpace(space, origin),
+        startNow: true,
+        token: hostToken.token,
+        wsUrl: hostToken.wsUrl,
+        role: 'host',
+        roomName: hostToken.roomName,
+        identity: hostToken.identity,
+        handle: user.handle,
+        displayName: hostProfile?.displayName ?? null,
+        avatarUrl: hostProfile?.avatarUrl ?? null,
+        onAir: false,
+      },
+      { status: 201 }
+    );
   }
 
   // ---- Default / scheduled flow -----------------------------------------

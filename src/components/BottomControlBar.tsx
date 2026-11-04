@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Hand, SignOut } from '@phosphor-icons/react';
+import { Broadcast, Hand, SignOut } from '@phosphor-icons/react';
 import { ReactionBar } from '@/components/ReactionBar';
 
 export type BottomControlRole = 'host' | 'speaker' | 'audience';
@@ -19,6 +19,13 @@ export interface BottomControlBarProps {
   onReact: (emoji: string) => void;
   handRaised?: boolean;
   onToggleHand?: () => void;
+  /**
+   * Host only: whether the show is currently on air, and the toggle that
+   * starts or stops the broadcast. Off air, only the stage hears itself.
+   */
+  onAir?: boolean;
+  onToggleOnAir?: () => void;
+  onAirBusy?: boolean;
 }
 
 /**
@@ -43,6 +50,9 @@ export function BottomControlBar({
   onReact,
   handRaised = false,
   onToggleHand,
+  onAir = false,
+  onToggleOnAir,
+  onAirBusy = false,
 }: BottomControlBarProps): ReactElement {
   const renderActions = (): ReactElement => {
     if (role === 'audience') {
@@ -96,9 +106,31 @@ export function BottomControlBar({
       );
     }
 
-    // host + speaker share mic toggle + leave
+    // host + speaker share mic toggle + leave; the host also gets on air.
     return (
       <div className="flex w-full items-center gap-2" data-testid="bottom-bar-speaker">
+        {role === 'host' && onToggleOnAir ? (
+          <button
+            type="button"
+            onClick={onToggleOnAir}
+            disabled={onAirBusy}
+            aria-pressed={onAir}
+            className={
+              ACTION_BTN +
+              ' disabled:opacity-50 ' +
+              (onAir
+                ? 'border border-[var(--color-live-border)] bg-[var(--color-live-muted)] text-[var(--color-live)] hover:bg-[var(--color-live-border)]'
+                : 'bg-[var(--color-live)] text-white hover:opacity-90')
+            }
+            data-testid="bottom-bar-on-air"
+            data-on-air={onAir ? 'true' : 'false'}
+          >
+            <Broadcast size={16} weight="bold" />
+            <span className="truncate">
+              {onAirBusy ? 'Working…' : onAir ? 'Go off air' : 'On air'}
+            </span>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onMicToggle}
@@ -143,6 +175,7 @@ export function BottomControlBar({
       data-testid="bottom-control-bar"
       data-role={role}
       data-anonymous={anonymous ? 'true' : 'false'}
+      data-on-air={onAir ? 'true' : 'false'}
     >
       <div className="flex items-center justify-center gap-3 sm:justify-start">
         <ReactionBar onReact={onReact} />

@@ -30,6 +30,11 @@ vi.mock('@/components/SiteHeader', () => ({
   SiteHeader: () => <header data-testid="site-header" />,
 }));
 
+// StartShowButton needs the app router; stand it in with a plain button.
+vi.mock('@/components/StartShowButton', () => ({
+  StartShowButton: () => <button data-testid="start-show-button">Start a show</button>,
+}));
+
 function makeShow(overrides: Partial<PublicSpace> = {}): PublicSpace {
   return {
     id: 'sp1',
@@ -115,5 +120,25 @@ describe('/stations page', () => {
     render(await StationsPage());
     expect(mockGetSpacesForUser).toHaveBeenCalledWith('did:plc:viewer');
     expect(screen.getAllByTestId('station-card')).toHaveLength(1);
+  });
+});
+
+describe('/stations start-a-show call to action', () => {
+  it('offers Start a show to signed-in visitors', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:me', handle: 'me.bsky.social' });
+    mockGetSpacesForUser.mockResolvedValueOnce([makeShow()]);
+    const { default: StationsPage } = await import('@/app/stations/page');
+    render(await StationsPage());
+    expect(screen.getByTestId('stations-start-show')).toBeInTheDocument();
+    expect(screen.getByTestId('start-show-button')).toBeInTheDocument();
+  });
+
+  it('asks anonymous visitors to sign in instead', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpacesForUser.mockResolvedValueOnce([makeShow()]);
+    const { default: StationsPage } = await import('@/app/stations/page');
+    render(await StationsPage());
+    expect(screen.queryByTestId('stations-start-show')).toBeNull();
+    expect(screen.queryByTestId('start-show-button')).toBeNull();
   });
 });

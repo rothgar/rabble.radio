@@ -1,17 +1,16 @@
 // src/lib/recording.ts
 //
-// Service helpers for the Recording table. The table is intentionally
-// accessed via `$queryRawUnsafe` / `$executeRawUnsafe` so this module
-// typechecks without depending on a freshly-regenerated Prisma client
-// (the Docker builder runs `prisma generate` and the runtime container
-// has the full generated client; locally on NixOS the engine binaries
-// are unavailable and we still want typecheck/tests to pass).
-//
-// Status values:
-//   - "starting" : egress started, file not yet visible in S3
+// Service helpers for the Recording table (one row per LiveKit egress, i.e.
+// one per show). Status values:
+//   - "starting" : egress started, file not yet visible in R2/S3
 //   - "available": file present, download URL issued
 //   - "failed"   : egress could not produce a usable file
-//   - "expired"  : past the 30-day retention window, S3 object deleted
+//   - "expired"  : past the retention window, object deleted
+//
+// Podcast publishing: a host can publish an "available" recording as an
+// episode. Published recordings are listed in the host's RSS feed
+// (/podcast/[handle]/feed.xml), are fetchable by anyone through
+// /api/recordings/[id]/audio, and are skipped by the expiry sweep.
 
 import { prisma } from '@/lib/db';
 import {
@@ -37,48 +36,14 @@ export interface RecordingRow {
   sizeBytes: number | null;
   downloadUrl: string | null;
   hostDid: string;
+  published: boolean;
+  publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const RECORDING_TTL_DAYS = 30;
 const SIGNED_URL_TTL_SECONDS = 300;
-
-const SELECT_COLUMNS =
-  'id, "spaceId", "egressId", status, "startedAt", "endedAt", "expiresAt", "s3Key", "s3Bucket", "contentType", "sizeBytes", "downloadUrl", "hostDid", "createdAt", "updatedAt"';
-
-// ---------------------------------------------------------------------------
-// Tiny SQL escape helpers.
-//
-// Prisma's tagged-template `Prisma.sql` API isn't accessible without a
-// regenerated client (we have only the untyped stubs locally on NixOS).
-// `prisma.$queryRawUnsafe` accepts plain strings and parameter arrays but
-// gives up parameterisation safety, so we escape inputs ourselves. All
-// values here come from internal code (we control the producers), but we
-// escape defensively anyway.
-// ---------------------------------------------------------------------------
-
-function sqlString(value: string): string {
-  // Postgres standard-conforming string literal: wrap in single quotes and
-  // double any embedded single quotes.
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function sqlValue(value: string | number | Date | null): string {
-  if (value === null || value === undefined) return 'NULL';
-  if (value instanceof Date) return `'${value.toISOString()}'`;
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL';
-  return sqlString(value);
-}
-
-type SqlParam = string | number | Date | null | undefined;
-
-function buildSelect(where: string): { sql: string; params: SqlParam[] } {
-  return {
-    sql: `SELECT ${SELECT_COLUMNS} FROM "Recording" WHERE ${where} LIMIT 1`,
-    params: [],
-  };
-}
 
 /**
  * Build a deterministic S3 object key for a given egress session.
@@ -89,23 +54,39 @@ export function buildRecordingKey(roomName: string, startedAt: Date): string {
   return `recordings/${safeRoom}-${ts}.mp4`;
 }
 
+/** D1 hands back ISO strings or epoch numbers for DATETIME columns. */
+function toDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string') return new Date(value);
+  return new Date(NaN);
+}
+
+function toDateOrNull(value: unknown): Date | null {
+  if (value === null || value === undefined) return null;
+  const d = toDate(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function rowToRecording(row: Record<string, unknown>): RecordingRow {
   return {
     id: String(row.id),
     spaceId: String(row.spaceId),
     egressId: String(row.egressId),
     status: (row.status as RecordingStatus) ?? 'starting',
-    startedAt: row.startedAt as Date,
-    endedAt: (row.endedAt as Date | null) ?? null,
-    expiresAt: row.expiresAt as Date,
+    startedAt: toDate(row.startedAt),
+    endedAt: toDateOrNull(row.endedAt),
+    expiresAt: toDate(row.expiresAt),
     s3Key: String(row.s3Key),
     s3Bucket: String(row.s3Bucket),
     contentType: String(row.contentType ?? 'audio/mpeg'),
     sizeBytes: typeof row.sizeBytes === 'number' ? row.sizeBytes : null,
     downloadUrl: (row.downloadUrl as string | null) ?? null,
     hostDid: String(row.hostDid),
-    createdAt: row.createdAt as Date,
-    updatedAt: row.updatedAt as Date,
+    published: Boolean(row.published),
+    publishedAt: toDateOrNull(row.publishedAt),
+    createdAt: toDate(row.createdAt),
+    updatedAt: toDate(row.updatedAt),
   };
 }
 
@@ -128,27 +109,20 @@ export async function createRecording(input: {
     input.expiresAt ??
     new Date(now.getTime() + RECORDING_TTL_DAYS * 24 * 60 * 60 * 1000);
   const cfg = getStorageConfig();
-  const id = generateCuid();
-  const sql = `
-    INSERT INTO "Recording" (
-      id, "spaceId", "egressId", status, "startedAt", "endedAt",
-      "expiresAt", "s3Key", "s3Bucket", "contentType", "sizeBytes",
-      "downloadUrl", "hostDid", "createdAt", "updatedAt"
-    )
-    VALUES (
-      ${sqlValue(id)}, ${sqlValue(input.spaceId)}, ${sqlValue(input.egressId)},
-      'starting', ${sqlValue(now)}, NULL, ${sqlValue(expiresAt)},
-      ${sqlValue(input.s3Key)}, ${sqlValue(input.s3Bucket ?? cfg.bucket)},
-      ${sqlValue(input.contentType ?? 'audio/mpeg')},
-      NULL, NULL, ${sqlValue(input.hostDid)}, ${sqlValue(now)}, ${sqlValue(now)}
-    )
-    RETURNING ${SELECT_COLUMNS}
-  `;
-  const rows = await runQuery(sql);
-  if (rows.length === 0) {
-    throw new Error('createRecording: no row returned.');
-  }
-  return rowToRecording(rows[0]);
+  const row = await prisma.recording.create({
+    data: {
+      spaceId: input.spaceId,
+      egressId: input.egressId,
+      status: 'starting',
+      startedAt: now,
+      expiresAt,
+      s3Key: input.s3Key,
+      s3Bucket: input.s3Bucket ?? cfg.bucket,
+      contentType: input.contentType ?? 'audio/mpeg',
+      hostDid: input.hostDid,
+    },
+  });
+  return rowToRecording(row as unknown as Record<string, unknown>);
 }
 
 /**
@@ -158,34 +132,25 @@ export async function createRecording(input: {
 export async function findActiveRecordingForSpace(
   spaceId: string
 ): Promise<RecordingRow | null> {
-  const sql = `
-    SELECT ${SELECT_COLUMNS}
-    FROM "Recording"
-    WHERE "spaceId" = ${sqlValue(spaceId)}
-      AND status IN ('starting', 'available')
-    ORDER BY "startedAt" DESC
-    LIMIT 1
-  `;
-  const rows = await runQuery(sql);
-  return rows.length === 0 ? null : rowToRecording(rows[0]);
+  const row = await prisma.recording.findFirst({
+    where: { spaceId, status: { in: ['starting', 'available'] } },
+    orderBy: { startedAt: 'desc' },
+  });
+  return row ? rowToRecording(row as unknown as Record<string, unknown>) : null;
 }
 
 /**
  * Return every recording for a space, ordered by `startedAt` DESC so the
- * newest row is first. Used by the space-delete flow which needs to
- * enumerate and clean up all S3 objects for a space.
+ * newest row is first.
  */
 export async function getRecordingsForSpace(
   spaceId: string
 ): Promise<RecordingRow[]> {
-  const sql = `
-    SELECT ${SELECT_COLUMNS}
-    FROM "Recording"
-    WHERE "spaceId" = ${sqlValue(spaceId)}
-    ORDER BY "startedAt" DESC
-  `;
-  const rows = await runQuery(sql);
-  return rows.map(rowToRecording);
+  const rows = await prisma.recording.findMany({
+    where: { spaceId },
+    orderBy: { startedAt: 'desc' },
+  });
+  return rows.map((r) => rowToRecording(r as unknown as Record<string, unknown>));
 }
 
 /**
@@ -194,15 +159,100 @@ export async function getRecordingsForSpace(
 export async function getRecordingForSpace(
   spaceId: string
 ): Promise<RecordingRow | null> {
-  const sql = `
-    SELECT ${SELECT_COLUMNS}
-    FROM "Recording"
-    WHERE "spaceId" = ${sqlValue(spaceId)}
-    ORDER BY "startedAt" DESC
-    LIMIT 1
-  `;
-  const rows = await runQuery(sql);
-  return rows.length === 0 ? null : rowToRecording(rows[0]);
+  const row = await prisma.recording.findFirst({
+    where: { spaceId },
+    orderBy: { startedAt: 'desc' },
+  });
+  return row ? rowToRecording(row as unknown as Record<string, unknown>) : null;
+}
+
+export async function getRecordingById(id: string): Promise<RecordingRow | null> {
+  const row = await prisma.recording.findUnique({ where: { id } });
+  return row ? rowToRecording(row as unknown as Record<string, unknown>) : null;
+}
+
+/** Every recording a host owns, newest first (the account page). */
+export async function getRecordingsForHost(hostDid: string): Promise<RecordingRow[]> {
+  const rows = await prisma.recording.findMany({
+    where: { hostDid },
+    orderBy: { startedAt: 'desc' },
+  });
+  return rows.map((r) => rowToRecording(r as unknown as Record<string, unknown>));
+}
+
+export interface PublishedEpisode {
+  recording: RecordingRow;
+  space: { id: string; title: string; description: string | null; tags: string[] };
+}
+
+/** Published, playable recordings for a host's podcast feed, newest first. */
+export async function getPublishedEpisodesForHost(
+  hostDid: string
+): Promise<PublishedEpisode[]> {
+  const rows = await prisma.recording.findMany({
+    where: { hostDid, published: true, status: 'available' },
+    orderBy: { startedAt: 'desc' },
+    include: {
+      space: {
+        select: { id: true, title: true, description: true, tags: { select: { tag: true } } },
+      },
+    },
+  });
+  return rows.map((r) => {
+    const { space, ...rest } = r as unknown as Record<string, unknown> & {
+      space: {
+        id: string;
+        title: string;
+        description: string | null;
+        tags: Array<{ tag: string } | string>;
+      };
+    };
+    return {
+      recording: rowToRecording(rest),
+      space: {
+        id: space.id,
+        title: space.title,
+        description: space.description,
+        tags: (space.tags ?? []).map((t) => (typeof t === 'string' ? t : t.tag)),
+      },
+    };
+  });
+}
+
+/**
+ * Publish or unpublish a recording as a podcast episode. Only "available"
+ * recordings can be published; returns null when the row does not exist.
+ */
+export async function setRecordingPublished(
+  id: string,
+  published: boolean,
+  now: Date = new Date()
+): Promise<RecordingRow | null> {
+  const current = await getRecordingById(id);
+  if (!current) return null;
+  if (published && current.status !== 'available') {
+    throw new RecordingStateError(
+      'not_ready',
+      `Recording is in status '${current.status}' and cannot be published.`
+    );
+  }
+  const row = await prisma.recording.update({
+    where: { id },
+    data: {
+      published,
+      publishedAt: published ? current.publishedAt ?? now : null,
+    },
+  });
+  return rowToRecording(row as unknown as Record<string, unknown>);
+}
+
+export class RecordingStateError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'RecordingStateError';
+    this.code = code;
+  }
 }
 
 /**
@@ -214,15 +264,9 @@ export async function completeRecording(
   egressId: string,
   options: { endedAt?: Date; sizeBytes?: number | null } = {}
 ): Promise<RecordingRow | null> {
-  const lookupSql = `
-    SELECT ${SELECT_COLUMNS}
-    FROM "Recording"
-    WHERE "egressId" = ${sqlValue(egressId)}
-    LIMIT 1
-  `;
-  const existing = await runQuery(lookupSql);
-  if (existing.length === 0) return null;
-  const current = rowToRecording(existing[0]);
+  const existing = await prisma.recording.findUnique({ where: { egressId } });
+  if (!existing) return null;
+  const current = rowToRecording(existing as unknown as Record<string, unknown>);
 
   const endedAt = options.endedAt ?? new Date();
   const detectedSize =
@@ -235,18 +279,16 @@ export async function completeRecording(
     current.s3Bucket
   );
 
-  const updateSql = `
-    UPDATE "Recording"
-    SET status = 'available',
-        "endedAt" = ${sqlValue(endedAt)},
-        "sizeBytes" = ${sqlValue(detectedSize ?? null)},
-        "downloadUrl" = ${sqlValue(downloadUrl)},
-        "updatedAt" = ${sqlValue(new Date())}
-    WHERE "egressId" = ${sqlValue(egressId)}
-    RETURNING ${SELECT_COLUMNS}
-  `;
-  const updated = await runQuery(updateSql);
-  return updated.length === 0 ? null : rowToRecording(updated[0]);
+  const updated = await prisma.recording.update({
+    where: { egressId },
+    data: {
+      status: 'available',
+      endedAt,
+      sizeBytes: detectedSize ?? null,
+      downloadUrl,
+    },
+  });
+  return rowToRecording(updated as unknown as Record<string, unknown>);
 }
 
 /**
@@ -255,15 +297,8 @@ export async function completeRecording(
 export async function refreshSignedUrl(
   recordingId: string
 ): Promise<RecordingRow | null> {
-  const lookupSql = `
-    SELECT ${SELECT_COLUMNS}
-    FROM "Recording"
-    WHERE id = ${sqlValue(recordingId)}
-    LIMIT 1
-  `;
-  const existing = await runQuery(lookupSql);
-  if (existing.length === 0) return null;
-  const current = rowToRecording(existing[0]);
+  const current = await getRecordingById(recordingId);
+  if (!current) return null;
   if (current.status !== 'available') return current;
 
   const downloadUrl = await getSignedDownloadUrl(
@@ -271,15 +306,16 @@ export async function refreshSignedUrl(
     SIGNED_URL_TTL_SECONDS,
     current.s3Bucket
   );
-  const updateSql = `
-    UPDATE "Recording"
-    SET "downloadUrl" = ${sqlValue(downloadUrl)},
-        "updatedAt" = ${sqlValue(new Date())}
-    WHERE id = ${sqlValue(recordingId)}
-    RETURNING ${SELECT_COLUMNS}
-  `;
-  const updated = await runQuery(updateSql);
-  return updated.length === 0 ? null : rowToRecording(updated[0]);
+  const updated = await prisma.recording.update({
+    where: { id: recordingId },
+    data: { downloadUrl },
+  });
+  return rowToRecording(updated as unknown as Record<string, unknown>);
+}
+
+/** A short-lived URL for streaming or downloading the object. */
+export async function signedUrlFor(recording: RecordingRow): Promise<string> {
+  return getSignedDownloadUrl(recording.s3Key, SIGNED_URL_TTL_SECONDS, recording.s3Bucket);
 }
 
 /**
@@ -288,44 +324,37 @@ export async function refreshSignedUrl(
 export async function failRecording(
   egressId: string
 ): Promise<RecordingRow | null> {
-  const updateSql = `
-    UPDATE "Recording"
-    SET status = 'failed',
-        "endedAt" = ${sqlValue(new Date())},
-        "updatedAt" = ${sqlValue(new Date())}
-    WHERE "egressId" = ${sqlValue(egressId)}
-      AND status != 'expired'
-    RETURNING ${SELECT_COLUMNS}
-  `;
-  const updated = await runQuery(updateSql);
-  return updated.length === 0 ? null : rowToRecording(updated[0]);
+  const result = await prisma.recording.updateMany({
+    where: { egressId, status: { not: 'expired' } },
+    data: { status: 'failed', endedAt: new Date() },
+  });
+  if (result.count === 0) return null;
+  const row = await prisma.recording.findUnique({ where: { egressId } });
+  return row ? rowToRecording(row as unknown as Record<string, unknown>) : null;
 }
 
 /**
- * Sweep stale recordings past their expiresAt. Deletes S3 objects
- * (best-effort) and marks rows 'expired'.
+ * Sweep stale recordings past their expiresAt. Deletes objects
+ * (best-effort) and marks rows 'expired'. Published episodes are kept.
  */
 export async function expireOldRecordings(
   now: Date = new Date()
 ): Promise<number> {
-  const selectSql = `
-    SELECT ${SELECT_COLUMNS}
-    FROM "Recording"
-    WHERE "expiresAt" < ${sqlValue(now)}
-      AND status IN ('starting', 'available')
-  `;
-  const rows = await runQuery(selectSql);
+  const rows = await prisma.recording.findMany({
+    where: {
+      expiresAt: { lt: now },
+      status: { in: ['starting', 'available'] },
+      published: false,
+    },
+  });
   if (rows.length === 0) return 0;
   for (const raw of rows) {
-    const row = rowToRecording(raw);
+    const row = rowToRecording(raw as unknown as Record<string, unknown>);
     await deleteObject(row.s3Key, row.s3Bucket).catch(() => false);
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Recording"
-       SET status = 'expired',
-           "downloadUrl" = NULL,
-           "updatedAt" = '${now.toISOString()}'
-       WHERE id = '${row.id.replace(/'/g, "''")}'`
-    );
+    await prisma.recording.update({
+      where: { id: row.id },
+      data: { status: 'expired', downloadUrl: null },
+    });
   }
   return rows.length;
 }
@@ -343,6 +372,12 @@ export interface PublicRecording {
   sizeBytes: number | null;
   downloadUrl: string | null;
   contentType: string;
+  published: boolean;
+  publishedAt: string | null;
+}
+
+function iso(d: Date): string {
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
 
 export function toPublicRecording(row: RecordingRow): PublicRecording {
@@ -350,48 +385,13 @@ export function toPublicRecording(row: RecordingRow): PublicRecording {
     id: row.id,
     spaceId: row.spaceId,
     status: row.status,
-    startedAt: row.startedAt.toISOString(),
-    endedAt: row.endedAt ? row.endedAt.toISOString() : null,
-    expiresAt: row.expiresAt.toISOString(),
+    startedAt: iso(row.startedAt),
+    endedAt: row.endedAt ? iso(row.endedAt) : null,
+    expiresAt: iso(row.expiresAt),
     sizeBytes: row.sizeBytes,
     downloadUrl: row.downloadUrl,
     contentType: row.contentType,
+    published: row.published,
+    publishedAt: row.publishedAt ? iso(row.publishedAt) : null,
   };
 }
-
-// ---------------------------------------------------------------------------
-// cuid generator. Prisma's `@default(cuid())` only fires for `$queryRaw`-
-// style inserts when we explicitly emit a value, so we generate one here.
-function generateCuid(): string {
-  const ts = Date.now().toString(36).padStart(8, '0');
-  let rand = '';
-  while (rand.length < 18) {
-    rand += Math.floor(Math.random() * 0xffffffff).toString(36);
-  }
-  rand = rand.slice(0, 18);
-  return `c${ts}${rand}`;
-}
-
-/**
- * Run a SELECT and cast the result to a typed array of plain rows. Goes
- * through the untyped `$queryRawUnsafe` API so this file typechecks even
- * when the locally-cached Prisma client has no generated models.
- */
-async function runQuery(
-  sql: string
-): Promise<Record<string, unknown>[]> {
-  // The cast is needed because the locally-cached client has no model
-  // information (we don't run prisma generate on NixOS). At runtime the
-  // real client is generated, so this cast is harmless.
-  const exec = (
-    prisma as unknown as {
-      $queryRawUnsafe: (q: string) => Promise<unknown>;
-    }
-  ).$queryRawUnsafe;
-  const result = (await exec(sql)) as unknown;
-  return Array.isArray(result) ? (result as Record<string, unknown>[]) : [];
-}
-
-// Avoid "unused" lint noise for helpers used only in some branches.
-void buildSelect;
-void sqlValue;

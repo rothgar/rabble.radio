@@ -39,6 +39,12 @@ export interface GenerateTokenInput {
   name?: string;
   /** Token TTL in seconds. Defaults to 1 hour. */
   ttlSeconds?: number;
+  /**
+   * Override the subscribe grant. Audience members get `false` while a show
+   * is off air so only the host and co-hosts hear each other; the live route
+   * flips it to `true` for everyone in the room when the host goes on air.
+   */
+  canSubscribe?: boolean;
 }
 
 export interface GeneratedToken {
@@ -251,7 +257,7 @@ export async function generateToken(
     roomJoin: true,
     room,
     canPublish: flags.canPublish,
-    canSubscribe: flags.canSubscribe,
+    canSubscribe: input.canSubscribe ?? flags.canSubscribe,
     canPublishData: flags.canPublishData,
     canUpdateOwnMetadata: true,
   });
@@ -431,6 +437,78 @@ export async function muteParticipant(
         undefined,
         { canPublish: !muted, canSubscribe: true, canPublishData: !muted } as unknown as undefined
       );
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Flip the subscribe permission for every audience participant (no publish
+ * rights) currently in a room. Called when the host goes on or off air so
+ * listeners who joined during the pre-show start (or stop) hearing the
+ * stage. Hosts and co-hosts are left untouched. Best-effort: returns the
+ * number of participants updated, or -1 when LiveKit could not be reached.
+ */
+export async function setAudienceSubscriptions(
+  roomName: string,
+  allowed: boolean
+): Promise<number> {
+  try {
+    const client = getLiveKitClient();
+    const participants = await client.listParticipants(roomName);
+    let updated = 0;
+    for (const p of participants) {
+      const perms = (p.permission ?? {}) as {
+        canPublish?: boolean;
+        canSubscribe?: boolean;
+      };
+      if (perms.canPublish !== false) continue;
+      if (perms.canSubscribe === allowed) continue;
+      try {
+        await client.updateParticipant(roomName, p.identity, undefined, {
+          canPublish: false,
+          canSubscribe: allowed,
+          canPublishData: false,
+        });
+        updated++;
+      } catch {
+        /* one failure must not stop the rest of the room */
+      }
+    }
+    return updated;
+  } catch {
+    return -1;
+  }
+}
+
+/**
+ * Best-effort reliable data message to everyone in a room (or to the given
+ * identities). Used for room-wide state changes such as going on air or the
+ * host editing the show title. Failures are swallowed: the database is the
+ * source of truth and clients re-fetch on reconnect.
+ */
+export async function broadcastRoomData(
+  roomName: string,
+  payload: Record<string, unknown>,
+  targetIdentities?: string[]
+): Promise<boolean> {
+  try {
+    const client = getLiveKitClient() as unknown as {
+      sendData: (...args: unknown[]) => Promise<unknown>;
+    };
+    const data = new TextEncoder().encode(JSON.stringify(payload));
+    try {
+      await client.sendData(roomName, data, {
+        reliable: true,
+        destinationIdentities: targetIdentities,
+      });
+    } catch {
+      await client.sendData(roomName, data, 1, {
+        reliable: true,
+        destinationIdentities: targetIdentities,
+      });
     }
     return true;
   } catch {

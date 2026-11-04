@@ -13,6 +13,7 @@ import {
 import { StationCard } from '@/components/StationCard';
 import { StationSuggestionCard } from '@/components/StationSuggestionCard';
 import { SiteHeader } from '@/components/SiteHeader';
+import { StartShowButton } from '@/components/StartShowButton';
 import { Button, PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -43,11 +44,18 @@ export default async function StationsPage(): Promise<ReactElement> {
     <>
       <SiteHeader />
       <PageLayout>
-        <header>
-          <h1 className="text-display font-bold tracking-tight">Stations</h1>
-          <p className="mt-1 text-label text-[var(--color-text-secondary)]">
-            Live and upcoming shows by category.
-          </p>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-display font-bold tracking-tight">Stations</h1>
+            <p className="mt-1 text-label text-[var(--color-text-secondary)]">
+              Live and upcoming shows by category.
+            </p>
+          </div>
+          {user ? (
+            <div data-testid="stations-start-show">
+              <StartShowButton size="lg" />
+            </div>
+          ) : null}
         </header>
 
         {stations.length === 0 && suggestions.length === 0 ? (
@@ -60,9 +68,13 @@ export default async function StationsPage(): Promise<ReactElement> {
               Stations fill up as hosts tag their shows. Create a show and pick
               up to 3 tags to get listed here.
             </p>
-            <Button href="/stations/new" size="lg" data-testid="create-show-link">
-              Create a show
-            </Button>
+            {user ? (
+              <StartShowButton size="lg" />
+            ) : (
+              <Button href="/login?next=%2Fstations" size="lg" data-testid="create-show-link">
+                Sign in to start a show
+              </Button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-8" data-testid="station-list">

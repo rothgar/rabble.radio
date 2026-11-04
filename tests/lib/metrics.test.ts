@@ -506,3 +506,45 @@ describe('getHostLeaderboard', () => {
     expect(m.userFindMany).not.toHaveBeenCalled();
   });
 });
+
+describe('getJoinedShows', () => {
+  it('maps participations to the shows a user joined, excluding their own', async () => {
+    const { getJoinedShows } = await import('@/lib/metrics');
+    m.partFindMany.mockResolvedValueOnce([
+      {
+        sessionId: 'sess1',
+        role: 'speaker',
+        joinedAt: new Date('2026-11-01T10:00:00Z'),
+        leftAt: new Date('2026-11-01T11:00:00Z'),
+        stageSeconds: 600,
+        session: {
+          startedAt: new Date('2026-11-01T09:55:00Z'),
+          endedAt: new Date('2026-11-01T11:00:00Z'),
+          durationSeconds: 3900,
+          uniqueListeners: 12,
+          tags: [{ tag: 'Music' }],
+          space: {
+            id: 'sp1',
+            title: 'Friday jams',
+            status: 'expired',
+            isLive: false,
+            host: { did: 'did:plc:host', handle: 'alice.bsky.social', displayName: 'Alice', avatarUrl: null },
+          },
+        },
+      },
+    ]);
+    const shows = await getJoinedShows('did:plc:me');
+    expect(shows).toHaveLength(1);
+    expect(shows[0]).toMatchObject({
+      sessionId: 'sess1',
+      role: 'speaker',
+      stageSeconds: 600,
+      space: { id: 'sp1', title: 'Friday jams', tags: ['Music'], host: { handle: 'alice.bsky.social' } },
+    });
+    expect(m.partFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { identity: 'did:plc:me', anonymous: false, session: { hostDid: { not: 'did:plc:me' } } },
+      })
+    );
+  });
+});

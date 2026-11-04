@@ -203,7 +203,7 @@ export async function POST(
               hostDid: user.did,
               egressId: started.egressId,
               s3Key,
-              contentType: 'video/mp4',
+              contentType: 'audio/mp4',
               now: startedAt,
             });
           } else {

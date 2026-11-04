@@ -154,7 +154,8 @@ skipped by the 30-day expiry sweep.
 
 `GET /downloads/rabble-android.apk` streams the current Android debug build
 from the recordings bucket (key `builds/rabble-android.apk`). Upload a new
-build with any S3 client using the R2 token, then install it on a phone from
+build with `node scripts/upload-android-build.mjs` (reads the R2 token from
+`.env`), then install it on a phone from
 `https://rabble.rodeo/downloads/rabble-android.apk` (allow "install unknown
 apps" for the browser). File names are allow-listed in
 `src/app/downloads/[file]/route.ts`.

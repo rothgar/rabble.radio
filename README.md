@@ -150,6 +150,15 @@ RSS feed at `/podcast/[handle]/feed.xml`; enclosures point at
 (public once published, host-only otherwise). Published recordings are
 skipped by the 30-day expiry sweep.
 
+## Mobile test builds
+
+`GET /downloads/rabble-android.apk` streams the current Android debug build
+from the recordings bucket (key `builds/rabble-android.apk`). Upload a new
+build with any S3 client using the R2 token, then install it on a phone from
+`https://rabble.rodeo/downloads/rabble-android.apk` (allow "install unknown
+apps" for the browser). File names are allow-listed in
+`src/app/downloads/[file]/route.ts`.
+
 ## Show metrics
 
 Every time a station goes live a `ShowSession` row is opened and closed with

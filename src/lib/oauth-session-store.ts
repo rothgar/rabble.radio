@@ -8,6 +8,7 @@
 // so the callback can land on a different isolate than the one that started
 // the authorization.
 
+import { JoseKey } from '@atproto/jwk-jose';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
@@ -28,7 +29,43 @@ function parse<V>(raw: string, key: string, what: string): V | undefined {
   }
 }
 
+/**
+ * The OAuth client keeps a live `Key` instance (`dpopKey`) in both the
+ * authorization state and the session. JSON.stringify turns it into a plain
+ * object, and the client then crashes on the callback ("Cannot read
+ * properties of undefined (reading 'includes')" from the DPoP signer). This
+ * mirrors `toDpopKeyStore` from @atproto/oauth-client-node: persist the
+ * private JWK and rebuild the key on read.
+ */
+export function withDpopKey<V>(store: SimpleStore<V>): SimpleStore<V> {
+  return {
+    async get(key) {
+      const value = (await store.get(key)) as (Record<string, unknown> & { dpopJwk?: unknown }) | undefined;
+      if (!value || typeof value !== 'object' || !value.dpopJwk) return value as V | undefined;
+      const { dpopJwk, ...rest } = value;
+      const dpopKey = await JoseKey.fromJWK(dpopJwk as Parameters<typeof JoseKey.fromJWK>[0]);
+      return { ...rest, dpopKey } as V;
+    },
+    async set(key, value) {
+      const v = value as Record<string, unknown> & { dpopKey?: { privateJwk?: unknown } };
+      if (v && typeof v === 'object' && v.dpopKey && typeof v.dpopKey === 'object') {
+        const { dpopKey, ...rest } = v;
+        if (!dpopKey.privateJwk) throw new Error('Private DPoP JWK is missing.');
+        await store.set(key, { ...rest, dpopJwk: dpopKey.privateJwk } as V);
+        return;
+      }
+      await store.set(key, value);
+    },
+    del: (key) => store.del(key),
+    clear: () => store.clear(),
+  };
+}
+
 export function createPrismaSessionStore<V>(): SimpleStore<V> {
+  return withDpopKey(createRawSessionStore<V>());
+}
+
+function createRawSessionStore<V>(): SimpleStore<V> {
   return {
     async get(key) {
       try {
@@ -78,6 +115,10 @@ export function createPrismaSessionStore<V>(): SimpleStore<V> {
 export const OAUTH_STATE_TTL_MS = 15 * 60 * 1000;
 
 export function createPrismaStateStore<V>(): SimpleStore<V> {
+  return withDpopKey(createRawStateStore<V>());
+}
+
+function createRawStateStore<V>(): SimpleStore<V> {
   return {
     async get(key) {
       const row = await prisma.oAuthState.findUnique({ where: { key } });

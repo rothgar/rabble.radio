@@ -24,7 +24,7 @@ describe('<ShareButtons />', () => {
     const link = screen.getByTestId('share-bluesky-button');
     const href = link.getAttribute('href') ?? '';
     expect(href.startsWith('https://bsky.app/intent/compose?text=')).toBe(true);
-    const expected = `Join my space on Rabble: ${title}\n${shareableUrl}`;
+    const expected = `Tune in to my show on Rabble Radio: ${title}\n${shareableUrl}`;
     expect(href).toContain(encodeURIComponent(expected));
     expect(link.getAttribute('target')).toBe('_blank');
   });

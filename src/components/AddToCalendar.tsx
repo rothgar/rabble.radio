@@ -73,7 +73,7 @@ export function AddToCalendar({
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl;
-    a.download = `${title.replace(/[^\w]+/g, '-').slice(0, 40) || 'space'}.ics`;
+    a.download = `${title.replace(/[^\w]+/g, '-').slice(0, 40) || 'show'}.ics`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

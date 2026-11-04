@@ -73,7 +73,7 @@ export async function POST(
   const recording = await getRecordingForSpace(resolved.space.id);
   if (!recording) {
     return NextResponse.json(
-      { error: 'not_found', message: 'No recording exists for this space.' },
+      { error: 'not_found', message: 'No recording exists for this show.' },
       { status: 404 }
     );
   }

@@ -60,7 +60,7 @@ function statusBadge(view: {
   switch (view.status) {
     case 'live':
       return {
-        label: 'Live',
+        label: 'On air',
         className: 'bg-[var(--color-live-muted)] text-[var(--color-live)]',
       };
     case 'scheduled':
@@ -86,7 +86,7 @@ function statusBadge(view: {
     default:
       return view.isLive
         ? {
-            label: 'Live',
+            label: 'On air',
             className: 'bg-[var(--color-live-muted)] text-[var(--color-live)]',
           }
         : {
@@ -179,7 +179,7 @@ export default function SpacePage(): ReactElement {
           space: null,
           user: null,
           recording: null,
-          error: `Failed to load space (HTTP ${spaceRes.status}).`,
+          error: `Failed to load the show (HTTP ${spaceRes.status}).`,
         });
         return;
       }
@@ -255,7 +255,7 @@ export default function SpacePage(): ReactElement {
         user: null,
         recording: null,
         error:
-          err instanceof Error ? err.message : 'Failed to load space.',
+          err instanceof Error ? err.message : 'Failed to load the show.',
       });
     }
   }, []);
@@ -279,7 +279,7 @@ export default function SpacePage(): ReactElement {
             data-testid="space-loading"
           >
             <p className="text-sm text-[var(--color-text-secondary)]">
-              Loading space&hellip;
+              Loading the show&hellip;
             </p>
           </section>
         </PageLayout>
@@ -302,10 +302,10 @@ export default function SpacePage(): ReactElement {
             data-testid="space-not-found"
           >
             <h1 className="text-2xl font-bold tracking-tight">
-              Space not found
+              Show not found
             </h1>
             <p className="text-sm text-[var(--color-text-secondary)]">
-              We couldn&apos;t find a space with that ID. It may have ended or
+              We couldn&apos;t find a show with that ID. It may have ended or
               been removed.
             </p>
           </section>
@@ -333,7 +333,7 @@ export default function SpacePage(): ReactElement {
               Something went wrong
             </h1>
             <p className="text-sm text-[var(--color-live)]">
-              {state.error ?? 'Failed to load space.'}
+              {state.error ?? 'Failed to load the show.'}
             </p>
             <button
               type="button"
@@ -365,7 +365,7 @@ export default function SpacePage(): ReactElement {
             </Link>
           </header>
           <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text-secondary)]">
-            Loading space&hellip;
+            Loading the show&hellip;
           </section>
         </PageLayout>
       </>

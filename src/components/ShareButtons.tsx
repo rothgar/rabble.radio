@@ -16,7 +16,7 @@ export function ShareButtons({
   const [copied, setCopied] = useState(false);
 
   const bskyHref = `https://bsky.app/intent/compose?text=${encodeURIComponent(
-    `Join my space on Rabble: ${title}\n${shareableUrl}`
+    `Tune in to my show on Rabble Radio: ${title}\n${shareableUrl}`
   )}`;
 
   const onCopy = async (): Promise<void> => {

@@ -263,7 +263,7 @@ export async function inviteToStage(
     throw new StageError(
       'forbidden',
       403,
-      'Only the space host can invite speakers.'
+      'Only the show host can invite speakers.'
     );
   }
 
@@ -406,7 +406,7 @@ export async function removeFromStage(
     throw new StageError(
       'forbidden',
       403,
-      'Only the space host can remove speakers.'
+      'Only the show host can remove speakers.'
     );
   }
 
@@ -469,7 +469,7 @@ export async function kickFromSpace(
     throw new StageError(
       'forbidden',
       403,
-      'Only the space host can kick participants.'
+      'Only the show host can kick participants.'
     );
   }
   await unmarkSpeaker(space.id, input.targetIdentity);
@@ -516,7 +516,7 @@ export async function blockFromSpace(
     throw new StageError(
       'forbidden',
       403,
-      'Only the space host can block participants.'
+      'Only the show host can block participants.'
     );
   }
   await prisma.stageBlock.upsert({
@@ -557,7 +557,7 @@ export async function muteSpeaker(
     throw new StageError(
       'forbidden',
       403,
-      'Only the space host can mute speakers.'
+      'Only the show host can mute speakers.'
     );
   }
   await muteParticipant(space.roomName, input.targetIdentity, input.muted);

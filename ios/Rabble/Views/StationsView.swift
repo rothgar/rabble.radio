@@ -27,7 +27,7 @@ struct StationsView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
                             Text("Stations").font(.largeTitle.weight(.bold))
-                            Text("Live and upcoming shows by category.")
+                            Text("On-air and upcoming shows by station.")
                                 .foregroundStyle(RabbleColors.textSecondary)
                             ForEach(stations) { station in
                                 NavigationLink(value: station.tag) {

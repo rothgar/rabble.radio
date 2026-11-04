@@ -118,7 +118,7 @@ private fun StationList(stations: List<Station>, padding: PaddingValues, onOpen:
     ) {
         item {
             Text("Stations", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Live and upcoming shows by category.", color = RabbleColors.TextSecondary)
+            Text("On-air and upcoming shows by station.", color = RabbleColors.TextSecondary)
             Spacer(Modifier.height(4.dp))
         }
         items(stations, key = { it.tag }) { station ->

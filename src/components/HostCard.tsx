@@ -80,7 +80,7 @@ export function HostCard({ host, rank }: HostCardProps): ReactElement {
       </div>
 
       <div className="flex items-center gap-3 text-xs text-slate-400" data-testid="host-popularity">
-        <span title="Live audience">👂 {host.popularity}</span>
+        <span title="On-air audience">👂 {host.popularity}</span>
       </div>
 
       {host.upcoming.length > 0 ? (

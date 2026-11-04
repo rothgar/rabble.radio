@@ -289,7 +289,7 @@ export function CreateSpaceForm(): ReactElement {
           maxLength={2000}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="What is this space about?"
+          placeholder="What is this show about?"
           className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
           data-testid="description-input"
         />

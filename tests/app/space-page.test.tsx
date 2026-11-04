@@ -103,7 +103,7 @@ describe('<SpacePage />', () => {
 
     render(<SpacePage />);
     expect(screen.getByTestId('space-loading')).toBeInTheDocument();
-    expect(screen.getByText(/loading space/i)).toBeInTheDocument();
+    expect(screen.getByText(/loading the show/i)).toBeInTheDocument();
   });
 
   it('renders the not-found state when the API returns 404', async () => {
@@ -116,7 +116,7 @@ describe('<SpacePage />', () => {
       expect(screen.getByTestId('space-not-found')).toBeInTheDocument();
     });
     expect(
-      screen.getByRole('heading', { name: /space not found/i })
+      screen.getByRole('heading', { name: /show not found/i })
     ).toBeInTheDocument();
   });
 

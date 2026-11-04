@@ -55,7 +55,7 @@ struct ShowView: View {
     private func header(_ show: Show) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                if show.isLive { LiveBadge() } else { Pill(text: show.status.capitalized) }
+                if show.isLive { LiveBadge() } else { Pill(text: show.status == "active" ? "Off air" : show.status.capitalized) }
                 Spacer()
                 Text("\(show.listenerCount) listening").font(.caption).foregroundStyle(RabbleColors.textSecondary)
             }
@@ -81,7 +81,7 @@ struct ShowView: View {
                     Text(message).foregroundStyle(RabbleColors.live)
                 }
                 if signedIn {
-                    Text(show.isLive ? "Joining connects you to the live audio room." : "This show is not live yet; you can still join the room.")
+                    Text(show.isLive ? "The show is on air. Joining puts you in the audience." : "The host is off air. You can join and wait in the studio; audio starts when they go on air.")
                         .foregroundStyle(RabbleColors.textSecondary)
                     Button("Join") { Task { await room.join(showId: showId, api: env.api) } }
                         .buttonStyle(.borderedProminent)

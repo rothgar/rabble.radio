@@ -23,7 +23,7 @@ export function DeleteSpaceButton({
   const handleDelete = useCallback(async () => {
     if (deleting) return;
     const confirmed = window.confirm(
-      'Delete this space permanently? This cannot be undone and any recording will be removed.'
+      'Close this station for good? This cannot be undone and any recording will be removed.'
     );
     if (!confirmed) {
       return;
@@ -43,13 +43,13 @@ export function DeleteSpaceButton({
         .catch(() => ({}))) as DeleteApiResponse;
       setError(body.message || body.error || `HTTP ${res.status}`);
       window.alert(
-        `Failed to delete space: ${body.error ?? 'unknown'}`
+        `Failed to close the station: ${body.error ?? 'unknown'}`
       );
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to delete space.';
+        err instanceof Error ? err.message : 'Failed to close the station.';
       setError(message);
-      window.alert(`Failed to delete space: ${message}`);
+      window.alert(`Failed to close the station: ${message}`);
     } finally {
       setDeleting(false);
     }
@@ -70,7 +70,7 @@ export function DeleteSpaceButton({
         data-testid="delete-space-button"
       >
         <StopCircle size={16} weight="fill" />
-        {deleting ? 'Ending…' : 'End space'}
+        {deleting ? 'Closing…' : 'Close station'}
       </button>
       {error ? (
         <p

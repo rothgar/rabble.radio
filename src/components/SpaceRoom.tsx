@@ -668,7 +668,7 @@ function Inner({
             Right now only you and your co-hosts can hear each other. Share the
             link to invite people, bring co-hosts on stage from the Listening
             list, then press <span className="font-semibold text-[var(--color-text)]">On air</span> when
-            you&apos;re ready to broadcast.
+            you&apos;re ready to go on air.
           </p>
         </>
       ) : bottomRole === 'speaker' ? (

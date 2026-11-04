@@ -23,8 +23,8 @@ export default async function HostsPage(): Promise<ReactElement> {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Top hosts</h1>
             <p className="text-sm text-[var(--color-text-secondary)]">
-              Space hosts with the most engaged rooms. See who&apos;s live now
-              and who&apos;s coming up — add scheduled spaces to your calendar so
+              Hosts with the most engaged shows. See who&apos;s on air now
+              and who&apos;s coming up — add scheduled shows to your calendar so
               you don&apos;t miss them.
             </p>
           </div>
@@ -37,7 +37,7 @@ export default async function HostsPage(): Promise<ReactElement> {
         >
           <p className="text-lg text-[var(--color-text)]">No hosts yet.</p>
           <p className="max-w-md text-sm text-[var(--color-text-tertiary)]">
-            When people start hosting spaces, their profiles will show up here.
+            When people start hosting shows, their profiles will show up here.
           </p>
         </div>
       ) : (

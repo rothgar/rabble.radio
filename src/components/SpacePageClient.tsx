@@ -261,7 +261,7 @@ export function SpacePageClient({
         setError(
           body.message ||
             body.error ||
-            `Failed to join space (HTTP ${res.status}).`
+            `Failed to join the show (HTTP ${res.status}).`
         );
         return;
       }
@@ -280,7 +280,7 @@ export function SpacePageClient({
       if (typeof body.onAir === 'boolean') setLive(body.onAir);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Unexpected error joining space.'
+        err instanceof Error ? err.message : 'Unexpected error joining the show.'
       );
     } finally {
       setJoining(false);
@@ -373,8 +373,8 @@ export function SpacePageClient({
       <div className="flex flex-col gap-3">
         <p>
           {isHost
-            ? 'You are the host. Joining will connect you as a speaker.'
-            : 'Joining will connect you as audience (listen-only).'}
+            ? 'You are the host. Joining puts you on stage, off air until you press On air.'
+            : 'Joining puts you in the audience (listen-only).'}
         </p>
         {error ? (
           <p
@@ -395,7 +395,7 @@ export function SpacePageClient({
             className="rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)] disabled:opacity-50"
             data-testid="join-button"
           >
-            {joining ? 'Joining…' : 'Join Space'}
+            {joining ? 'Joining…' : 'Join the show'}
           </button>
         </div>
         {status ? (

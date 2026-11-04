@@ -230,7 +230,7 @@ export async function DELETE(
   const { space, isHost } = resolved;
   if (!isHost) {
     return NextResponse.json(
-      { ok: false, error: 'forbidden', message: 'Only the host can delete this space.' },
+      { ok: false, error: 'forbidden', message: 'Only the host can close this station.' },
       { status: 403 }
     );
   }

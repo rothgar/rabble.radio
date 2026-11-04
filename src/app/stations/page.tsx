@@ -48,7 +48,7 @@ export default async function StationsPage(): Promise<ReactElement> {
           <div>
             <h1 className="text-display font-bold tracking-tight">Stations</h1>
             <p className="mt-1 text-label text-[var(--color-text-secondary)]">
-              Live and upcoming shows by category.
+              On-air and upcoming shows by station.
             </p>
           </div>
           {user ? (

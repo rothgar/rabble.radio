@@ -221,7 +221,7 @@ private fun ShowHeader(show: Show) {
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (show.isLive) LiveBadge() else Pill(show.status.replaceFirstChar { it.uppercase() })
+                if (show.isLive) LiveBadge() else Pill(if (show.status == "active") "Off air" else show.status.replaceFirstChar { it.uppercase() })
                 Spacer(Modifier.weight(1f))
                 Text("${show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
             }
@@ -268,7 +268,7 @@ private fun RoomPanel(
                         }
                     } else {
                         Text(
-                            if (show.isLive) "Joining connects you to the live audio room." else "This show is not live yet; you can still join the room.",
+                            if (show.isLive) "The show is on air. Joining puts you in the audience." else "The host is off air. You can join and wait in the studio; audio starts when they go on air.",
                             color = RabbleColors.TextSecondary,
                         )
                         Button(onClick = onJoin, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Join") }

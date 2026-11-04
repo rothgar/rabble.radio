@@ -60,7 +60,7 @@ struct Pill: View {
 
 struct LiveBadge: View {
     var body: some View {
-        Pill(text: "LIVE", color: RabbleColors.live, background: RabbleColors.live.opacity(0.15))
+        Pill(text: "ON AIR", color: RabbleColors.live, background: RabbleColors.live.opacity(0.15))
     }
 }
 

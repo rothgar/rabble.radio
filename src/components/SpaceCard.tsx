@@ -36,7 +36,7 @@ function statusBadge(space: PublicSpace): BadgeSpec {
   switch (space.status) {
     case 'live':
       return {
-        label: 'Live',
+        label: 'On air',
         className: 'bg-red-600/20 text-red-300',
       };
     case 'scheduled':
@@ -49,7 +49,7 @@ function statusBadge(space: PublicSpace): BadgeSpec {
       };
     case 'active':
       return {
-        label: 'Active',
+        label: 'Off air',
         className: 'bg-emerald-700/30 text-emerald-200',
       };
     case 'ended':
@@ -65,7 +65,7 @@ function statusBadge(space: PublicSpace): BadgeSpec {
     default:
       // Backwards-compat fallback when status is missing on legacy rows.
       return space.isLive
-        ? { label: 'Live', className: 'bg-red-600/20 text-red-300' }
+        ? { label: 'On air', className: 'bg-red-600/20 text-red-300' }
         : { label: 'Upcoming', className: 'bg-slate-700 text-slate-300' };
   }
 }

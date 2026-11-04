@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'Rabble',
-  description: 'Rabble — live audio spaces for Bluesky',
+  description: 'Rabble Radio — live audio shows for Bluesky',
 };
 
 export const viewport = {

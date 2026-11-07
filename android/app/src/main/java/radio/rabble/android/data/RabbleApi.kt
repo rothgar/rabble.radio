@@ -38,6 +38,31 @@ class RabbleApi(
     suspend fun show(id: String): Show =
         Show.fromJson(request(get("/api/spaces/$id")).getJSONObject("space"))
 
+    /**
+     * Create a show and land the caller in it as host, off air. The server
+     * picks a default title; the host can rename it later. The host token in
+     * the response is ignored because ShowScreen joins through /join, which
+     * mints a host token for the owner anyway.
+     */
+    suspend fun startShow(): Show =
+        Show.fromJson(request(post("/api/spaces", JSONObject().put("startNow", true))).getJSONObject("space"))
+
+    /** Host only: go on air (start broadcasting + recording) or off air. */
+    suspend fun setOnAir(showId: String, onAir: Boolean): Show =
+        Show.fromJson(
+            request(post("/api/spaces/$showId/live", JSONObject().put("action", if (onAir) "start" else "end")))
+                .getJSONObject("space")
+        )
+
+    /** Host only: rename the show or set its description/tags from inside the room. */
+    suspend fun updateShow(showId: String, title: String? = null, description: String? = null, tags: List<String>? = null): Show {
+        val body = JSONObject()
+        if (title != null) body.put("title", title)
+        if (description != null) body.put("description", description)
+        if (tags != null) body.put("tags", org.json.JSONArray(tags))
+        return Show.fromJson(request(patch("/api/spaces/$showId", body)).getJSONObject("space"))
+    }
+
     /** Returns null when there is no valid session. */
     suspend fun me(): Me? = try {
         Me.fromJson(request(get("/api/me")))
@@ -82,6 +107,9 @@ class RabbleApi(
 
     private fun post(path: String, body: JSONObject): Request =
         Request.Builder().url("$baseUrl$path").post(body.toString().toRequestBody(jsonType)).withSession().build()
+
+    private fun patch(path: String, body: JSONObject): Request =
+        Request.Builder().url("$baseUrl$path").patch(body.toString().toRequestBody(jsonType)).withSession().build()
 
     private fun get(path: String): Request =
         Request.Builder().url("$baseUrl$path").get().withSession().build()

@@ -4,14 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -26,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import radio.rabble.android.data.PublicHost
+import radio.rabble.android.data.Show
 
 @Composable
 fun Loading() {
@@ -119,5 +123,31 @@ fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 fun HostRow(hosts: List<PublicHost>) {
     Row(horizontalArrangement = Arrangement.spacedBy((-8).dp), verticalAlignment = Alignment.CenterVertically) {
         hosts.take(3).forEach { HostAvatar(it, 28) }
+    }
+}
+
+/** One show in a list: host avatar, title, on-air badge, counts and tags. */
+@Composable
+fun ShowCard(show: Show, onOpen: (String) -> Unit) {
+    Card(Modifier.clickable { onOpen(show.id) }) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HostAvatar(show.host)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(show.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text("@${show.host.handle}", color = RabbleColors.TextTertiary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+                if (show.isLive) LiveBadge() else if (show.status == "scheduled") Pill("Scheduled")
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("${show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("${show.speakerCount} on stage", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("${show.reactionCount} reactions", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+            }
+            if (show.tags.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { show.tags.forEach { Pill(it) } }
+            }
+        }
     }
 }

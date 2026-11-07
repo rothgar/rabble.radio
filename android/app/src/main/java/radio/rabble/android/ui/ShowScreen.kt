@@ -25,7 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -111,7 +114,7 @@ private const val STAGE_POLL_MS = 4000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () -> Unit, onBack: () -> Unit) {
+fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () -> Unit, onBack: () -> Unit, autoJoin: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<ShowState>(ShowState.Loading) }
@@ -120,6 +123,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     var signedIn by remember { mutableStateOf(false) }
     var profiles by remember { mutableStateOf<Map<String, UserSummary>>(emptyMap()) }
     var floating by remember { mutableStateOf<List<FloatingEmoji>>(emptyList()) }
+    var editing by remember { mutableStateOf(false) }
+    var autoJoined by remember { mutableStateOf(false) }
     val lkRoom = remember { LiveKit.create(context.applicationContext) }
 
     LaunchedEffect(showId, reload, sessionVersion) {
@@ -329,6 +334,36 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
+    /** Host only. Flips the show on or off air; the server opens or closes the audience's audio. */
+    fun setOnAir(onAir: Boolean) {
+        val current = room as? RoomState.Connected ?: return
+        room = current.copy(stageBusy = true, notice = null)
+        scope.launch {
+            try {
+                val updated = app.api.setOnAir(showId, onAir)
+                state = ShowState.Ready(updated)
+                (room as? RoomState.Connected)?.let {
+                    room = it.copy(onAir = updated.isLive, stageBusy = false, notice = if (updated.isLive) "You're on air. Listeners can hear the stage now." else "Off air. The recording has stopped.")
+                }
+            } catch (e: Exception) {
+                (room as? RoomState.Connected)?.let { room = it.copy(stageBusy = false, notice = e.message ?: "Could not change on-air state.") }
+            }
+        }
+    }
+
+    /** Host only. Rename the show or set a description from inside the room. */
+    fun saveDetails(title: String, description: String) {
+        scope.launch {
+            try {
+                state = ShowState.Ready(app.api.updateShow(showId, title = title.trim(), description = description.trim()))
+                editing = false
+            } catch (e: Exception) {
+                (room as? RoomState.Connected)?.let { room = it.copy(notice = e.message ?: "Could not save show details.") }
+                editing = false
+            }
+        }
+    }
+
     fun react(emoji: String) {
         val id = System.nanoTime()
         floating = floating + FloatingEmoji(id, emoji)
@@ -339,11 +374,35 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
+    LaunchedEffect(state) {
+        if (autoJoin && !autoJoined && state is ShowState.Ready && room == RoomState.Idle) {
+            autoJoined = true
+            joinShow()
+        }
+    }
+
+    val isHost = (room as? RoomState.Connected)?.join?.role == "host"
+
+    if (editing) {
+        val show = (state as? ShowState.Ready)?.show
+        if (show != null) {
+            ShowDetailsDialog(
+                title = show.title,
+                description = show.description ?: "",
+                onSave = ::saveDetails,
+                onDismiss = { editing = false },
+            )
+        }
+    }
+
     Scaffold(
         containerColor = RabbleColors.Bg,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
+                actions = {
+                    if (isHost) TextButton(onClick = { editing = true }) { Text("Edit") }
+                },
                 navigationIcon = {
                     IconButton(onClick = { leave(); onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -382,6 +441,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                         onLeave = ::leave,
                         onToggleMic = ::toggleMic,
                         onStepDown = { stage("leave") },
+                        onToggleOnAir = { setOnAir(!(connected?.onAir ?: false)) },
                         onLogin = onLogin,
                     )
                     if (connected != null) {
@@ -450,6 +510,7 @@ private fun RoomPanel(
     onLeave: () -> Unit,
     onToggleMic: () -> Unit,
     onStepDown: () -> Unit,
+    onToggleOnAir: () -> Unit,
     onLogin: () -> Unit,
 ) {
     Card {
@@ -489,13 +550,36 @@ private fun RoomPanel(
                     Text(status, color = RabbleColors.Success, fontWeight = FontWeight.SemiBold)
                     if (!room.onAir) {
                         Text(
-                            if (onStage) "Off air: only the stage can hear each other right now."
-                            else "Off air: you'll hear audio as soon as the host goes on air.",
+                            when {
+                                room.join.role == "host" -> "Off air: only the stage can hear each other. Invite co-hosts from the web, name the show with Edit, then go on air to broadcast and record."
+                                onStage -> "Off air: only the stage can hear each other right now."
+                                else -> "Off air: you'll hear audio as soon as the host goes on air."
+                            },
                             color = RabbleColors.TextSecondary,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     room.notice?.let { Text(it, color = RabbleColors.TextSecondary, style = MaterialTheme.typography.bodySmall) }
+                    if (room.join.role == "host") {
+                        Button(
+                            onClick = onToggleOnAir,
+                            enabled = !room.stageBusy,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (room.onAir) RabbleColors.SurfaceRaised else RabbleColors.Live,
+                                contentColor = RabbleColors.Text,
+                            ),
+                        ) {
+                            Text(
+                                when {
+                                    room.stageBusy -> "Working…"
+                                    room.onAir -> "Go off air"
+                                    else -> "Go on air"
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (onStage) {
                             OutlinedButton(onClick = onToggleMic, modifier = Modifier.weight(1f).height(48.dp)) {
@@ -628,4 +712,38 @@ private fun connectOptionsFor(join: JoinResponse): ConnectOptions {
         }.createIceServer()
     }
     return ConnectOptions(rtcConfig = PeerConnection.RTCConfiguration(servers))
+}
+
+@Composable
+private fun ShowDetailsDialog(title: String, description: String, onSave: (String, String) -> Unit, onDismiss: () -> Unit) {
+    var newTitle by remember { mutableStateOf(title) }
+    var newDescription by remember { mutableStateOf(description) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = RabbleColors.Surface,
+        title = { Text("Show details", color = RabbleColors.Text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = newTitle,
+                    onValueChange = { newTitle = it.take(200) },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = newDescription,
+                    onValueChange = { newDescription = it.take(2000) },
+                    label = { Text("What's the show about?") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("Topics (stations) can be set from the web for now.", color = RabbleColors.TextTertiary, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(newTitle, newDescription) }, enabled = newTitle.isNotBlank()) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

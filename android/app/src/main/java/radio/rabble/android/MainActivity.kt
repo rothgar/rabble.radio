@@ -12,11 +12,12 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import radio.rabble.android.ui.HomeScreen
 import radio.rabble.android.ui.LoginScreen
 import radio.rabble.android.ui.RabbleTheme
 import radio.rabble.android.ui.ShowScreen
 import radio.rabble.android.ui.StationScreen
-import radio.rabble.android.ui.StationsScreen
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -32,12 +33,12 @@ class MainActivity : ComponentActivity() {
 }
 
 object Routes {
-    const val STATIONS = "stations"
+    const val HOME = "home"
     const val STATION = "station/{tag}"
-    const val SHOW = "show/{id}"
+    const val SHOW = "show/{id}?autoJoin={autoJoin}"
     const val LOGIN = "login"
     fun station(tag: String) = "station/" + URLEncoder.encode(tag, "UTF-8")
-    fun show(id: String) = "show/$id"
+    fun show(id: String, autoJoin: Boolean = false) = "show/$id?autoJoin=$autoJoin"
 }
 
 @Composable
@@ -46,13 +47,15 @@ fun RabbleNav(app: RabbleApp) {
     // Bumped after login/logout so screens re-check the session.
     var sessionVersion by remember { mutableStateOf(0) }
 
-    NavHost(navController = nav, startDestination = Routes.STATIONS) {
-        composable(Routes.STATIONS) {
-            StationsScreen(
+    NavHost(navController = nav, startDestination = Routes.HOME) {
+        composable(Routes.HOME) {
+            HomeScreen(
                 api = app.api,
                 session = app.session,
                 sessionVersion = sessionVersion,
+                onOpenShow = { nav.navigate(Routes.show(it)) },
                 onOpenStation = { nav.navigate(Routes.station(it)) },
+                onStartedShow = { nav.navigate(Routes.show(it, autoJoin = true)) },
                 onLogin = { nav.navigate(Routes.LOGIN) },
                 onLogout = { app.session.clear(); sessionVersion++ },
             )
@@ -66,11 +69,16 @@ fun RabbleNav(app: RabbleApp) {
                 onBack = { nav.popBackStack() },
             )
         }
-        composable(Routes.SHOW) { entry ->
+        composable(
+            Routes.SHOW,
+            arguments = listOf(navArgument("autoJoin") { defaultValue = "false" }),
+        ) { entry ->
             val id = entry.arguments?.getString("id") ?: ""
+            val autoJoin = entry.arguments?.getString("autoJoin") == "true"
             ShowScreen(
                 app = app,
                 showId = id,
+                autoJoin = autoJoin,
                 sessionVersion = sessionVersion,
                 onLogin = { nav.navigate(Routes.LOGIN) },
                 onBack = { nav.popBackStack() },

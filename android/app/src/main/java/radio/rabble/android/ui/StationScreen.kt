@@ -1,15 +1,11 @@
 package radio.rabble.android.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -63,7 +59,7 @@ fun StationScreen(api: RabbleApi, tag: String, onOpenShow: (String) -> Unit, onB
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to stations")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 title = { Text(tag, fontWeight = FontWeight.SemiBold) },
@@ -100,28 +96,6 @@ private fun ShowList(shows: List<Show>, tag: String, padding: PaddingValues, onO
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(shows, key = { it.id }) { show ->
-            Card(Modifier.clickable { onOpen(show.id) }) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        HostAvatar(show.host)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(show.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            Text("@${show.host.handle}", color = RabbleColors.TextTertiary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                        }
-                        if (show.isLive) LiveBadge()
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("${show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
-                        Text("${show.speakerCount} on stage", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
-                        Text("${show.reactionCount} reactions", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        show.tags.forEach { Pill(it) }
-                    }
-                }
-            }
-        }
+        items(shows, key = { it.id }) { show -> ShowCard(show, onOpen) }
     }
 }

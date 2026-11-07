@@ -12,6 +12,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.mutableStateMapOf
+import radio.rabble.android.data.Diagnostics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,8 +103,12 @@ data class RoomMember(
     val isLocal: Boolean,
 )
 
-/** A reaction in flight: the emoji rides on the sender's avatar. */
-data class FloatingEmoji(val id: Long, val emoji: String, val name: String, val avatarUrl: String?, val lane: Int)
+/**
+ * A reaction in flight. `origin` is the centre of the sender's avatar in
+ * root coordinates (px); null when their tile is not on screen, in which
+ * case it rises from the bottom centre.
+ */
+data class FloatingEmoji(val id: Long, val emoji: String, val origin: Offset?, val jitter: Int)
 
 sealed interface RoomState {
     data object Idle : RoomState
@@ -132,6 +142,27 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     var floating by remember { mutableStateOf<List<FloatingEmoji>>(emptyList()) }
     var editing by remember { mutableStateOf(false) }
     var autoJoined by remember { mutableStateOf(false) }
+    /** Centre of each member's avatar (root px), kept fresh by MemberTile. */
+    val avatarCentres = remember { mutableStateMapOf<String, Offset>() }
+    var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
+
+    LaunchedEffect(showId) { Diagnostics.screen = "show/$showId" }
+    LaunchedEffect(room) {
+        when (val r = room) {
+            is RoomState.Connected -> Diagnostics.setRoom(
+                showId = showId,
+                role = r.join.role,
+                connected = true,
+                onAir = r.onAir,
+                micOn = r.micOn,
+                members = r.members.size,
+                anonymousListeners = r.anonymousListeners,
+                invitePending = r.invitePending,
+            )
+            is RoomState.Failed -> Diagnostics.event("room_failed", r.message)
+            else -> Diagnostics.clearRoom()
+        }
+    }
     val lkRoom = remember { LiveKit.create(context.applicationContext) }
 
     LaunchedEffect(showId, reload, sessionVersion) {
@@ -144,10 +175,10 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
-    /** Float a reaction from someone's avatar for ~1.6s. */
-    fun spawnReaction(emoji: String, name: String, avatarUrl: String?) {
+    /** Float an emoji up from a member's avatar in the stage/audience area for ~1.6s. */
+    fun spawnReaction(emoji: String, identity: String) {
         val id = System.nanoTime()
-        floating = floating + FloatingEmoji(id, emoji, name, avatarUrl, lane = ((id / 7) % 5).toInt())
+        floating = floating + FloatingEmoji(id, emoji, avatarCentres[identity], jitter = ((id / 7) % 41).toInt() - 20)
         scope.launch {
             delay(1700)
             floating = floating.filterNot { it.id == id }
@@ -230,12 +261,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             // Our own reaction already floated when we tapped it.
                             val did = msg.optString("did")
                             if (did.isNotEmpty() && did != current.join.identity) {
-                                val profile = profiles[did]
-                                val name = msg.optString("displayName").takeIf { it.isNotBlank() }
-                                    ?: profile?.displayName
-                                    ?: "@" + (msg.optString("handle").takeIf { it.isNotBlank() } ?: profile?.handle ?: "someone")
-                                val avatar = msg.optString("avatarUrl").takeIf { it.isNotBlank() } ?: profile?.avatarUrl
-                                spawnReaction(msg.optString("emoji", "❤️"), name, avatar)
+                                spawnReaction(msg.optString("emoji", "❤️"), did)
                             }
                         }
                     }
@@ -395,7 +421,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
 
     fun react(emoji: String) {
         val current = room as? RoomState.Connected ?: return
-        spawnReaction(emoji, current.join.displayName ?: "@${current.join.handle}", current.join.avatarUrl)
+        spawnReaction(emoji, current.join.identity)
         scope.launch { runCatching { app.api.react(showId, emoji) } }
     }
 
@@ -427,6 +453,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
                 actions = {
                     if (isHost) TextButton(onClick = { editing = true }) { Text("Edit") }
+                    FeedbackAction(app.api, showId)
                 },
                 navigationIcon = {
                     IconButton(onClick = { leave(); onBack() }) {
@@ -437,7 +464,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).onGloballyPositioned { overlayOrigin = it.positionInRoot() }) {
             when (val s = state) {
                 ShowState.Loading -> Loading()
                 is ShowState.Failed -> ErrorPanel(s.message) { reload++ }
@@ -467,7 +494,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     }
                     val people: @Composable () -> Unit = {
                         if (connected != null) {
-                            PeoplePanel(connected)
+                            PeoplePanel(connected, avatarCentres)
                             ReactionBar(onReact = ::react)
                         } else if (isWideScreen()) {
                             Card {
@@ -511,7 +538,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     }
                 }
             }
-            floating.forEach { FloatingReaction(it) }
+            floating.forEach { FloatingReaction(it, overlayOrigin) }
         }
     }
 }
@@ -660,7 +687,7 @@ private fun RoomPanel(
 }
 
 @Composable
-private fun PeoplePanel(room: RoomState.Connected) {
+private fun PeoplePanel(room: RoomState.Connected, avatarCentres: MutableMap<String, Offset>) {
     val stage = room.members.filter { it.onStage }
     val audience = room.members.filter { !it.onStage }
     Card {
@@ -670,7 +697,7 @@ private fun PeoplePanel(room: RoomState.Connected) {
                 Text("No one on stage yet.", color = RabbleColors.TextSecondary)
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    stage.forEach { MemberTile(it, large = true) }
+                    stage.forEach { m -> MemberTile(m, large = true, onAvatarCentre = { c -> avatarCentres[m.identity] = c }) }
                 }
             }
             val listening = audience.size + room.anonymousListeners
@@ -682,7 +709,7 @@ private fun PeoplePanel(room: RoomState.Connected) {
                 )
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    audience.forEach { MemberTile(it, large = false) }
+                    audience.forEach { m -> MemberTile(m, large = false, onAvatarCentre = { c -> avatarCentres[m.identity] = c }) }
                 }
                 if (room.anonymousListeners > 0) {
                     Text("+${room.anonymousListeners} listening without an account", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
@@ -693,10 +720,16 @@ private fun PeoplePanel(room: RoomState.Connected) {
 }
 
 @Composable
-private fun MemberTile(member: RoomMember, large: Boolean) {
+private fun MemberTile(member: RoomMember, large: Boolean, onAvatarCentre: (Offset) -> Unit) {
     val size = if (large) 64 else 44
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width((size + 16).dp)) {
-        Box(contentAlignment = Alignment.BottomEnd) {
+        Box(
+            contentAlignment = Alignment.BottomEnd,
+            modifier = Modifier.onGloballyPositioned { coords ->
+                val pos = coords.positionInRoot()
+                onAvatarCentre(Offset(pos.x + coords.size.width / 2f, pos.y))
+            },
+        ) {
             Avatar(
                 name = member.name,
                 avatarUrl = member.avatarUrl,
@@ -752,28 +785,36 @@ private fun ReactionBar(onReact: (String) -> Unit) {
 }
 
 /**
- * A reaction drifting up the screen: the sender's avatar with the emoji
- * pinned to its corner, fading out as it rises. Lanes spread simultaneous
- * reactions sideways so they don't stack.
+ * An emoji rising from the top of someone's avatar in the people panel and
+ * fading out, like the web room. Positions are root px, converted back to
+ * dp for the offset modifier.
  */
 @Composable
-private fun FloatingReaction(item: FloatingEmoji) {
+private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
     val progress = remember(item.id) { Animatable(0f) }
     LaunchedEffect(item.id) { progress.animateTo(1f, animationSpec = tween(1600, easing = LinearOutSlowInEasing)) }
     val p = progress.value
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Box(
-            Modifier
-                .offset(x = ((item.lane - 2) * 56).dp, y = (-120 - p * 360).dp)
-                .alpha(if (p < 0.7f) 1f else (1f - p) / 0.3f)
-                .scale(0.9f + 0.2f * (1f - p)),
-        ) {
-            Avatar(item.name, item.avatarUrl, size = 44, ring = RabbleColors.Accent)
+    val density = LocalDensity.current
+    val origin = item.origin
+    if (origin != null) {
+        val xDp = with(density) { (origin.x - overlayOrigin.x).toDp() }
+        val yDp = with(density) { (origin.y - overlayOrigin.y).toDp() }
+        Text(
+            item.emoji,
+            fontSize = 26.sp,
+            modifier = Modifier
+                .offset(x = xDp - 13.dp + (item.jitter * p).dp, y = yDp - 30.dp - (p * 140).dp)
+                .alpha(if (p < 0.6f) 1f else (1f - p) / 0.4f)
+                .scale(0.8f + 0.4f * (1f - p)),
+        )
+    } else {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             Text(
                 item.emoji,
-                fontSize = 22.sp,
-                color = RabbleColors.Text,
-                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 8.dp),
+                fontSize = 26.sp,
+                modifier = Modifier
+                    .offset(x = item.jitter.dp, y = (-100 - p * 200).dp)
+                    .alpha(if (p < 0.6f) 1f else (1f - p) / 0.4f),
             )
         }
     }

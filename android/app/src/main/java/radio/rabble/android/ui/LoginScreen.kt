@@ -31,6 +31,7 @@ import radio.rabble.android.data.SessionStore
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun LoginScreen(baseUrl: String, session: SessionStore, onDone: () -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { radio.rabble.android.data.Diagnostics.screen = "login" }
     Scaffold(
         containerColor = RabbleColors.Bg,
         topBar = {

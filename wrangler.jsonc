@@ -30,6 +30,8 @@
     "S3_REGION": "auto",
     "S3_ENDPOINT": "https://0f8fe574f3489eda5a599104efd24d26.r2.cloudflarestorage.com",
     "RECORDING_BUCKET": "rabble-dev-recordings",
-    "LOG_LEVEL": "info"
+    "LOG_LEVEL": "info",
+    // Who can read /admin/feedback and GET /api/feedback (DIDs or handles).
+    "FEEDBACK_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3"
   }
 }

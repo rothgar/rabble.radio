@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import radio.rabble.android.Tags
+import radio.rabble.android.data.Diagnostics
 import radio.rabble.android.data.Me
 import radio.rabble.android.data.RabbleApi
 import radio.rabble.android.data.SessionStore
@@ -76,6 +77,7 @@ fun HomeScreen(
     var starting by remember { mutableStateOf(false) }
     var startError by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(Unit) { Diagnostics.screen = "home" }
     LaunchedEffect(reload, sessionVersion) {
         state = HomeState.Loading
         me = if (session.hasSession()) runCatching { api.me() }.getOrNull() else null
@@ -109,6 +111,7 @@ fun HomeScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
                 title = { Text("Rabble Radio", fontWeight = FontWeight.SemiBold) },
                 actions = {
+                    FeedbackAction(api)
                     val user = me
                     if (user != null) {
                         TextButton(onClick = onLogout) {

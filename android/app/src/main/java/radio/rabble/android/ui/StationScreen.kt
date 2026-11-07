@@ -46,6 +46,7 @@ fun StationScreen(api: RabbleApi, tag: String, onOpenShow: (String) -> Unit, onB
     var state by remember { mutableStateOf<StationState>(StationState.Loading) }
     var reload by remember { mutableStateOf(0) }
 
+    LaunchedEffect(tag) { radio.rabble.android.data.Diagnostics.screen = "station/$tag" }
     LaunchedEffect(tag, reload) {
         state = StationState.Loading
         state = try {

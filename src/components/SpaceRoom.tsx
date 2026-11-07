@@ -42,6 +42,8 @@ import { RoomSidebar, type PublicRecording } from '@/components/RoomSidebar';
 import { BottomControlBar } from '@/components/BottomControlBar';
 import { ShareButtons } from '@/components/ShareButtons';
 import { FloatingReaction } from '@/components/FloatingReaction';
+import { FeedbackButton } from '@/components/FeedbackButton';
+import { setRoomSnapshot } from '@/lib/diagnostics';
 import { StageInviteToast } from '@/components/StageInviteToast';
 import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
@@ -185,8 +187,6 @@ interface FloatingReactionState {
   emoji: string;
   x: number;
   y: number;
-  avatarUrl?: string | null;
-  name?: string;
 }
 
 /** A `reaction` data message from POST /api/spaces/[id]/reactions. */
@@ -414,6 +414,20 @@ function Inner({
   useEffect(() => {
     setMicOn(Boolean(localParticipant?.isMicrophoneEnabled));
   }, [localParticipant?.isMicrophoneEnabled]);
+
+  // Keep a snapshot of the room for the feedback button's diagnostics.
+  useEffect(() => {
+    setRoomSnapshot({
+      spaceId,
+      role: isHost ? 'host' : role,
+      connected: Boolean(localParticipant),
+      onAir: isLive,
+      micOn,
+      participants: participants.length,
+      speakers: participants.filter((p) => canPublishFor(p)).length,
+    });
+    return () => setRoomSnapshot(null);
+  }, [isHost, isLive, localParticipant, micOn, participants, role, spaceId]);
 
   const onMicToggle = useCallback(async () => {
     if (!localParticipant) return;
@@ -739,6 +753,7 @@ function Inner({
             host={host}
             listenerCount={listenerCount}
             onAir={isLive}
+            trailing={<FeedbackButton variant="icon" spaceId={spaceId} />}
           />
         }
         main={
@@ -808,8 +823,6 @@ function Inner({
       />
       {floatingReactions.map((r) => (
         <FloatingReaction
-          avatarUrl={r.avatarUrl}
-          name={r.name}
           key={r.id}
           id={r.id}
           emoji={r.emoji}
@@ -989,11 +1002,15 @@ export function SpaceRoom({
     setFloatingReactions((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
-  /** Float an emoji from an avatar element (or the screen centre). */
+  /**
+   * Float an emoji up from someone's avatar in the stage/audience area. If
+   * their tile is not on screen (e.g. the grid is still loading) it rises
+   * from the bottom centre instead.
+   */
   const spawnReaction = useCallback(
-    (emoji: string, el: HTMLElement | null, who: { avatarUrl?: string | null; name?: string }) => {
+    (emoji: string, el: HTMLElement | null) => {
       let x = window.innerWidth / 2;
-      let y = window.innerHeight / 2;
+      let y = window.innerHeight - 120;
       if (el) {
         const rect = el.getBoundingClientRect();
         x = rect.left + rect.width / 2;
@@ -1002,21 +1019,14 @@ export function SpaceRoom({
       const id = `${reactionId}-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;
-      setFloatingReactions((prev) => [
-        ...prev,
-        { id, emoji, x, y, avatarUrl: who.avatarUrl ?? null, name: who.name },
-      ]);
+      setFloatingReactions((prev) => [...prev, { id, emoji, x, y }]);
     },
     [reactionId]
   );
 
   const handleReact = useCallback(
     (emoji: string) => {
-      spawnReaction(
-        emoji,
-        document.querySelector<HTMLElement>('[data-local-avatar="true"]'),
-        { avatarUrl, name: displayName ?? handle }
-      );
+      spawnReaction(emoji, document.querySelector<HTMLElement>('[data-local-avatar="true"]'));
       // Best-effort: record the reaction server-side so it feeds the show's
       // metrics and is broadcast to the rest of the room. Failures are
       // swallowed — the local emoji already rendered.
@@ -1026,7 +1036,7 @@ export function SpaceRoom({
         body: JSON.stringify({ emoji }),
       }).catch(() => undefined);
     },
-    [avatarUrl, displayName, handle, spaceId, spawnReaction]
+    [spaceId, spawnReaction]
   );
 
   /** Someone else reacted: float it from their avatar. Our own come back too; skip those. */
@@ -1036,10 +1046,7 @@ export function SpaceRoom({
       const el = document.querySelector<HTMLElement>(
         `[data-testid$="-avatar-${CSS.escape(reaction.did)}"]`
       );
-      spawnReaction(reaction.emoji, el, {
-        avatarUrl: reaction.avatarUrl,
-        name: reaction.displayName ?? reaction.handle,
-      });
+      spawnReaction(reaction.emoji, el);
     },
     [identity, spawnReaction]
   );

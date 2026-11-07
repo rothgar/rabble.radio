@@ -321,3 +321,24 @@ model TopicStats {
   lastLiveAt    DateTime?
   updatedAt     DateTime  @updatedAt
 }
+
+/// A problem report or suggestion sent from the feedback button. `context`
+/// is a JSON blob of client state (page/screen, room state, recent errors)
+/// and environment (device, OS, app version) captured when it was sent.
+model Feedback {
+  id         String   @id @default(cuid())
+  did        String?
+  handle     String?
+  category   String   @default("problem")
+  message    String
+  platform   String   @default("web")
+  appVersion String?
+  page       String?
+  spaceId    String?
+  userAgent  String?
+  context    String   @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([did])
+}

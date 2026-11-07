@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 export interface RoomHeaderHost {
   handle: string;
@@ -15,12 +15,15 @@ export interface RoomHeaderProps {
   listenerCount: number;
   /** True while the host is broadcasting; false in the pre-show green room. */
   onAir?: boolean;
+  /** Rendered at the end of the status row (e.g. the feedback button). */
+  trailing?: ReactNode;
 }
 
 export function RoomHeader({
   title,
   listenerCount,
   onAir = true,
+  trailing,
 }: RoomHeaderProps): ReactElement {
   return (
     <header
@@ -50,6 +53,7 @@ export function RoomHeader({
             Off air
           </span>
         )}
+        {trailing ? <span className="ml-auto">{trailing}</span> : null}
       </div>
 
       <h1

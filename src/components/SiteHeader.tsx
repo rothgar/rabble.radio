@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
 import { StartShowButton } from '@/components/StartShowButton';
+import { FeedbackButton } from '@/components/FeedbackButton';
 import { Button } from '@/components/ui';
 
 interface Me {
@@ -64,6 +65,7 @@ export function SiteHeader(): ReactElement {
       </Link>
 
       <nav className="flex items-center gap-3">
+        <FeedbackButton className="hidden sm:inline-flex" />
         {me ? (
           <>
             <StartShowButton size="sm" />

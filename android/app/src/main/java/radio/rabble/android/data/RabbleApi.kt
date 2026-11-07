@@ -97,6 +97,22 @@ class RabbleApi(
         request(post("/api/spaces/$showId/reactions", JSONObject().put("emoji", emoji)))
     }
 
+    /**
+     * Send a problem report. Works signed out. `context` is the Diagnostics
+     * capture; the server adds the session user and User-Agent.
+     */
+    suspend fun sendFeedback(message: String, category: String, showId: String?, context: JSONObject) {
+        val body = JSONObject()
+            .put("message", message)
+            .put("category", category)
+            .put("platform", "android")
+            .put("appVersion", radio.rabble.android.BuildConfig.VERSION_NAME)
+            .put("page", Diagnostics.screen)
+            .put("context", context)
+        if (showId != null) body.put("spaceId", showId)
+        request(post("/api/feedback", body))
+    }
+
     /** Resolve DIDs to handles and avatars for the people in a room. */
     suspend fun users(identities: Collection<String>): List<UserSummary> {
         if (identities.isEmpty()) return emptyList()
@@ -121,11 +137,20 @@ class RabbleApi(
 
     private suspend fun request(req: Request): JSONObject =
         withContext(Dispatchers.IO) {
-            client.newCall(req).execute().use { res ->
+            val call = runCatching { client.newCall(req).execute() }.getOrElse { e ->
+                Diagnostics.event("network_error", "${req.method} ${req.url.encodedPath}: ${e.message ?: e.javaClass.simpleName}")
+                throw e
+            }
+            call.use { res ->
                 val body = res.body.string()
                 if (!res.isSuccessful) {
                     val err = runCatching { ApiError.fromJson(JSONObject(body)) }
                         .getOrDefault(ApiError("http_${res.code}"))
+                    Diagnostics.event(
+                        "api_error",
+                        "${req.method} ${req.url.encodedPath} -> ${res.code} ${err.error}",
+                        JSONObject().put("message", err.message ?: JSONObject.NULL),
+                    )
                     throw ApiException(res.code, err.error, err.message)
                 }
                 JSONObject(body)

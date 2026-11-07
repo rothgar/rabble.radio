@@ -1,20 +1,29 @@
 'use client';
 
-import { Suspense, useState, type FormEvent } from 'react';
+import { Suspense, useState, useSyncExternalStore, type FormEvent } from 'react';
 import type { ReactElement } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { HandleInput } from '@/components/HandleInput';
+import { recallHandle, rememberHandle } from '@/lib/bluesky-typeahead';
+
+const subscribeNever = (): (() => void) => () => {};
 
 function LoginForm(): ReactElement {
-  const [handle, setHandle] = useState('');
+  // Prefill from the last attempt on this browser; the server snapshot is
+  // empty so hydration matches, then the client snapshot fills it in.
+  const remembered = useSyncExternalStore(subscribeNever, () => recallHandle(), () => '');
+  const [typed, setTyped] = useState<string | null>(null);
+  const handle = typed ?? remembered;
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
   const next = searchParams.get('next');
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const trimmed = handle.trim();
+    const trimmed = handle.trim().replace(/^@/, '');
     if (!trimmed) return;
     setLoading(true);
+    rememberHandle(trimmed);
     const url = new URL('/api/auth/bluesky', window.location.origin);
     url.searchParams.set('handle', trimmed);
     if (next) url.searchParams.set('next', next);
@@ -27,22 +36,13 @@ function LoginForm(): ReactElement {
         <label htmlFor="handle" className="mb-1.5 block text-sm font-medium text-slate-300">
           Bluesky handle
         </label>
-        <input
-          id="handle"
-          type="text"
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          placeholder="alice.bsky.social"
-          autoFocus
-          required
-          pattern="[a-zA-Z0-9._-]+"
-          className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        />
+        <HandleInput id="handle" value={handle} onChange={setTyped} autoFocus disabled={loading} />
       </div>
       <button
         type="submit"
         disabled={loading}
-        className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+        className="min-h-[44px] rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+        data-testid="login-submit"
       >
         {loading ? 'Redirecting…' : 'Sign in with Bluesky'}
       </button>

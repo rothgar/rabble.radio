@@ -18,6 +18,8 @@ export interface StartShowButtonProps {
   fullWidth?: boolean;
   className?: string;
   label?: string;
+  /** Reopen this show the viewer hosts for a new session instead of the default one. */
+  spaceId?: string;
 }
 
 interface StartResponse {
@@ -41,6 +43,7 @@ export function StartShowButton({
   fullWidth = false,
   className = '',
   label = 'Start a show',
+  spaceId,
 }: StartShowButtonProps): ReactElement {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -54,7 +57,7 @@ export function StartShowButton({
       const res = await fetch('/api/spaces', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ startNow: true }),
+        body: JSON.stringify(spaceId ? { startNow: true, spaceId } : { startNow: true }),
       });
       const body = (await res.json().catch(() => ({}))) as StartResponse;
       if (res.status === 401) {
@@ -85,7 +88,7 @@ export function StartShowButton({
       setError(err instanceof Error ? err.message : 'Could not start a show.');
       setBusy(false);
     }
-  }, [busy, router]);
+  }, [busy, router, spaceId]);
 
   return (
     <div className={fullWidth ? 'flex w-full flex-col gap-2' : 'inline-flex flex-col gap-2'}>

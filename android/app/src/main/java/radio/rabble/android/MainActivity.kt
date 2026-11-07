@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import radio.rabble.android.ui.HomeScreen
 import radio.rabble.android.ui.LoginScreen
+import radio.rabble.android.ui.MeScreen
 import radio.rabble.android.ui.RabbleTheme
 import radio.rabble.android.ui.ShowScreen
 import radio.rabble.android.ui.StationScreen
@@ -46,6 +47,7 @@ object Routes {
     const val STATION = "station/{tag}"
     const val SHOW = "show/{id}?autoJoin={autoJoin}"
     const val LOGIN = "login"
+    const val ME = "me"
     fun station(tag: String) = "station/" + URLEncoder.encode(tag, "UTF-8")
     fun show(id: String, autoJoin: Boolean = false) = "show/$id?autoJoin=$autoJoin"
 }
@@ -75,7 +77,21 @@ fun RabbleNav(app: RabbleApp, pendingShowId: androidx.compose.runtime.MutableSta
                 onOpenStation = { nav.navigate(Routes.station(it)) },
                 onStartedShow = { nav.navigate(Routes.show(it, autoJoin = true)) },
                 onLogin = { nav.navigate(Routes.LOGIN) },
-                onLogout = { app.session.clear(); sessionVersion++ },
+                onOpenMe = { nav.navigate(Routes.ME) },
+            )
+        }
+        composable(Routes.ME) {
+            MeScreen(
+                api = app.api,
+                sessionVersion = sessionVersion,
+                onOpenShow = { nav.navigate(Routes.show(it)) },
+                onStartedShow = { nav.navigate(Routes.show(it, autoJoin = true)) },
+                onLogout = {
+                    app.session.clear()
+                    sessionVersion++
+                    nav.popBackStack(Routes.HOME, inclusive = false)
+                },
+                onBack = { nav.popBackStack() },
             )
         }
         composable(Routes.STATION) { entry ->

@@ -289,6 +289,56 @@ export async function getHostedSpaces(hostDid: string): Promise<SpaceWithHost[]>
 }
 
 /**
+ * The show a host's untitled "Start a show" lands in: their existing show
+ * with the default title, if they have one. Scheduled rows are skipped so a
+ * planned show keeps its date. Null when the host has never started one.
+ */
+export async function findDefaultHostedSpace(
+  hostDid: string,
+  handle: string
+): Promise<SpaceWithHost | null> {
+  const row = await prisma.space.findFirst({
+    where: {
+      hostId: hostDid,
+      title: defaultShowTitle(handle),
+      status: { not: SPACE_STATUS.SCHEDULED },
+    },
+    orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
+    include: spaceInclude,
+  });
+  return row ? withTags(row) : null;
+}
+
+/**
+ * Put an existing show back in the off-air, joinable state for a new
+ * session: active, not live, empty countdown restarted. Ended and expired
+ * shows come back; a live one is left live.
+ */
+export async function reopenSpace(
+  id: string,
+  now: Date = new Date()
+): Promise<SpaceWithHost> {
+  const current = await prisma.space.findUnique({ where: { id }, select: { status: true } });
+  if (current?.status === SPACE_STATUS.LIVE) {
+    const live = await getSpaceById(id);
+    if (!live) throw new Error(`Space not found: ${id}`);
+    return live;
+  }
+  const row = await prisma.space.update({
+    where: { id },
+    data: {
+      status: SPACE_STATUS.ACTIVE,
+      isLive: false,
+      scheduledAt: null,
+      emptySince: now,
+      expiresAt: new Date(now.getTime() + EMPTY_SPACE_TTL_MS),
+    },
+    include: spaceInclude,
+  });
+  return withTags(row);
+}
+
+/**
  * The default title for a show started without one.
  */
 export function defaultShowTitle(handle: string): string {

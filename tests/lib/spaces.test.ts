@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const {
   mockUserFindUnique,
   mockSpaceCreate,
+  mockSpaceFindFirst,
   mockSpaceFindMany,
   mockSpaceFindUnique,
   mockSpaceUpdate,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   mockUserFindUnique: vi.fn(),
   mockSpaceCreate: vi.fn(),
+  mockSpaceFindFirst: vi.fn(),
   mockSpaceFindMany: vi.fn(),
   mockSpaceFindUnique: vi.fn(),
   mockSpaceUpdate: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock('@/lib/db', () => ({
     },
     space: {
       create: mockSpaceCreate,
+      findFirst: mockSpaceFindFirst,
       findMany: mockSpaceFindMany,
       findUnique: mockSpaceFindUnique,
       update: mockSpaceUpdate,
@@ -61,7 +64,9 @@ import {
   buildSpaceSlug,
   createSpace,
   defaultShowTitle,
+  findDefaultHostedSpace,
   getHostedSpaces,
+  reopenSpace,
   updateSpace,
   expireStaleSpaces,
   getSpaces,
@@ -422,5 +427,60 @@ describe('defaultShowTitle', () => {
   it('builds a title from the handle', () => {
     expect(defaultShowTitle('alice.bsky.social')).toBe("@alice.bsky.social's show");
     expect(defaultShowTitle('@bob')).toBe("@bob's show");
+  });
+});
+
+describe('findDefaultHostedSpace', () => {
+  it("looks up the host's default-titled, unscheduled show", async () => {
+    mockSpaceFindFirst.mockResolvedValueOnce(makeSpaceRow({ id: 'd1', tags: [{ tag: 'Music' }] }));
+    const row = await findDefaultHostedSpace('did:plc:host', 'alice.bsky.social');
+    expect(row?.id).toBe('d1');
+    expect(row?.tags).toEqual(['Music']);
+    expect(mockSpaceFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          hostId: 'did:plc:host',
+          title: "@alice.bsky.social's show",
+          status: { not: 'scheduled' },
+        },
+        orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
+      })
+    );
+  });
+
+  it('returns null when the host has none', async () => {
+    mockSpaceFindFirst.mockResolvedValueOnce(null);
+    expect(await findDefaultHostedSpace('did:plc:host', 'alice')).toBeNull();
+  });
+});
+
+describe('reopenSpace', () => {
+  it('puts an ended show back to active, off air, with a fresh empty countdown', async () => {
+    const now = new Date('2026-11-07T12:00:00Z');
+    mockSpaceFindUnique.mockResolvedValueOnce({ status: 'ended' });
+    mockSpaceUpdate.mockResolvedValueOnce(makeSpaceRow({ id: 'sp1', status: 'active', tags: [] }));
+    const row = await reopenSpace('sp1', now);
+    expect(row.id).toBe('sp1');
+    expect(mockSpaceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'sp1' },
+        data: {
+          status: 'active',
+          isLive: false,
+          scheduledAt: null,
+          emptySince: now,
+          expiresAt: new Date(now.getTime() + 10 * 60 * 1000),
+        },
+      })
+    );
+  });
+
+  it('leaves a show that is on air untouched', async () => {
+    mockSpaceFindUnique
+      .mockResolvedValueOnce({ status: 'live' })
+      .mockResolvedValueOnce(makeSpaceRow({ id: 'sp1', status: 'live', isLive: true, tags: [] }));
+    const row = await reopenSpace('sp1');
+    expect(row.isLive).toBe(true);
+    expect(mockSpaceUpdate).not.toHaveBeenCalled();
   });
 });

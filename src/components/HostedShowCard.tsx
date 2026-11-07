@@ -8,6 +8,7 @@
 
 import { useCallback, useState, type ReactElement } from 'react';
 import { Button, Card } from '@/components/ui';
+import { StartShowButton } from '@/components/StartShowButton';
 import type { PublicSpace } from '@/types';
 
 export interface HostedRecording {
@@ -155,6 +156,37 @@ function RecordingRow({ recording: initial }: { recording: HostedRecording }): R
   );
 }
 
+/** The show's landing-page URL with a copy button; this is what hosts share. */
+function ShareLine({ url }: { url: string }): ReactElement {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked: the URL is selectable text right there.
+    }
+  }, [url]);
+  return (
+    <div
+      className="flex items-center gap-2 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+      data-testid="hosted-show-share"
+    >
+      <a
+        href={url}
+        className="min-w-0 flex-1 truncate text-caption text-[var(--color-accent-300)] hover:underline"
+        data-testid="hosted-show-share-url"
+      >
+        {url}
+      </a>
+      <Button type="button" variant="ghost" size="sm" onClick={() => void copy()} data-testid="hosted-show-copy">
+        {copied ? 'Copied' : 'Copy link'}
+      </Button>
+    </div>
+  );
+}
+
 export function HostedShowCard({ space, recordings }: HostedShowCardProps): ReactElement {
   const badge = statusLabel(space);
   const stats = [
@@ -194,9 +226,14 @@ export function HostedShowCard({ space, recordings }: HostedShowCardProps): Reac
         <p className="text-caption text-[var(--color-text-tertiary)]">No recordings yet.</p>
       )}
 
+      <ShareLine url={space.shareableUrl} />
+
       <div className="flex flex-wrap gap-2">
+        {space.isLive ? null : (
+          <StartShowButton spaceId={space.id} size="sm" label="Start a session" />
+        )}
         <Button href={`/show/${encodeURIComponent(space.id)}`} variant="secondary" size="sm" data-testid="hosted-show-open">
-          {space.isLive ? 'Back to the room' : space.status === 'active' ? 'Open the room' : 'View'}
+          {space.isLive ? 'Back to the room' : 'Show page'}
         </Button>
       </div>
     </Card>

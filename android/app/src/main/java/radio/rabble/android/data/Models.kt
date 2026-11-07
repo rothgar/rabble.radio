@@ -126,6 +126,51 @@ data class Show(
     }
 }
 
+/** A show the user took part in, from GET /api/me/shows. */
+data class JoinedShow(
+    val sessionId: String,
+    val role: String,
+    val joinedAt: String,
+    val stageSeconds: Int,
+    val showId: String,
+    val title: String,
+    val status: String,
+    val isLive: Boolean,
+    val tags: List<String>,
+    val host: PublicHost,
+) {
+    companion object {
+        fun fromJson(o: JSONObject): JoinedShow {
+            val sp = o.getJSONObject("space")
+            return JoinedShow(
+                sessionId = o.getString("sessionId"),
+                role = o.optString("role", "audience"),
+                joinedAt = o.optString("joinedAt", ""),
+                stageSeconds = o.optInt("stageSeconds", 0),
+                showId = sp.getString("id"),
+                title = sp.getString("title"),
+                status = sp.optString("status", "active"),
+                isLive = sp.optBoolean("isLive", false),
+                tags = sp.optJSONArray("tags")?.toStringList() ?: emptyList(),
+                host = PublicHost.fromJson(sp.getJSONObject("host")),
+            )
+        }
+    }
+}
+
+/** The signed-in user's own shows and the ones they joined. */
+data class MyShows(val hosted: List<Show>, val joined: List<JoinedShow>) {
+    companion object {
+        fun fromJson(o: JSONObject): MyShows {
+            val joined = o.optJSONArray("joined")
+            return MyShows(
+                hosted = o.optJSONArray("hosted")?.let { Show.listFromJson(it) } ?: emptyList(),
+                joined = if (joined == null) emptyList() else (0 until joined.length()).map { JoinedShow.fromJson(joined.getJSONObject(it)) },
+            )
+        }
+    }
+}
+
 data class Me(
     val id: String = "",
     val did: String,

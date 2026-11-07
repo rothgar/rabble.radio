@@ -81,3 +81,20 @@ describe('<StartShowButton />', () => {
     expect(screen.getByTestId('start-show-button').className).toContain('min-h-touch');
   });
 });
+
+describe('<StartShowButton spaceId />', () => {
+  it('asks the API to reopen that show', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ space: { id: 'sp2' } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<StartShowButton spaceId="sp2" label="Start a session" />);
+    fireEvent.click(screen.getByTestId('start-show-button'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ startNow: true, spaceId: 'sp2' });
+    vi.unstubAllGlobals();
+  });
+});

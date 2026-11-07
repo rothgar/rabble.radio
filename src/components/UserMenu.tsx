@@ -71,6 +71,7 @@ export function UserMenu({
           </Link>
           <Link
             href="/logout"
+            prefetch={false}
             role="menuitem"
             className="block w-full rounded-md px-2 py-1.5 text-left text-red-300 hover:bg-slate-800"
             data-testid="user-menu-logout"

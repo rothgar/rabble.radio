@@ -15,6 +15,9 @@ const {
   mockTryExpireStaleSpaces,
   mockSetSpaceLive,
   mockToPublicSpace,
+  mockFindDefaultHostedSpace,
+  mockReopenSpace,
+  mockResolveSpaceForUser,
   mockGetCurrentUser,
   mockFindUserByDid,
   mockPublishLiveStatus,
@@ -34,6 +37,9 @@ const {
   mockTryExpireStaleSpaces: vi.fn(),
   mockSetSpaceLive: vi.fn(),
   mockToPublicSpace: vi.fn(),
+  mockFindDefaultHostedSpace: vi.fn(),
+  mockReopenSpace: vi.fn(),
+  mockResolveSpaceForUser: vi.fn(),
   mockGetCurrentUser: vi.fn(),
   mockFindUserByDid: vi.fn(),
   mockPublishLiveStatus: vi.fn(),
@@ -62,6 +68,9 @@ vi.mock('@/lib/spaces', () => ({
   tryExpireStaleSpaces: mockTryExpireStaleSpaces,
   setSpaceLive: mockSetSpaceLive,
   toPublicSpace: mockToPublicSpace,
+  findDefaultHostedSpace: mockFindDefaultHostedSpace,
+  reopenSpace: mockReopenSpace,
+  resolveSpaceForUser: mockResolveSpaceForUser,
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -513,6 +522,84 @@ describe('POST /api/spaces', () => {
     expect(mockCreateSpace).toHaveBeenCalledWith(
       expect.objectContaining({ title: "@alice.bsky.social's show", hostId: 'did:plc:host123' })
     );
+  });
+
+  it('startNow without a title reopens the existing default show instead of creating one', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:host123', handle: 'alice.bsky.social' });
+    mockFindDefaultHostedSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp-old', status: 'expired' }));
+    mockReopenSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp-old', status: 'active', isLive: false }));
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 'jwt.host.token',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp-old',
+      identity: 'did:plc:host123',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true }),
+    });
+    const res = await POST(req);
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(mockFindDefaultHostedSpace).toHaveBeenCalledWith('did:plc:host123', 'alice.bsky.social');
+    expect(mockReopenSpace).toHaveBeenCalledWith('sp-old');
+    expect(mockCreateSpace).not.toHaveBeenCalled();
+    expect(body.reopened).toBe(true);
+    expect(mockCreateHostToken).toHaveBeenCalledWith('sp-old', expect.anything());
+  });
+
+  it('startNow with a title always creates a new show', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:host123', handle: 'alice.bsky.social' });
+    mockCreateSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp-new', title: 'Second show' }));
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 't',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp-new',
+      identity: 'did:plc:host123',
+    });
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true, title: 'Second show' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    expect(mockFindDefaultHostedSpace).not.toHaveBeenCalled();
+    expect(mockCreateSpace).toHaveBeenCalledWith(expect.objectContaining({ title: 'Second show' }));
+    expect((await res.json()).reopened).toBe(false);
+  });
+
+  it('startNow with spaceId reopens that show for its host and 404s for anyone else', async () => {
+    mockGetCurrentUser.mockResolvedValue({ did: 'did:plc:host123', handle: 'alice.bsky.social' });
+    mockResolveSpaceForUser.mockResolvedValueOnce({ space: makeSpaceRow({ id: 'sp2' }), isHost: true });
+    mockReopenSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp2', status: 'active' }));
+    mockCreateHostToken.mockResolvedValue({
+      token: 't',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp2',
+      identity: 'did:plc:host123',
+    });
+    const { POST } = await import('@/app/api/spaces/route');
+    const make = () =>
+      new NextRequest('http://localhost/api/spaces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ startNow: true, spaceId: 'sp2' }),
+      });
+    const ok = await POST(make());
+    expect(ok.status).toBe(201);
+    expect(mockResolveSpaceForUser).toHaveBeenCalledWith('sp2', 'did:plc:host123');
+    expect(mockReopenSpace).toHaveBeenCalledWith('sp2');
+
+    mockResolveSpaceForUser.mockResolvedValueOnce({ space: makeSpaceRow({ id: 'sp2' }), isHost: false });
+    const denied = await POST(make());
+    expect(denied.status).toBe(404);
+    expect(mockReopenSpace).toHaveBeenCalledTimes(1);
+    expect(mockCreateSpace).not.toHaveBeenCalled();
   });
 
   it('a title is still required when not starting now', async () => {

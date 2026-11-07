@@ -39,13 +39,20 @@ class RabbleApi(
         Show.fromJson(request(get("/api/spaces/$id")).getJSONObject("space"))
 
     /**
-     * Create a show and land the caller in it as host, off air. The server
-     * picks a default title; the host can rename it later. The host token in
-     * the response is ignored because ShowScreen joins through /join, which
-     * mints a host token for the owner anyway.
+     * Open a show for a new session and land the caller in it as host, off
+     * air. Without [showId] the server reopens the host's default show (or
+     * creates it the first time); with one it reopens that show. The host
+     * token in the response is ignored because ShowScreen joins through
+     * /join, which mints a host token for the owner anyway.
      */
-    suspend fun startShow(): Show =
-        Show.fromJson(request(post("/api/spaces", JSONObject().put("startNow", true))).getJSONObject("space"))
+    suspend fun startShow(showId: String? = null): Show {
+        val body = JSONObject().put("startNow", true)
+        if (showId != null) body.put("spaceId", showId)
+        return Show.fromJson(request(post("/api/spaces", body)).getJSONObject("space"))
+    }
+
+    /** The signed-in user's hosted and joined shows. */
+    suspend fun myShows(): MyShows = MyShows.fromJson(request(get("/api/me/shows")))
 
     /** Host only: go on air (start broadcasting + recording) or off air. */
     suspend fun setOnAir(showId: String, onAir: Boolean): Show =

@@ -69,7 +69,7 @@ fun HomeScreen(
     onOpenStation: (String) -> Unit,
     onStartedShow: (String) -> Unit,
     onLogin: () -> Unit,
-    onLogout: () -> Unit,
+    onOpenMe: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
@@ -117,7 +117,7 @@ fun HomeScreen(
                     FeedbackAction(api)
                     val user = me
                     if (user != null) {
-                        TextButton(onClick = onLogout) {
+                        TextButton(onClick = onOpenMe) {
                             Avatar(user.displayName ?: user.handle, user.avatarUrl, 24)
                             Spacer(Modifier.width(8.dp))
                             Text("@${user.handle}")

@@ -8,19 +8,25 @@
 // The POST handler supports three flows:
 //   - Immediate  (no startNow, no scheduledAt): creates an `active` space.
 //   - Scheduled  (scheduledAt: <ISO string>): creates a `scheduled` space.
-//   - Start now  (startNow: true): creates an `active` space, mints a host
+//   - Start now  (startNow: true): opens an `active` space, mints a host
 //                 LiveKit token and returns it so the host lands straight in
 //                 the room. The show stays OFF AIR: nothing is published to
 //                 Bluesky and no recording starts until the host presses
 //                 "On air" (POST /api/spaces/[id]/live). The title is
-//                 optional in this flow; a default is used and the host can
-//                 rename the show from inside the room.
+//                 optional in this flow. Without one the host's existing
+//                 default-titled show is reopened for a new session (one
+//                 landing page per show, many sessions) and only created
+//                 when they have none; `spaceId` reopens a specific show
+//                 they host. A title always creates a new show.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   createSpace,
   defaultShowTitle,
+  findDefaultHostedSpace,
   getSpacesForUser,
+  reopenSpace,
+  resolveSpaceForUser,
   toPublicSpace,
 } from '@/lib/spaces';
 import { createHostToken } from '@/lib/livekit';
@@ -85,6 +91,8 @@ interface CreateSpaceBody {
   scheduledAt?: unknown;
   startNow?: unknown;
   tags?: unknown;
+  /** startNow only: reopen this show (id or slug) the caller hosts. */
+  spaceId?: unknown;
 }
 
 /**
@@ -251,25 +259,48 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // ---- Create the row ---------------------------------------------------
+  // ---- Reuse an existing show for a new session ---------------------------
   let space;
-  try {
-    space = await createSpace({
-      title,
-      description,
-      tags,
-      hostId: user.did,
-      // startNow always creates a row with no scheduledAt; the scheduledAt
-      // path keeps whatever the caller validated.
-      scheduledAt: startNow ? null : scheduledAt,
-    });
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Failed to create space.';
-    return NextResponse.json(
-      { error: 'create_failed', message },
-      { status: 500 }
-    );
+  let reopened = false;
+  if (startNow) {
+    const spaceId = typeof body.spaceId === 'string' ? body.spaceId.trim() : '';
+    let existing = null;
+    if (spaceId) {
+      const resolved = await resolveSpaceForUser(spaceId, user.did);
+      if (!resolved || !resolved.isHost) {
+        return NextResponse.json({ error: 'not_found' }, { status: 404 });
+      }
+      existing = resolved.space;
+    } else if (!rawTitle) {
+      existing = await findDefaultHostedSpace(user.did, user.handle);
+    }
+    if (existing) {
+      try {
+        space = await reopenSpace(existing.id);
+        reopened = true;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to reopen show.';
+        return NextResponse.json({ error: 'create_failed', message }, { status: 500 });
+      }
+    }
+  }
+
+  // ---- Create the row ---------------------------------------------------
+  if (!space) {
+    try {
+      space = await createSpace({
+        title,
+        description,
+        tags,
+        hostId: user.did,
+        // startNow always creates a row with no scheduledAt; the scheduledAt
+        // path keeps whatever the caller validated.
+        scheduledAt: startNow ? null : scheduledAt,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create space.';
+      return NextResponse.json({ error: 'create_failed', message }, { status: 500 });
+    }
   }
 
   const origin = originFromRequest(request);
@@ -309,11 +340,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    logger.info('spaces.start_now.created', { spaceId: space.id, did: user.did });
+    logger.info(reopened ? 'spaces.start_now.reopened' : 'spaces.start_now.created', {
+      spaceId: space.id,
+      did: user.did,
+    });
     return NextResponse.json(
       {
         space: toPublicSpace(space, origin),
         startNow: true,
+        reopened,
         token: hostToken.token,
         wsUrl: hostToken.wsUrl,
         role: 'host',

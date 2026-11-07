@@ -5,6 +5,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HostedShowCard, formatHosted } from '@/components/HostedShowCard';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 import type { PublicSpace } from '@/types';
 
 function space(overrides: Partial<PublicSpace> = {}): PublicSpace {
@@ -62,6 +64,27 @@ describe('<HostedShowCard />', () => {
     expect(screen.getByTestId('hosted-show-stats')).toHaveTextContent('1 show · 1 listener · 1 like · 2m on air');
     expect(screen.getByTestId('hosted-show-open')).toHaveAttribute('href', '/show/sp1');
     expect(screen.getByText('No recordings yet.')).toBeInTheDocument();
+  });
+
+  it('shows the shareable landing-page URL and copies it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<HostedShowCard space={space()} recordings={[]} />);
+    expect(screen.getByTestId('hosted-show-share-url')).toHaveAttribute('href', 'https://rabble.rodeo/show/sp1');
+    expect(screen.getByTestId('hosted-show-share-url')).toHaveTextContent('https://rabble.rodeo/show/sp1');
+    fireEvent.click(screen.getByTestId('hosted-show-copy'));
+    expect(writeText).toHaveBeenCalledWith('https://rabble.rodeo/show/sp1');
+    await waitFor(() => expect(screen.getByTestId('hosted-show-copy')).toHaveTextContent('Copied'));
+  });
+
+  it('offers a new session for off-air shows and only the room link while live', () => {
+    const { unmount } = render(<HostedShowCard space={space({ status: 'expired' })} recordings={[]} />);
+    expect(screen.getByTestId('start-show-button')).toHaveTextContent('Start a session');
+    expect(screen.getByTestId('hosted-show-open')).toHaveTextContent('Show page');
+    unmount();
+    render(<HostedShowCard space={space({ status: 'live', isLive: true })} recordings={[]} />);
+    expect(screen.queryByTestId('start-show-button')).toBeNull();
+    expect(screen.getByTestId('hosted-show-open')).toHaveTextContent('Back to the room');
   });
 
   it('publishes a recording through the API and updates in place', async () => {

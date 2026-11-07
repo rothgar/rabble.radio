@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import radio.rabble.android.Tags
 import radio.rabble.android.data.Diagnostics
@@ -80,12 +81,14 @@ fun HomeScreen(
     LaunchedEffect(Unit) { Diagnostics.screen = "home" }
     LaunchedEffect(reload, sessionVersion) {
         state = HomeState.Loading
-        me = if (session.hasSession()) runCatching { api.me() }.getOrNull() else null
+        // Profile and listing are independent requests; fetch them together.
+        val meDeferred = async { if (session.hasSession()) runCatching { api.me() }.getOrNull() else null }
         state = try {
             HomeState.Ready(api.listShows())
         } catch (e: Exception) {
             HomeState.Failed(e.message ?: "Could not load shows.")
         }
+        me = meDeferred.await()
     }
 
     fun startShow() {

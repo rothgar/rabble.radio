@@ -414,44 +414,50 @@ export async function expireStaleSpaces(
   });
   expired += fallback.count;
 
-  // 2) Occupancy-based sweep for active/live spaces.
+  // 2) Occupancy-based sweep for active/live spaces. Each space costs one
+  //    LiveKit round trip, so they run concurrently; this is why the sweep
+  //    lives on the cron trigger and not in the request path.
   const candidates = await prisma.space.findMany({
     where: { status: { in: [SPACE_STATUS.ACTIVE, SPACE_STATUS.LIVE] } },
     select: { id: true, emptySince: true },
   });
-  for (const space of candidates) {
-    const roomName = roomNameForSpace(space.id);
-    const summary = await getRoomParticipantSummary(roomName);
-    if (summary === null) continue; // LiveKit unreachable — fail safe.
-    const occupied = summary.speakers + summary.listeners > 0;
-    // Always refresh the occupancy metrics when we have a reading.
-    await prisma.space.update({
-      where: { id: space.id },
-      data: {
-        speakerCount: summary.speakers,
-        listenerCount: summary.listeners,
-        emptySince: occupied ? null : space.emptySince,
-      },
-    });
-    if (occupied) continue;
-    // Room is empty.
-    if (space.emptySince === null) {
-      // First sweep observing it empty: start the countdown.
+  const results = await Promise.all(
+    candidates.map(async (space): Promise<boolean> => {
+      const roomName = roomNameForSpace(space.id);
+      const summary = await getRoomParticipantSummary(roomName);
+      if (summary === null) return false; // LiveKit unreachable — fail safe.
+      const occupied = summary.speakers + summary.listeners > 0;
+      // Always refresh the occupancy metrics when we have a reading.
       await prisma.space.update({
         where: { id: space.id },
-        data: { emptySince: now },
+        data: {
+          speakerCount: summary.speakers,
+          listenerCount: summary.listeners,
+          emptySince: occupied ? null : space.emptySince,
+        },
       });
-      continue;
-    }
-    if (now.getTime() - space.emptySince.getTime() >= EMPTY_SPACE_TTL_MS) {
-      await endShowSession({ spaceId: space.id });
-      await prisma.space.update({
-        where: { id: space.id },
-        data: { isLive: false, status: SPACE_STATUS.EXPIRED },
-      });
-      expired++;
-    }
-  }
+      if (occupied) return false;
+      // Room is empty.
+      if (space.emptySince === null) {
+        // First sweep observing it empty: start the countdown.
+        await prisma.space.update({
+          where: { id: space.id },
+          data: { emptySince: now },
+        });
+        return false;
+      }
+      if (now.getTime() - space.emptySince.getTime() >= EMPTY_SPACE_TTL_MS) {
+        await endShowSession({ spaceId: space.id });
+        await prisma.space.update({
+          where: { id: space.id },
+          data: { isLive: false, status: SPACE_STATUS.EXPIRED },
+        });
+        return true;
+      }
+      return false;
+    })
+  );
+  expired += results.filter(Boolean).length;
 
   return expired;
 }

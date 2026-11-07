@@ -11,7 +11,6 @@ import type { ReactElement } from 'react';
 import {
   getSpacesForUser,
   toPublicSpace,
-  tryExpireStaleSpaces,
 } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
 import { countPostsBySpace } from '@/lib/posts';
@@ -51,7 +50,6 @@ export default async function StationPage({
   }
 
   const user = await getCurrentUser();
-  await tryExpireStaleSpaces();
   const spaces = await getSpacesForUser(user?.did ?? null);
   const shows = spaces
     .map((s) => toPublicSpace(s))

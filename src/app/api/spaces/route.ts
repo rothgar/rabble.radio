@@ -22,7 +22,6 @@ import {
   defaultShowTitle,
   getSpacesForUser,
   toPublicSpace,
-  tryExpireStaleSpaces,
 } from '@/lib/spaces';
 import { createHostToken } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
@@ -66,9 +65,9 @@ function originFromRequest(request: Request): string {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // Best-effort cleanup before we read the listing. Failures are swallowed
-  // by the helper so the request still returns data.
-  await tryExpireStaleSpaces();
+  // The stale-show sweep (one LiveKit round trip per active show) runs from
+  // the cron trigger every five minutes, not here: doing it per request made
+  // the listing take seconds. Visibility rules already hide expired rows.
   const user = await getCurrentUser();
   const spaces = await getSpacesForUser(user?.did ?? null);
   const origin = originFromRequest(request);

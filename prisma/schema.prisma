@@ -70,6 +70,7 @@ model Space {
   invites    StageInvite[]
   speakers   StageSpeaker[]
   blocks     StageBlock[]
+  reminders  ShowReminder[]
 
   @@index([hostId])
   @@index([isLive])
@@ -340,5 +341,19 @@ model Feedback {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+  @@index([did])
+}
+
+/// "Notify me" on a scheduled show. `notifiedAt` is set once the viewer has
+/// been told the show went on air (the clients poll for due reminders).
+model ShowReminder {
+  spaceId    String
+  did        String
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, did])
   @@index([did])
 }

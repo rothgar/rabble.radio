@@ -414,6 +414,8 @@ export default function SpacePage(): ReactElement {
           }}
           shareableUrl={view.shareableUrl}
           recording={state.recording}
+          replay={view.replay ?? null}
+          reminded={view.reminded ?? false}
           onJoinedChange={setInRoom}
         />
 

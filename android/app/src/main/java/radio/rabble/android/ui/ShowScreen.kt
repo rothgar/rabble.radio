@@ -18,6 +18,16 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableStateMapOf
 import radio.rabble.android.data.Diagnostics
+import radio.rabble.android.data.Me
+import radio.rabble.android.data.Replay
+import radio.rabble.android.Reminders
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material3.Slider
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -142,6 +152,27 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     var floating by remember { mutableStateOf<List<FloatingEmoji>>(emptyList()) }
     var editing by remember { mutableStateOf(false) }
     var autoJoined by remember { mutableStateOf(false) }
+    var reminded by remember { mutableStateOf(false) }
+    var remindBusy by remember { mutableStateOf(false) }
+    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    fun toggleRemind() {
+        if (remindBusy) return
+        remindBusy = true
+        val next = !reminded
+        scope.launch {
+            try {
+                reminded = app.api.remind(showId, next)
+                if (reminded && !Reminders.canPost(context)) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                if (reminded) Reminders.schedule(context.applicationContext)
+            } catch (e: Exception) {
+                Diagnostics.event("remind_failed", e.message ?: "")
+            } finally {
+                remindBusy = false
+            }
+        }
+    }
+
     /** Centre of each member's avatar (root px), kept fresh by MemberTile. */
     val avatarCentres = remember { mutableStateMapOf<String, Offset>() }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -165,11 +196,17 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     }
     val lkRoom = remember { LiveKit.create(context.applicationContext) }
 
+    var me by remember { mutableStateOf<Me?>(null) }
+    LaunchedEffect(sessionVersion) {
+        me = if (app.session.hasSession()) runCatching { app.api.me() }.getOrNull() else null
+    }
     LaunchedEffect(showId, reload, sessionVersion) {
         state = ShowState.Loading
         signedIn = app.session.hasSession()
         state = try {
-            ShowState.Ready(app.api.show(showId))
+            val show = app.api.show(showId)
+            reminded = show.reminded
+            ShowState.Ready(show)
         } catch (e: Exception) {
             ShowState.Failed(e.message ?: "Could not load this show.")
         }
@@ -433,6 +470,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     }
 
     val isHost = (room as? RoomState.Connected)?.join?.role == "host"
+    val isHostOfShow = isHost || ((state as? ShowState.Ready)?.show?.host?.did != null && me?.did == (state as? ShowState.Ready)?.show?.host?.did)
 
     if (editing) {
         val show = (state as? ShowState.Ready)?.show
@@ -470,8 +508,20 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 is ShowState.Failed -> ErrorPanel(s.message) { reload++ }
                 is ShowState.Ready -> {
                     val connected = room as? RoomState.Connected
+                    val replay = s.show.replay
+                    val showReplay = replay != null && connected == null && !(connected?.onAir ?: s.show.isLive)
                     val controls: @Composable () -> Unit = {
                         ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive)
+                        if (showReplay && replay != null) {
+                            // Off air with a recording: play it instead of opening an empty stage.
+                            ReplayPanel(show = s.show, replay = replay, audioUrl = app.api.absolute(replay.audioUrl))
+                            if (room is RoomState.Failed) Text((room as RoomState.Failed).message, color = RabbleColors.Live)
+                            if (isHostOfShow) {
+                                OutlinedButton(onClick = ::joinShow, enabled = room != RoomState.Joining, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                                    Text(if (room == RoomState.Joining) "Opening…" else "Open the studio")
+                                }
+                            }
+                        }
                         if (connected != null && connected.invitePending) {
                             InviteBanner(
                                 hostName = s.show.host.displayName ?: "@${s.show.host.handle}",
@@ -480,10 +530,14 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                 onDecline = { stage("leave") },
                             )
                         }
-                        RoomPanel(
+                        if (!showReplay) RoomPanel(
                             show = s.show,
                             room = room,
                             signedIn = signedIn,
+                            isHost = isHostOfShow,
+                            reminded = reminded,
+                            remindBusy = remindBusy,
+                            onToggleRemind = ::toggleRemind,
                             onJoin = ::joinShow,
                             onLeave = ::leave,
                             onToggleMic = ::toggleMic,
@@ -593,6 +647,10 @@ private fun RoomPanel(
     show: Show,
     room: RoomState,
     signedIn: Boolean,
+    isHost: Boolean,
+    reminded: Boolean,
+    remindBusy: Boolean,
+    onToggleRemind: () -> Unit,
     onJoin: () -> Unit,
     onLeave: () -> Unit,
     onToggleMic: () -> Unit,
@@ -607,7 +665,28 @@ private fun RoomPanel(
                     if (room is RoomState.Failed) {
                         Text(room.message, color = RabbleColors.Live)
                     }
-                    if (!signedIn) {
+                    if (show.status == "scheduled" && !show.isLive && !isHost) {
+                        // Nothing to join yet: offer a reminder instead.
+                        Text(
+                            "This show hasn't started yet" + (show.scheduledAt?.let { " — planned for ${formatWhen(it)}" } ?: "") + ".",
+                            color = RabbleColors.TextSecondary,
+                        )
+                        if (signedIn) {
+                            Button(onClick = onToggleRemind, enabled = !remindBusy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                                Icon(if (reminded) Icons.Filled.NotificationsActive else Icons.Outlined.Notifications, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (remindBusy) "Saving…" else if (reminded) "You'll be notified" else "Notify me")
+                            }
+                            Text(
+                                if (reminded) "We'll notify you when the host goes on air. Tap again to cancel. Checks run about every 15 minutes."
+                                else "Get a notification on this phone when the host goes on air.",
+                                color = RabbleColors.TextTertiary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        } else {
+                            OutlinedButton(onClick = onLogin, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Sign in to get notified") }
+                        }
+                    } else if (!signedIn) {
                         Text(
                             "Listen without an account. You count toward the listener total but " +
                                 "stay invisible; sign in with Bluesky to take the stage.",
@@ -868,4 +947,114 @@ private fun ShowDetailsDialog(title: String, description: String, onSave: (Strin
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+private fun formatWhen(iso: String): String = runCatching {
+    val t = java.time.OffsetDateTime.parse(iso)
+    t.atZoneSameInstant(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM, HH:mm"))
+}.getOrDefault(iso)
+
+private fun formatClock(ms: Int): String {
+    val total = ms / 1000
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+/**
+ * Plays a finished show's recording with the platform MediaPlayer. The
+ * audio URL redirects to a short-lived signed object URL; MediaPlayer
+ * follows it and streams with range requests, so seeking works.
+ */
+@Composable
+private fun ReplayPanel(show: Show, replay: Replay, audioUrl: String) {
+    val player = remember(audioUrl) { MediaPlayer() }
+    var prepared by remember(audioUrl) { mutableStateOf(false) }
+    var playing by remember(audioUrl) { mutableStateOf(false) }
+    var durationMs by remember(audioUrl) { mutableStateOf((replay.durationSeconds ?: 0) * 1000) }
+    var positionMs by remember(audioUrl) { mutableStateOf(0) }
+    var error by remember(audioUrl) { mutableStateOf<String?>(null) }
+    var loading by remember(audioUrl) { mutableStateOf(false) }
+
+    DisposableEffect(audioUrl) {
+        player.setAudioAttributes(
+            AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).setUsage(AudioAttributes.USAGE_MEDIA).build()
+        )
+        player.setOnPreparedListener { mp ->
+            prepared = true
+            loading = false
+            if (mp.duration > 0) durationMs = mp.duration
+            mp.start()
+            playing = true
+        }
+        player.setOnCompletionListener { playing = false; positionMs = durationMs }
+        player.setOnErrorListener { _, what, extra ->
+            loading = false
+            error = "Could not play the recording ($what/$extra)."
+            true
+        }
+        onDispose { runCatching { player.release() } }
+    }
+
+    LaunchedEffect(playing) {
+        while (playing) {
+            positionMs = runCatching { player.currentPosition }.getOrDefault(positionMs)
+            delay(500)
+        }
+    }
+
+    fun toggle() {
+        error = null
+        if (!prepared) {
+            if (loading) return
+            loading = true
+            runCatching {
+                player.reset()
+                player.setDataSource(audioUrl)
+                player.prepareAsync()
+            }.onFailure { loading = false; error = it.message ?: "Could not open the recording." }
+            return
+        }
+        if (playing) { player.pause(); playing = false } else { player.start(); playing = true }
+    }
+
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Pill("Replay")
+                Spacer(Modifier.width(8.dp))
+                Text("This show is off air.", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            Text("Listen to the recording of ${show.title}.", color = RabbleColors.Text)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = ::toggle, modifier = Modifier.size(56.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                    Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (playing) "Pause" else "Play")
+                }
+                Column(Modifier.weight(1f)) {
+                    Slider(
+                        value = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f,
+                        onValueChange = { f ->
+                            if (prepared && durationMs > 0) {
+                                positionMs = (f * durationMs).toInt()
+                                player.seekTo(positionMs)
+                            }
+                        },
+                        enabled = prepared && durationMs > 0,
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(formatClock(positionMs), color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        Text(if (loading) "Loading…" else formatClock(durationMs), color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            val meta = listOfNotNull(
+                replay.startedAt.takeIf { it.isNotBlank() }?.let { "Recorded ${formatWhen(it)}" },
+                replay.sizeBytes?.let { "%.1f MB".format(it / 1048576.0) },
+            ).joinToString(" · ")
+            if (meta.isNotEmpty()) Text(meta, color = RabbleColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
+            error?.let { Text(it, color = RabbleColors.Live, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
 }

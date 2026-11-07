@@ -23,6 +23,18 @@ export interface PublicHost {
   avatarUrl: string | null;
 }
 
+/** A finished show's recording, playable without joining the room. */
+export interface PublicReplay {
+  recordingId: string;
+  /** Stable URL that redirects to a short-lived signed object URL. */
+  audioUrl: string;
+  contentType: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  sizeBytes: number | null;
+}
+
 export interface PublicSpace {
   id: string;
   slug: string;
@@ -52,4 +64,8 @@ export interface PublicSpace {
   updatedAt: string;
   host: PublicHost;
   shareableUrl: string;
+  /** Latest playable recording when the show is off air; null otherwise. */
+  replay: PublicReplay | null;
+  /** True when the viewer asked to be notified when this show goes on air. */
+  reminded: boolean;
 }

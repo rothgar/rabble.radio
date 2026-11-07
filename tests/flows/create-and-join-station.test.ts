@@ -148,6 +148,8 @@ vi.mock('@/lib/atproto', () => ({
 }));
 
 vi.mock('@/lib/recording', () => ({
+  getLatestAvailableRecordings: vi.fn(async () => new Map()),
+  recordingDurationSeconds: vi.fn(() => null),
   createRecording: vi.fn(async () => null),
   findActiveRecordingForSpace: vi.fn(async () => null),
   buildRecordingKey: vi.fn(() => 'recordings/key.ogg'),

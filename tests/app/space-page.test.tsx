@@ -65,6 +65,8 @@ function makeSpace(overrides: Partial<PublicSpace> = {}): PublicSpace {
       avatarUrl: null,
     },
     shareableUrl: 'https://rabble.example/space/sp1',
+    replay: null,
+    reminded: false,
     ...overrides,
   };
 }

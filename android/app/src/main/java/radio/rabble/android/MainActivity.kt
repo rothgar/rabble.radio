@@ -22,13 +22,22 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 class MainActivity : ComponentActivity() {
+    /** Show id from a tapped reminder notification; consumed by RabbleNav. */
+    private val pendingShowId = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingShowId.value = intent?.getStringExtra(Reminders.EXTRA_SHOW_ID)
         val app = application as RabbleApp
         setContent {
-            RabbleTheme { RabbleNav(app) }
+            RabbleTheme { RabbleNav(app, pendingShowId) }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        pendingShowId.value = intent.getStringExtra(Reminders.EXTRA_SHOW_ID)
     }
 }
 
@@ -42,10 +51,19 @@ object Routes {
 }
 
 @Composable
-fun RabbleNav(app: RabbleApp) {
+fun RabbleNav(app: RabbleApp, pendingShowId: androidx.compose.runtime.MutableState<String?>) {
     val nav = rememberNavController()
     // Bumped after login/logout so screens re-check the session.
     var sessionVersion by remember { mutableStateOf(0) }
+
+    // A reminder notification was tapped: jump to that show.
+    val wanted = pendingShowId.value
+    androidx.compose.runtime.LaunchedEffect(wanted) {
+        if (wanted != null) {
+            pendingShowId.value = null
+            nav.navigate(Routes.show(wanted))
+        }
+    }
 
     NavHost(navController = nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) {

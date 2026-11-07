@@ -223,3 +223,65 @@ describe('<SpacePageClient /> anonymous listening', () => {
     });
   });
 });
+
+describe('SpacePageClient scheduled and replay branches', () => {
+  it('offers Notify me instead of Join on a scheduled show', () => {
+    render(
+      <SpacePageClient
+        {...baseProps()}
+        isHost={false}
+        isLive={false}
+        status="scheduled"
+        scheduledAt="2026-11-08T10:00:00.000Z"
+        reminded={false}
+      />
+    );
+    expect(screen.getByTestId('space-scheduled')).toBeTruthy();
+    expect(screen.getByTestId('notify-me-button')).toBeTruthy();
+    expect(screen.queryByTestId('join-button')).toBeNull();
+  });
+
+  it('plays the recording instead of joining when the show is off air with a replay', () => {
+    render(
+      <SpacePageClient
+        {...baseProps()}
+        isHost={false}
+        isLive={false}
+        status="active"
+        replay={{
+          recordingId: 'rec1',
+          audioUrl: '/api/recordings/rec1/audio',
+          contentType: 'audio/mp4',
+          startedAt: '2026-11-07T00:00:00.000Z',
+          endedAt: null,
+          durationSeconds: null,
+          sizeBytes: null,
+        }}
+      />
+    );
+    expect(screen.getByTestId('replay-player')).toBeTruthy();
+    expect(screen.queryByTestId('join-button')).toBeNull();
+  });
+
+  it('still lets the host open the studio under the replay', () => {
+    render(
+      <SpacePageClient
+        {...baseProps()}
+        isHost
+        isLive={false}
+        status="active"
+        replay={{
+          recordingId: 'rec1',
+          audioUrl: '/api/recordings/rec1/audio',
+          contentType: 'audio/mp4',
+          startedAt: '2026-11-07T00:00:00.000Z',
+          endedAt: null,
+          durationSeconds: null,
+          sizeBytes: null,
+        }}
+      />
+    );
+    expect(screen.getByTestId('replay-player')).toBeTruthy();
+    expect(screen.getByTestId('join-button').textContent).toMatch(/open the studio/i);
+  });
+});

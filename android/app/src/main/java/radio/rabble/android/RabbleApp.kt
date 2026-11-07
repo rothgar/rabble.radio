@@ -8,4 +8,10 @@ class RabbleApp : Application() {
     val baseUrl: String = BuildConfig.BASE_URL
     val session: SessionStore by lazy { SessionStore(baseUrl) }
     val api: RabbleApi by lazy { RabbleApi(baseUrl, session) }
+
+    override fun onCreate() {
+        super.onCreate()
+        Reminders.ensureChannel(this)
+        Reminders.schedule(this)
+    }
 }

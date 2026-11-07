@@ -25,6 +25,41 @@ data class PublicHost(
     }
 }
 
+/** Mirror of PublicReplay: a finished show's recording, playable without joining. */
+data class Replay(
+    val recordingId: String,
+    /** Server-relative; prefix with the API base URL. */
+    val audioUrl: String,
+    val contentType: String,
+    val startedAt: String,
+    val endedAt: String?,
+    val durationSeconds: Int?,
+    val sizeBytes: Long?,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = Replay(
+            recordingId = o.getString("recordingId"),
+            audioUrl = o.getString("audioUrl"),
+            contentType = o.optString("contentType", "audio/mp4"),
+            startedAt = o.optString("startedAt", ""),
+            endedAt = o.optNullableString("endedAt"),
+            durationSeconds = if (o.isNull("durationSeconds")) null else o.optInt("durationSeconds"),
+            sizeBytes = if (o.isNull("sizeBytes")) null else o.optLong("sizeBytes"),
+        )
+    }
+}
+
+/** One due reminder from GET /api/me/reminders?due=1. */
+data class DueReminder(val spaceId: String, val title: String, val hostName: String) {
+    companion object {
+        fun fromJson(o: JSONObject): DueReminder {
+            val host = o.optJSONObject("host")
+            val name = host?.optNullableString("displayName") ?: host?.optString("handle")?.let { "@$it" } ?: "The host"
+            return DueReminder(o.getString("spaceId"), o.optString("title", "A show"), name)
+        }
+    }
+}
+
 /** Mirror of PublicSpace in src/types.ts. */
 data class Show(
     val id: String,
@@ -43,6 +78,8 @@ data class Show(
     val updatedAt: String = "",
     val host: PublicHost,
     val shareableUrl: String = "",
+    val replay: Replay? = null,
+    val reminded: Boolean = false,
 ) {
     companion object {
         fun fromJson(o: JSONObject) = Show(
@@ -62,6 +99,8 @@ data class Show(
             updatedAt = o.optString("updatedAt", ""),
             host = PublicHost.fromJson(o.getJSONObject("host")),
             shareableUrl = o.optString("shareableUrl", ""),
+            replay = o.optJSONObject("replay")?.let { Replay.fromJson(it) },
+            reminded = o.optBoolean("reminded", false),
         )
 
         fun listFromJson(arr: JSONArray): List<Show> =

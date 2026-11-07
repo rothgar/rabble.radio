@@ -359,6 +359,30 @@ export async function expireOldRecordings(
   return rows.length;
 }
 
+/** The newest playable recording per space, for replay buttons. */
+export async function getLatestAvailableRecordings(
+  spaceIds: string[]
+): Promise<Map<string, RecordingRow>> {
+  const out = new Map<string, RecordingRow>();
+  if (spaceIds.length === 0) return out;
+  const rows = await prisma.recording.findMany({
+    where: { spaceId: { in: spaceIds }, status: 'available' },
+    orderBy: { startedAt: 'desc' },
+  });
+  for (const raw of rows) {
+    const row = rowToRecording(raw as unknown as Record<string, unknown>);
+    if (!out.has(row.spaceId)) out.set(row.spaceId, row);
+  }
+  return out;
+}
+
+/** Seconds between start and end, when both are known. */
+export function recordingDurationSeconds(row: RecordingRow): number | null {
+  if (!row.endedAt) return null;
+  const ms = row.endedAt.getTime() - row.startedAt.getTime();
+  return Number.isFinite(ms) && ms > 0 ? Math.round(ms / 1000) : null;
+}
+
 /**
  * Public view of a recording row, safe to send to clients.
  */

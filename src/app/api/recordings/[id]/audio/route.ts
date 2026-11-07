@@ -2,10 +2,13 @@
 //
 // GET /api/recordings/[id]/audio
 //
-// Stable URL for a recording's audio, used as the podcast enclosure. The
-// object store only issues short-lived signed URLs, so this route mints a
-// fresh one and redirects. Published recordings are public; unpublished
-// ones are only served to their host.
+// Stable URL for a recording's audio, used as the podcast enclosure and by
+// the in-app "Replay" player. The object store only issues short-lived
+// signed URLs, so this route mints a fresh one and redirects. Any
+// "available" recording is playable: finished shows are replayable from
+// their page for the retention window, and publishing only controls the
+// podcast feed. Recordings that are not ready are only described to their
+// host.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
@@ -27,16 +30,11 @@ export async function GET(
   if (!recording) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
-  if (!recording.published) {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-    }
-    if (user.did !== recording.hostDid) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-    }
-  }
   if (recording.status !== 'available') {
+    const user = await getCurrentUser();
+    if (!user || user.did !== recording.hostDid) {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
     return NextResponse.json(
       { error: 'not_ready', message: `Recording is in status '${recording.status}'.` },
       { status: 409 }

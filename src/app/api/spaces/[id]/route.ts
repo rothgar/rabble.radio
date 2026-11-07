@@ -22,6 +22,7 @@ import {
   updateSpace,
 } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { decoratePublicSpaces } from '@/lib/space-extras';
 import { deleteLiveStatus, publishLiveStatus } from '@/lib/atproto';
 import { broadcastRoomData, roomNameForSpace } from '@/lib/livekit';
 import { normalizeTags } from '@/lib/tags';
@@ -60,10 +61,14 @@ export async function GET(
   }
 
   const origin = originFromRequest(request);
-  return NextResponse.json(
-    { space: toPublicSpace(space, origin) },
-    { status: 200 }
-  );
+  let viewer: { did: string } | null = null;
+  try {
+    viewer = (await getCurrentUser()) ?? null;
+  } catch {
+    viewer = null;
+  }
+  const [decorated] = await decoratePublicSpaces([toPublicSpace(space, origin)], viewer?.did ?? null);
+  return NextResponse.json({ space: decorated }, { status: 200 });
 }
 
 interface PatchBody {

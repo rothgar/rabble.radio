@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { DiagnosticsInstaller } from '@/components/DiagnosticsInstaller';
+import { ReminderToasts } from '@/components/ReminderToasts';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] antialiased">
         <DiagnosticsInstaller />
         {children}
+        <ReminderToasts />
       </body>
     </html>
   );

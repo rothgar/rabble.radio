@@ -4,6 +4,7 @@ import {
   toPublicSpace,
 } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { decoratePublicSpaces } from '@/lib/space-extras';
 import {
   CATEGORY_PROMPTS,
   primaryTagOf,
@@ -22,7 +23,10 @@ const SUGGESTION_COUNT = 2;
 export default async function StationsPage(): Promise<ReactElement> {
   const user = await getCurrentUser();
   const spaces = await getSpacesForUser(user?.did ?? null);
-  const shows = spaces.map((s) => toPublicSpace(s));
+  const shows = await decoratePublicSpaces(
+    spaces.map((s) => toPublicSpace(s)),
+    user?.did ?? null
+  );
 
   const byStation = new Map<string, typeof shows>();
   for (const show of shows) {

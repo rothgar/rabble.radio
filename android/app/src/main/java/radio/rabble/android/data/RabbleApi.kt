@@ -113,6 +113,19 @@ class RabbleApi(
         request(post("/api/feedback", body))
     }
 
+    /** "Notify me" on a scheduled show. Returns the resulting state. */
+    suspend fun remind(showId: String, on: Boolean): Boolean =
+        request(post("/api/spaces/$showId/remind", JSONObject().put("on", on))).optBoolean("reminded", on)
+
+    /** Reminders whose show just went on air; each is returned once. */
+    suspend fun dueReminders(): List<DueReminder> {
+        val arr = request(get("/api/me/reminders?due=1")).optJSONArray("due") ?: return emptyList()
+        return (0 until arr.length()).map { DueReminder.fromJson(arr.getJSONObject(it)) }
+    }
+
+    /** Absolute URL for a replay's audio. */
+    fun absolute(path: String): String = if (path.startsWith("http")) path else "$baseUrl$path"
+
     /** Resolve DIDs to handles and avatars for the people in a room. */
     suspend fun users(identities: Collection<String>): List<UserSummary> {
         if (identities.isEmpty()) return emptyList()

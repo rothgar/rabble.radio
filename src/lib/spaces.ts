@@ -7,7 +7,7 @@ import { prisma } from '@/lib/db';
 import { getRoomParticipantSummary, roomNameForSpace } from '@/lib/livekit';
 import { normalizeTags } from '@/lib/tags';
 import { endShowSession } from '@/lib/metrics';
-import type { PublicHost, PublicSpace } from '@/types';
+import type { PublicHost, PublicReplay, PublicSpace } from '@/types';
 
 // Local model shapes that mirror the Prisma schema. We define them by hand so
 // the service module compiles even when the generated Prisma client is not
@@ -611,6 +611,11 @@ function visibleSpacesWhere(now: Date): Record<string, unknown> {
             status: SPACE_STATUS.ACTIVE,
             expiresAt: { gt: now },
           },
+          // Finished shows stay listed while a replay is available.
+          {
+            status: { in: [SPACE_STATUS.ENDED, SPACE_STATUS.EXPIRED] },
+            recordings: { some: { status: 'available' } },
+          },
         ],
       },
       // Never leak rows that haven't been written yet.
@@ -701,9 +706,16 @@ export function canonicalizeOrigin(origin?: string | null): string {
   }
 }
 
+/** Viewer- and recording-specific additions attached by `decoratePublicSpaces`. */
+export interface PublicSpaceExtras {
+  replay?: PublicReplay | null;
+  reminded?: boolean;
+}
+
 export function toPublicSpace(
   space: SpaceWithHost,
-  origin?: string | null
+  origin?: string | null,
+  extras: PublicSpaceExtras = {}
 ): PublicSpace {
   const base = canonicalizeOrigin(origin);
   const shareableUrl = `${base}/show/${space.id}`;
@@ -729,5 +741,7 @@ export function toPublicSpace(
     updatedAt: space.updatedAt.toISOString(),
     host: toPublicHost(space.host),
     shareableUrl,
+    replay: extras.replay ?? null,
+    reminded: extras.reminded ?? false,
   };
 }

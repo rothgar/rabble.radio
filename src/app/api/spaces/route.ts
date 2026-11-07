@@ -25,6 +25,7 @@ import {
 } from '@/lib/spaces';
 import { createHostToken } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
+import { decoratePublicSpaces } from '@/lib/space-extras';
 import { normalizeTags } from '@/lib/tags';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
@@ -71,10 +72,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   const spaces = await getSpacesForUser(user?.did ?? null);
   const origin = originFromRequest(request);
-  return NextResponse.json(
-    { spaces: spaces.map((s) => toPublicSpace(s, origin)) },
-    { status: 200 }
+  const decorated = await decoratePublicSpaces(
+    spaces.map((s) => toPublicSpace(s, origin)),
+    user?.did ?? null
   );
+  return NextResponse.json({ spaces: decorated }, { status: 200 });
 }
 
 interface CreateSpaceBody {

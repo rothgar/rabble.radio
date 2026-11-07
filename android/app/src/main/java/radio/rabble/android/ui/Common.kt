@@ -140,7 +140,11 @@ fun ShowCard(show: Show, onOpen: (String) -> Unit) {
                     Text(show.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     Text("@${show.host.handle}", color = RabbleColors.TextTertiary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
-                if (show.isLive) LiveBadge() else if (show.status == "scheduled") Pill("Scheduled")
+                when {
+                    show.isLive -> LiveBadge()
+                    show.replay != null -> Pill("Replay")
+                    show.status == "scheduled" -> Pill(if (show.reminded) "Scheduled · 🔔" else "Scheduled")
+                }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("${show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)

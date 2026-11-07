@@ -13,6 +13,7 @@ import {
   toPublicSpace,
 } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { decoratePublicSpaces } from '@/lib/space-extras';
 import { countPostsBySpace } from '@/lib/posts';
 import { isValidTag, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { StationShowCard } from '@/components/StationShowCard';
@@ -51,9 +52,12 @@ export default async function StationPage({
 
   const user = await getCurrentUser();
   const spaces = await getSpacesForUser(user?.did ?? null);
-  const shows = spaces
-    .map((s) => toPublicSpace(s))
-    .filter((s) => s.tags.includes(decoded));
+  const shows = (
+    await decoratePublicSpaces(
+      spaces.map((s) => toPublicSpace(s)),
+      user?.did ?? null
+    )
+  ).filter((s) => s.tags.includes(decoded));
 
   const postCounts = await countPostsBySpace(shows.map((s) => s.id));
 

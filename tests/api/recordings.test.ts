@@ -106,18 +106,22 @@ describe('GET /api/recordings/[id]/audio', () => {
     expect(m.getCurrentUser).not.toHaveBeenCalled();
   });
 
-  it('keeps unpublished recordings private to the host', async () => {
+  it('serves unpublished but available recordings to anyone (replay)', async () => {
     const { GET } = await import('@/app/api/recordings/[id]/audio/route');
-    m.getCurrentUser.mockResolvedValueOnce(null);
-    expect((await GET(get(), ctx)).status).toBe(401);
-    m.getCurrentUser.mockResolvedValueOnce({ did: 'did:plc:other', handle: 'bob' });
-    expect((await GET(get(), ctx)).status).toBe(403);
-    expect((await GET(get(), ctx)).status).toBe(302);
+    const res = await GET(get(), ctx);
+    expect(m.getCurrentUser).not.toHaveBeenCalled();
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://signed.example/file.mp4');
   });
 
-  it('refuses recordings that are not ready', async () => {
-    m.getRecordingById.mockResolvedValueOnce(rec({ status: 'starting' }));
+  it('describes a not-ready recording only to its host', async () => {
     const { GET } = await import('@/app/api/recordings/[id]/audio/route');
+    m.getRecordingById.mockResolvedValue(rec({ status: 'starting' }));
+    m.getCurrentUser.mockResolvedValueOnce(null);
+    expect((await GET(get(), ctx)).status).toBe(404);
+    m.getCurrentUser.mockResolvedValueOnce({ did: 'did:plc:other', handle: 'bob' });
+    expect((await GET(get(), ctx)).status).toBe(404);
+    m.getCurrentUser.mockResolvedValueOnce({ did: 'did:plc:host', handle: 'host' });
     expect((await GET(get(), ctx)).status).toBe(409);
   });
 

@@ -33,6 +33,13 @@ interface BadgeSpec {
 }
 
 function statusBadge(space: PublicSpace): BadgeSpec {
+  if (!space.isLive && space.replay) {
+    return {
+      label: 'Replay',
+      className: 'bg-[var(--color-accent-900)] text-[var(--color-accent)]',
+      title: 'Off air — listen to the recording',
+    };
+  }
   switch (space.status) {
     case 'live':
       return {
@@ -115,6 +122,7 @@ export function SpaceCard({ space, featured = false }: SpaceCardProps): ReactEle
           data-testid="scheduled-time"
         >
           Starts {new Date(space.scheduledAt).toLocaleString()}
+          {space.reminded ? ' · 🔔 notifying you' : ''}
         </p>
       ) : null}
       <div className="mt-auto flex items-center justify-between text-xs text-slate-500">

@@ -14,6 +14,9 @@ import { SpaceRoom, type SpaceRole } from '@/components/SpaceRoom';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
 import type { PublicRecording } from '@/components/RoomSidebar';
+import type { PublicReplay } from '@/types';
+import { NotifyMeButton } from '@/components/NotifyMeButton';
+import { ReplayPlayer } from '@/components/ReplayPlayer';
 
 export interface SpacePageClientProps {
   spaceId: string;
@@ -32,6 +35,10 @@ export interface SpacePageClientProps {
   };
   shareableUrl: string;
   recording: PublicRecording | null;
+  /** Latest playable recording while the show is off air. */
+  replay?: PublicReplay | null;
+  /** Whether the viewer already asked to be notified (scheduled shows). */
+  reminded?: boolean;
   /**
    * Called whenever the joined state changes (`true` once the user is in
    * the room, `false` after leaving). Lets the surrounding page swap its
@@ -75,6 +82,8 @@ export function SpacePageClient({
   host,
   shareableUrl,
   recording,
+  replay = null,
+  reminded = false,
   onJoinedChange,
 }: SpacePageClientProps): ReactElement {
   const [joining, setJoining] = useState(false);
@@ -318,6 +327,62 @@ export function SpacePageClient({
         spaceId={spaceId}
         recording={recording}
       />
+    );
+  }
+
+  // Scheduled shows: nothing to join yet (except for the host, who opens the
+  // studio from here). Everyone else gets "Notify me".
+  if (status === 'scheduled' && !isHost && !live) {
+    return (
+      <section
+        className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)] sm:p-6"
+        data-testid="space-scheduled"
+      >
+        <p>
+          This show hasn&apos;t started yet
+          {scheduledAt ? ` — it is planned for ${new Date(scheduledAt).toLocaleString()}` : ''}.
+        </p>
+        <div>
+          <NotifyMeButton
+            spaceId={spaceId}
+            isAuthenticated={isAuthenticated}
+            reminded={reminded}
+            scheduledAt={scheduledAt}
+          />
+        </div>
+      </section>
+    );
+  }
+
+  // Off air with a recording: play it back instead of opening an empty stage.
+  // The host still gets a way into the studio underneath.
+  if (!live && replay) {
+    return (
+      <div className="flex flex-col gap-4" data-testid="space-replay">
+        <ReplayPlayer replay={replay} title={details.title} />
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-md border border-[var(--color-live-border)] bg-[var(--color-live-muted)] px-3 py-2 text-sm text-[var(--color-live)]"
+            data-testid="join-error"
+          >
+            {error}
+          </p>
+        ) : null}
+        {isHost ? (
+          <button
+            type="button"
+            onClick={() => {
+              void onJoin();
+            }}
+            disabled={joining}
+            className="inline-flex min-h-touch items-center justify-center self-start rounded-[var(--radius-md)] border border-[var(--color-border-strong)] px-4 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
+            data-testid="join-button"
+          >
+            {joining ? 'Opening…' : 'Open the studio'}
+          </button>
+        ) : null}
+      </div>
     );
   }
 

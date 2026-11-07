@@ -92,9 +92,9 @@ class RabbleApi(
     suspend fun stageAction(showId: String, action: String): StageActionResponse =
         StageActionResponse.fromJson(request(post("/api/spaces/$showId/stage", JSONObject().put("action", action))))
 
-    /** Record a reaction tap; the emoji itself is only shown locally. */
-    suspend fun react(showId: String) {
-        request(post("/api/spaces/$showId/reactions", JSONObject()))
+    /** Record a reaction; the server counts it and broadcasts it to the room with our profile. */
+    suspend fun react(showId: String, emoji: String) {
+        request(post("/api/spaces/$showId/reactions", JSONObject().put("emoji", emoji)))
     }
 
     /** Resolve DIDs to handles and avatars for the people in a room. */

@@ -28,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
 import radio.rabble.android.data.PublicHost
 import radio.rabble.android.data.Show
 
@@ -151,3 +153,14 @@ fun ShowCard(show: Show, onOpen: (String) -> Unit) {
         }
     }
 }
+
+/** Widest a column of cards should grow before it reads as stretched. */
+val ContentMaxWidth: Dp = 1040.dp
+
+/**
+ * True on the Fold's inner display (about 700dp wide) and tablets, where a
+ * single phone-width column wastes most of the screen. Material's "medium"
+ * width class starts at 600dp.
+ */
+@Composable
+fun isWideScreen(): Boolean = LocalConfiguration.current.screenWidthDp >= 600

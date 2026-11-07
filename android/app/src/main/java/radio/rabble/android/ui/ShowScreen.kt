@@ -4,8 +4,14 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -91,7 +97,8 @@ data class RoomMember(
     val isLocal: Boolean,
 )
 
-data class FloatingEmoji(val id: Long, val emoji: String)
+/** A reaction in flight: the emoji rides on the sender's avatar. */
+data class FloatingEmoji(val id: Long, val emoji: String, val name: String, val avatarUrl: String?, val lane: Int)
 
 sealed interface RoomState {
     data object Idle : RoomState
@@ -134,6 +141,16 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             ShowState.Ready(app.api.show(showId))
         } catch (e: Exception) {
             ShowState.Failed(e.message ?: "Could not load this show.")
+        }
+    }
+
+    /** Float a reaction from someone's avatar for ~1.6s. */
+    fun spawnReaction(emoji: String, name: String, avatarUrl: String?) {
+        val id = System.nanoTime()
+        floating = floating + FloatingEmoji(id, emoji, name, avatarUrl, lane = ((id / 7) % 5).toInt())
+        scope.launch {
+            delay(1700)
+            floating = floating.filterNot { it.id == id }
         }
     }
 
@@ -209,6 +226,18 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             if (msg.optString("identity") == current.join.identity) {
                                 room = current.copy(notice = "The host moved you back to the audience.")
                             }
+                        "reaction" -> {
+                            // Our own reaction already floated when we tapped it.
+                            val did = msg.optString("did")
+                            if (did.isNotEmpty() && did != current.join.identity) {
+                                val profile = profiles[did]
+                                val name = msg.optString("displayName").takeIf { it.isNotBlank() }
+                                    ?: profile?.displayName
+                                    ?: "@" + (msg.optString("handle").takeIf { it.isNotBlank() } ?: profile?.handle ?: "someone")
+                                val avatar = msg.optString("avatarUrl").takeIf { it.isNotBlank() } ?: profile?.avatarUrl
+                                spawnReaction(msg.optString("emoji", "❤️"), name, avatar)
+                            }
+                        }
                     }
                 }
                 is RoomEvent.Disconnected -> if (room is RoomState.Connected) room = RoomState.Idle
@@ -365,13 +394,9 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     }
 
     fun react(emoji: String) {
-        val id = System.nanoTime()
-        floating = floating + FloatingEmoji(id, emoji)
-        scope.launch {
-            runCatching { app.api.react(showId) }
-            delay(1400)
-            floating = floating.filterNot { it.id == id }
-        }
+        val current = room as? RoomState.Connected ?: return
+        spawnReaction(emoji, current.join.displayName ?: "@${current.join.handle}", current.join.avatarUrl)
+        scope.launch { runCatching { app.api.react(showId, emoji) } }
     }
 
     LaunchedEffect(state) {
@@ -416,39 +441,74 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             when (val s = state) {
                 ShowState.Loading -> Loading()
                 is ShowState.Failed -> ErrorPanel(s.message) { reload++ }
-                is ShowState.Ready -> Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
+                is ShowState.Ready -> {
                     val connected = room as? RoomState.Connected
-                    ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive)
-                    if (connected != null && connected.invitePending) {
-                        InviteBanner(
-                            hostName = s.show.host.displayName ?: "@${s.show.host.handle}",
-                            busy = connected.stageBusy,
-                            onAccept = { stage("accept") },
-                            onDecline = { stage("leave") },
+                    val controls: @Composable () -> Unit = {
+                        ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive)
+                        if (connected != null && connected.invitePending) {
+                            InviteBanner(
+                                hostName = s.show.host.displayName ?: "@${s.show.host.handle}",
+                                busy = connected.stageBusy,
+                                onAccept = { stage("accept") },
+                                onDecline = { stage("leave") },
+                            )
+                        }
+                        RoomPanel(
+                            show = s.show,
+                            room = room,
+                            signedIn = signedIn,
+                            onJoin = ::joinShow,
+                            onLeave = ::leave,
+                            onToggleMic = ::toggleMic,
+                            onStepDown = { stage("leave") },
+                            onToggleOnAir = { setOnAir(!(connected?.onAir ?: false)) },
+                            onLogin = onLogin,
                         )
                     }
-                    RoomPanel(
-                        show = s.show,
-                        room = room,
-                        signedIn = signedIn,
-                        onJoin = ::joinShow,
-                        onLeave = ::leave,
-                        onToggleMic = ::toggleMic,
-                        onStepDown = { stage("leave") },
-                        onToggleOnAir = { setOnAir(!(connected?.onAir ?: false)) },
-                        onLogin = onLogin,
-                    )
-                    if (connected != null) {
-                        PeoplePanel(connected)
-                        ReactionBar(onReact = ::react)
+                    val people: @Composable () -> Unit = {
+                        if (connected != null) {
+                            PeoplePanel(connected)
+                            ReactionBar(onReact = ::react)
+                        } else if (isWideScreen()) {
+                            Card {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("THE ROOM", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        if (room is RoomState.Joining) "Connecting…" else "Join to see who's on stage and in the audience, and to send reactions.",
+                                        color = RabbleColors.TextSecondary,
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Spacer(Modifier.height(24.dp))
+                    if (isWideScreen()) {
+                        // Unfolded: controls on the left, the room on the right, each scrolling on its own.
+                        Row(
+                            Modifier.fillMaxSize().widthIn(max = ContentMaxWidth).align(Alignment.TopCenter).padding(horizontal = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        ) {
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) { controls(); Spacer(Modifier.height(24.dp)) }
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) { people(); Spacer(Modifier.height(24.dp)) }
+                        }
+                    } else {
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            controls()
+                            people()
+                            Spacer(Modifier.height(24.dp))
+                        }
+                    }
                 }
             }
             floating.forEach { FloatingReaction(it) }
@@ -671,30 +731,51 @@ private fun MemberTile(member: RoomMember, large: Boolean) {
 @Composable
 private fun ReactionBar(onReact: (String) -> Unit) {
     Card {
-        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-            REACTIONS.forEach { emoji ->
-                TextButton(onClick = { onReact(emoji) }, modifier = Modifier.height(48.dp)) {
-                    Text(emoji, fontSize = 24.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("REACT", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                REACTIONS.forEach { emoji ->
+                    Box(
+                        Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(RabbleColors.SurfaceRaised)
+                            .clickable { onReact(emoji) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(emoji, fontSize = 26.sp, color = RabbleColors.Text)
+                    }
                 }
             }
         }
     }
 }
 
-/** An emoji that drifts up from the bottom of the screen and fades out. */
+/**
+ * A reaction drifting up the screen: the sender's avatar with the emoji
+ * pinned to its corner, fading out as it rises. Lanes spread simultaneous
+ * reactions sideways so they don't stack.
+ */
 @Composable
 private fun FloatingReaction(item: FloatingEmoji) {
-    var started by remember(item.id) { mutableStateOf(false) }
-    LaunchedEffect(item.id) { started = true }
-    val progress by animateFloatAsState(if (started) 1f else 0f, animationSpec = tween(1300), label = "reaction")
+    val progress = remember(item.id) { Animatable(0f) }
+    LaunchedEffect(item.id) { progress.animateTo(1f, animationSpec = tween(1600, easing = LinearOutSlowInEasing)) }
+    val p = progress.value
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Text(
-            item.emoji,
-            fontSize = 36.sp,
-            modifier = Modifier
-                .offset(x = (((item.id / 7) % 120) - 60).toInt().dp, y = (-80 - progress * 320).dp)
-                .alpha(1f - progress),
-        )
+        Box(
+            Modifier
+                .offset(x = ((item.lane - 2) * 56).dp, y = (-120 - p * 360).dp)
+                .alpha(if (p < 0.7f) 1f else (1f - p) / 0.3f)
+                .scale(0.9f + 0.2f * (1f - p)),
+        ) {
+            Avatar(item.name, item.avatarUrl, size = 44, ring = RabbleColors.Accent)
+            Text(
+                item.emoji,
+                fontSize = 22.sp,
+                color = RabbleColors.Text,
+                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 8.dp),
+            )
+        }
     }
 }
 

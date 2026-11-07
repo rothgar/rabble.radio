@@ -12,8 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -156,24 +160,32 @@ private fun HomeContent(
         if (inStation.isEmpty()) null else Station(tag, inStation)
     }
 
-    LazyColumn(
+    val wide = isWideScreen()
+    val gutter = if (wide) 24.dp else 16.dp
+    // One column on the cover screen, two (or more) once unfolded; headers span the row.
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 320.dp),
         contentPadding = PaddingValues(
-            start = 16.dp, end = 16.dp,
+            start = gutter, end = gutter,
             top = padding.calculateTopPadding() + 8.dp,
             bottom = padding.calculateBottomPadding() + 24.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize().widthIn(max = ContentMaxWidth),
     ) {
-        item {
-            Text("Shows", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("On-air and upcoming shows from Bluesky hosts.", color = RabbleColors.TextSecondary)
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column {
+                Text("Shows", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("On-air and upcoming shows from Bluesky hosts.", color = RabbleColors.TextSecondary)
+            }
         }
-        item {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             StartShowCard(signedIn, starting, startError, onStartShow, onLogin)
         }
         if (shows.isEmpty()) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(
                     Modifier.fillMaxWidth().padding(vertical = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -188,25 +200,28 @@ private fun HomeContent(
             }
         }
         if (onAir.isNotEmpty()) {
-            item { SectionLabel("ON AIR NOW") }
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("ON AIR NOW") }
             items(onAir, key = { "live-" + it.id }) { ShowCard(it, onOpenShow) }
         }
         if (offAir.isNotEmpty()) {
-            item { SectionLabel(if (onAir.isEmpty()) "SHOWS" else "OFF AIR & UPCOMING") }
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(if (onAir.isEmpty()) "SHOWS" else "OFF AIR & UPCOMING") }
             items(offAir, key = { it.id }) { ShowCard(it, onOpenShow) }
         }
         if (stations.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(8.dp))
-                SectionLabel("STATIONS")
-                Text("Browse shows by topic.", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Spacer(Modifier.height(8.dp))
+                    SectionLabel("STATIONS")
+                    Text("Browse shows by topic.", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     stations.forEach { station -> StationChip(station) { onOpenStation(station.tag) } }
                 }
             }
         }
+    }
     }
 }
 

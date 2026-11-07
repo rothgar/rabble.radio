@@ -185,6 +185,17 @@ interface FloatingReactionState {
   emoji: string;
   x: number;
   y: number;
+  avatarUrl?: string | null;
+  name?: string;
+}
+
+/** A `reaction` data message from POST /api/spaces/[id]/reactions. */
+export interface RemoteReaction {
+  did: string;
+  emoji: string;
+  handle?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
 
 /**
@@ -246,18 +257,21 @@ function RoomSync({
   isHost,
   onLiveChange,
   onSpaceUpdated,
+  onRemoteReaction,
 }: {
   spaceId: string;
   isHost: boolean;
   onLiveChange: (next: boolean) => void;
   onSpaceUpdated?: (details: ShowDetails) => void;
+  onRemoteReaction?: (reaction: RemoteReaction) => void;
 }): null {
   const room = useRoomContext();
 
   useEffect(() => {
     if (!room) return;
     const onData = (payload: Uint8Array): void => {
-      let parsed: { type?: string; spaceId?: string; onAir?: boolean } & Partial<ShowDetails>;
+      let parsed: { type?: string; spaceId?: string; onAir?: boolean } & Partial<ShowDetails> &
+        Partial<RemoteReaction>;
       try {
         parsed = JSON.parse(new TextDecoder().decode(payload));
       } catch {
@@ -271,6 +285,18 @@ function RoomSync({
           title: parsed.title,
           description: parsed.description ?? null,
           tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        });
+      } else if (
+        parsed.type === 'reaction' &&
+        typeof parsed.did === 'string' &&
+        typeof parsed.emoji === 'string'
+      ) {
+        onRemoteReaction?.({
+          did: parsed.did,
+          emoji: parsed.emoji,
+          handle: parsed.handle,
+          displayName: parsed.displayName ?? null,
+          avatarUrl: parsed.avatarUrl ?? null,
         });
       }
     };
@@ -289,7 +315,7 @@ function RoomSync({
       room.off(RoomEvent.DataReceived, onData);
       room.off(RoomEvent.ParticipantPermissionsChanged, onPermissions);
     };
-  }, [isHost, onLiveChange, onSpaceUpdated, room, spaceId]);
+  }, [isHost, onLiveChange, onRemoteReaction, onSpaceUpdated, room, spaceId]);
 
   return null;
 }
@@ -326,6 +352,7 @@ interface InnerProps {
   handRaised: boolean;
   toggleHand: () => void;
   onReact: (emoji: string) => void;
+  onRemoteReaction: (reaction: RemoteReaction) => void;
   floatingReactions: FloatingReactionState[];
   removeFloatingReaction: (id: string) => void;
   pendingInvite: { hostName?: string } | null;
@@ -365,6 +392,7 @@ function Inner({
   handRaised,
   toggleHand,
   onReact,
+  onRemoteReaction,
   floatingReactions,
   removeFloatingReaction,
   pendingInvite,
@@ -700,6 +728,7 @@ function Inner({
         isHost={isHost}
         onLiveChange={onLiveChange}
         onSpaceUpdated={onSpaceUpdated}
+        onRemoteReaction={onRemoteReaction}
       />
       {stageSlot}
       <NocturneShell
@@ -779,6 +808,8 @@ function Inner({
       />
       {floatingReactions.map((r) => (
         <FloatingReaction
+          avatarUrl={r.avatarUrl}
+          name={r.name}
           key={r.id}
           id={r.id}
           emoji={r.emoji}
@@ -958,9 +989,9 @@ export function SpaceRoom({
     setFloatingReactions((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
-  const handleReact = useCallback(
-    (emoji: string) => {
-      const el = document.querySelector<HTMLElement>('[data-local-avatar="true"]');
+  /** Float an emoji from an avatar element (or the screen centre). */
+  const spawnReaction = useCallback(
+    (emoji: string, el: HTMLElement | null, who: { avatarUrl?: string | null; name?: string }) => {
       let x = window.innerWidth / 2;
       let y = window.innerHeight / 2;
       if (el) {
@@ -971,16 +1002,46 @@ export function SpaceRoom({
       const id = `${reactionId}-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;
-      setFloatingReactions((prev) => [...prev, { id, emoji, x, y }]);
-      // Best-effort: record the reaction server-side so it feeds the room's
-      // popularity metric. Failures are swallowed — the local emoji already
-      // rendered.
+      setFloatingReactions((prev) => [
+        ...prev,
+        { id, emoji, x, y, avatarUrl: who.avatarUrl ?? null, name: who.name },
+      ]);
+    },
+    [reactionId]
+  );
+
+  const handleReact = useCallback(
+    (emoji: string) => {
+      spawnReaction(
+        emoji,
+        document.querySelector<HTMLElement>('[data-local-avatar="true"]'),
+        { avatarUrl, name: displayName ?? handle }
+      );
+      // Best-effort: record the reaction server-side so it feeds the show's
+      // metrics and is broadcast to the rest of the room. Failures are
+      // swallowed — the local emoji already rendered.
       void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/reactions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ emoji }),
       }).catch(() => undefined);
     },
-    [reactionId, spaceId]
+    [avatarUrl, displayName, handle, spaceId, spawnReaction]
+  );
+
+  /** Someone else reacted: float it from their avatar. Our own come back too; skip those. */
+  const handleRemoteReaction = useCallback(
+    (reaction: RemoteReaction) => {
+      if (reaction.did === identity) return;
+      const el = document.querySelector<HTMLElement>(
+        `[data-testid$="-avatar-${CSS.escape(reaction.did)}"]`
+      );
+      spawnReaction(reaction.emoji, el, {
+        avatarUrl: reaction.avatarUrl,
+        name: reaction.displayName ?? reaction.handle,
+      });
+    },
+    [identity, spawnReaction]
   );
 
   // StageControls renders no visible DOM but bridges useSpaceState to the
@@ -1085,6 +1146,7 @@ export function SpaceRoom({
           handRaised={handRaised}
           toggleHand={toggleHand}
           onReact={handleReact}
+          onRemoteReaction={handleRemoteReaction}
           floatingReactions={floatingReactions}
           removeFloatingReaction={removeFloatingReaction}
           pendingInvite={pendingInvite}

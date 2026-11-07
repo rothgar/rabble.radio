@@ -29,9 +29,11 @@ import {
   RoomAudioRenderer,
   useLocalParticipant,
   useParticipants,
+  useTracks,
 } from '@livekit/components-react';
 import type { Participant } from 'livekit-client';
-import { Room, RoomEvent } from 'livekit-client';
+import { Room, RoomEvent, Track } from 'livekit-client';
+import { PreShowMusic } from '@/components/PreShowMusic';
 import { useRoomContext } from '@livekit/components-react';
 import { NocturneShell } from '@/components/NocturneShell';
 import { RoomHeader } from '@/components/RoomHeader';
@@ -113,6 +115,10 @@ export interface SpaceRoomProps {
   onLiveChange: (next: boolean) => void;
   spaceId: string;
   recording?: PublicRecording | null;
+  /** Pre-show music mood id (null for silence). */
+  musicMood?: string | null;
+  /** Host only: persist a new mood. */
+  onMusicMoodChange?: (mood: string | null) => Promise<void> | void;
 }
 
 /**
@@ -285,6 +291,8 @@ function RoomSync({
           title: parsed.title,
           description: parsed.description ?? null,
           tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+          musicMood:
+            parsed.musicMood === undefined ? undefined : typeof parsed.musicMood === 'string' ? parsed.musicMood : null,
         });
       } else if (
         parsed.type === 'reaction' &&
@@ -362,6 +370,8 @@ interface InnerProps {
   stageSlot?: ReactNode;
   stageControlsProps: StageControlsProps;
   onMicError?: (err: Error) => void;
+  musicMood: string | null;
+  onMusicMoodChange?: (mood: string | null) => Promise<void> | void;
 }
 
 function Inner({
@@ -402,9 +412,18 @@ function Inner({
   stageSlot,
   stageControlsProps,
   onMicError,
+  musicMood,
+  onMusicMoodChange,
 }: InnerProps): ReactElement {
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
+  // Music plays while nobody else is sending audio: the show is off air, or
+  // it is on air but no remote microphone is published (the demo shows).
+  const micTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
+  const remoteAudioCount = micTracks.filter(
+    (t) => t.publication && !(t.participant as { isLocal?: boolean }).isLocal
+  ).length;
+  const musicActive = Boolean(musicMood) && (!isLive || remoteAudioCount === 0);
   const localAvatarRef = useRef<HTMLDivElement | null>(null);
   const [micOn, setMicOn] = useState<boolean>(
     Boolean(localParticipant?.isMicrophoneEnabled)
@@ -767,6 +786,15 @@ function Inner({
                 {onAirError}
               </p>
             ) : null}
+            {musicMood || (isHost && !isLive) ? (
+              <PreShowMusic
+                spaceId={spaceId}
+                moodId={musicMood}
+                active={musicActive}
+                isHost={isHost && !isLive}
+                onMoodChange={onMusicMoodChange}
+              />
+            ) : null}
             {preShowBanner}
             {pendingInvite ? (
               <StageInviteToast
@@ -862,6 +890,8 @@ export function SpaceRoom({
   onSpaceUpdated,
   spaceId,
   recording,
+  musicMood,
+  onMusicMoodChange,
 }: SpaceRoomProps): ReactElement {
   const roomOptions = useMemo(
     () => ({
@@ -1124,6 +1154,8 @@ export function SpaceRoom({
       >
         <RoomAudioRenderer />
         <Inner
+          musicMood={musicMood ?? null}
+          onMusicMoodChange={onMusicMoodChange}
           identity={identity}
           displayName={displayName}
           isHost={isHost}

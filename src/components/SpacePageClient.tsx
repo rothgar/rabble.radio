@@ -39,6 +39,8 @@ export interface SpacePageClientProps {
   replay?: PublicReplay | null;
   /** Whether the viewer already asked to be notified (scheduled shows). */
   reminded?: boolean;
+  /** Pre-show music mood id, null for silence. */
+  musicMood?: string | null;
   /**
    * Called whenever the joined state changes (`true` once the user is in
    * the room, `false` after leaving). Lets the surrounding page swap its
@@ -84,6 +86,7 @@ export function SpacePageClient({
   recording,
   replay = null,
   reminded = false,
+  musicMood = null,
   onJoinedChange,
 }: SpacePageClientProps): ReactElement {
   const [joining, setJoining] = useState(false);
@@ -92,7 +95,26 @@ export function SpacePageClient({
   const [live, setLive] = useState<boolean>(isLive);
   // Show details can change while in the room (the host renames the show
   // or picks topics), so they live in state seeded from the page props.
-  const [details, setDetails] = useState<ShowDetails>({ title, description, tags });
+  const [details, setDetails] = useState<ShowDetails>({ title, description, tags, musicMood: musicMood ?? null });
+  // Messages that predate the music field leave the current mood alone.
+  const mergeDetails = useCallback((next: ShowDetails) => {
+    setDetails((prev) => ({ ...prev, ...next, musicMood: next.musicMood === undefined ? prev.musicMood : next.musicMood }));
+  }, []);
+  const changeMusicMood = useCallback(
+    async (mood: string | null) => {
+      const res = await fetch(`/api/spaces/${encodeURIComponent(spaceId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ musicMood: mood }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? `Could not save the music mood (HTTP ${res.status}).`);
+      }
+      setDetails((prev) => ({ ...prev, musicMood: mood }));
+    },
+    [spaceId]
+  );
   const [posts, setPosts] = useState<PublicSpacePost[]>([]);
   const [postsError, setPostsError] = useState<string | null>(null);
 
@@ -331,7 +353,9 @@ export function SpacePageClient({
         title={details.title}
         description={details.description}
         tags={details.tags}
-        onSpaceUpdated={setDetails}
+        onSpaceUpdated={mergeDetails}
+        musicMood={details.musicMood ?? null}
+        onMusicMoodChange={isHost ? changeMusicMood : undefined}
         host={host}
         shareableUrl={shareableUrl}
         posts={posts}

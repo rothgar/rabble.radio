@@ -416,6 +416,7 @@ export default function SpacePage(): ReactElement {
           recording={state.recording}
           replay={view.replay ?? null}
           reminded={view.reminded ?? false}
+          musicMood={view.musicMood ?? null}
           onJoinedChange={setInRoom}
         />
 

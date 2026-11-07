@@ -68,6 +68,8 @@ export interface PublicSpace {
   replay: PublicReplay | null;
   /** True when the viewer asked to be notified when this show goes on air. */
   reminded: boolean;
+  /** Pre-show music mood id (src/lib/music.ts), null for silence. */
+  musicMood?: string | null;
   /** Signed-in viewers: the host is someone they follow on Bluesky. */
   hostFollowed?: boolean;
   /** Signed-in viewers: people they follow who are in the room right now. */

@@ -88,6 +88,8 @@ data class Show(
     val hostFollowed: Boolean = false,
     /** Signed-in viewers: people they follow who are in the room right now. */
     val followedInRoom: List<PublicHost> = emptyList(),
+    /** Pre-show music mood id (see Music), null for silence. */
+    val musicMood: String? = null,
 ) {
     /** Worth surfacing in "For you": a followed host, or a follow in the room. */
     val forYou: Boolean get() = hostFollowed || followedInRoom.isNotEmpty()
@@ -119,6 +121,7 @@ data class Show(
             followedInRoom = o.optJSONArray("followedInRoom")?.let { arr ->
                 (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { PublicHost.fromJson(it) } }
             } ?: emptyList(),
+            musicMood = o.optNullableString("musicMood"),
         )
 
         fun listFromJson(arr: JSONArray): List<Show> =

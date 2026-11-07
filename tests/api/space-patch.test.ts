@@ -112,9 +112,27 @@ describe('PATCH /api/spaces/[id]', () => {
       title: 'Morning show',
       description: 'Coffee talk',
       tags: ['Music', 'Comedy'],
+      musicMood: null,
     });
     // Off air: nothing is republished to Bluesky.
     expect(m.publishLiveStatus).not.toHaveBeenCalled();
+  });
+
+  it('saves a music mood, clears it with null, and rejects unknown moods', async () => {
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const ok = await PATCH(patch({ musicMood: 'lounge' }), ctx);
+    expect(ok.status).toBe(200);
+    expect(m.updateSpace).toHaveBeenCalledWith('sp1', { musicMood: 'lounge' });
+    expect(m.broadcastRoomData).toHaveBeenLastCalledWith('space-sp1', expect.objectContaining({ musicMood: 'lounge' }));
+    expect((await ok.json()).space.musicMood).toBe('lounge');
+
+    const cleared = await PATCH(patch({ musicMood: null }), ctx);
+    expect(cleared.status).toBe(200);
+    expect(m.updateSpace).toHaveBeenLastCalledWith('sp1', { musicMood: null });
+
+    const bad = await PATCH(patch({ musicMood: 'death-metal' }), ctx);
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).message).toMatch(/mood/i);
   });
 
   it('republishes the Bluesky live status when renaming an on-air show', async () => {

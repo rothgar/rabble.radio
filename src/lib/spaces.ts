@@ -31,6 +31,8 @@ export interface SpaceModel {
   totalListeners: number;
   hostedSeconds: number;
   lastLiveAt: Date | null;
+  /** Pre-show music mood id (src/lib/music.ts), null for silence. */
+  musicMood?: string | null;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -241,6 +243,7 @@ export interface UpdateSpaceInput {
   title?: string;
   description?: string | null;
   tags?: string[];
+  musicMood?: string | null;
 }
 
 /**
@@ -265,6 +268,9 @@ export async function updateSpace(
   if (input.tags !== undefined) {
     const tags = normalizeTags(input.tags);
     data.tags = { deleteMany: {}, create: tags.map((tag) => ({ tag })) };
+  }
+  if (input.musicMood !== undefined) {
+    data.musicMood = input.musicMood;
   }
   const row = await prisma.space.update({
     where: { id },
@@ -793,5 +799,6 @@ export function toPublicSpace(
     shareableUrl,
     replay: extras.replay ?? null,
     reminded: extras.reminded ?? false,
+    musicMood: space.musicMood ?? null,
   };
 }

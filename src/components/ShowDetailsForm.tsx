@@ -15,6 +15,8 @@ export interface ShowDetails {
   title: string;
   description: string | null;
   tags: string[];
+  /** Pre-show music mood id; undefined when a message did not carry it. */
+  musicMood?: string | null;
 }
 
 export interface ShowDetailsFormProps {

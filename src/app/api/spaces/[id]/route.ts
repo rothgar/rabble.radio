@@ -26,6 +26,7 @@ import { decoratePublicSpaces } from '@/lib/space-extras';
 import { deleteLiveStatus, publishLiveStatus } from '@/lib/atproto';
 import { broadcastRoomData, roomNameForSpace } from '@/lib/livekit';
 import { normalizeTags } from '@/lib/tags';
+import { isValidMood } from '@/lib/music';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
@@ -75,6 +76,8 @@ interface PatchBody {
   title?: unknown;
   description?: unknown;
   tags?: unknown;
+  /** Pre-show music mood id, or null for silence. */
+  musicMood?: unknown;
 }
 
 export async function PATCH(
@@ -100,7 +103,7 @@ export async function PATCH(
     );
   }
 
-  const patch: { title?: string; description?: string | null; tags?: string[] } = {};
+  const patch: { title?: string; description?: string | null; tags?: string[]; musicMood?: string | null } = {};
   if (body.title !== undefined) {
     if (typeof body.title !== 'string' || body.title.trim().length === 0) {
       return NextResponse.json(
@@ -150,6 +153,15 @@ export async function PATCH(
     }
     patch.tags = tags;
   }
+  if (body.musicMood !== undefined) {
+    if (!isValidMood(body.musicMood)) {
+      return NextResponse.json(
+        { error: 'validation_error', message: 'Unknown music mood.' },
+        { status: 400 }
+      );
+    }
+    patch.musicMood = body.musicMood;
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
       { error: 'validation_error', message: 'Nothing to update.' },
@@ -190,6 +202,7 @@ export async function PATCH(
       title: updated.title,
       description: updated.description,
       tags: updated.tags,
+      musicMood: updated.musicMood ?? null,
     });
 
     return NextResponse.json({ space: toPublicSpace(updated, origin) }, { status: 200 });

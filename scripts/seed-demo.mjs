@@ -48,32 +48,32 @@ const SHOWS = [
   {
     host: 1, slug: 'demo-morning-news-roundup', title: 'Morning News Roundup',
     description: 'Three stories you need before coffee, with call-ins from the audience.',
-    status: 'live', tags: ['News & Politics'], listeners: 42, speakers: 2, reactions: 318, startedAgo: 25 * MIN,
+    status: 'live', musicMood: 'focus', tags: ['News & Politics'], listeners: 42, speakers: 2, reactions: 318, startedAgo: 25 * MIN,
   },
   {
     host: 2, slug: 'demo-late-night-synths', title: 'Late Night Synths',
     description: 'Live modular jam and listener requests. Bring headphones.',
-    status: 'live', tags: ['Music', 'Entertainment'], listeners: 128, speakers: 1, reactions: 2041, startedAgo: 70 * MIN,
+    status: 'live', musicMood: 'groove', tags: ['Music', 'Entertainment'], listeners: 128, speakers: 1, reactions: 2041, startedAgo: 70 * MIN,
   },
   {
     host: 3, slug: 'demo-ship-it-friday', title: 'Ship It Friday: what we broke this week',
     description: 'Engineers swap postmortems. Guests welcome on stage.',
-    status: 'live', tags: ['Science & Technology', 'Education'], listeners: 17, speakers: 3, reactions: 96, startedAgo: 8 * MIN,
+    status: 'live', musicMood: 'upbeat', tags: ['Science & Technology', 'Education'], listeners: 17, speakers: 3, reactions: 96, startedAgo: 8 * MIN,
   },
   {
     host: 4, slug: 'demo-fjord-to-table', title: 'Fjord to Table',
     description: 'Cooking the Nordic pantry, one ingredient at a time. Starting shortly.',
-    status: 'active', tags: ['Howto & Style'], listeners: 0, speakers: 0, reactions: 12,
+    status: 'active', musicMood: 'lounge', tags: ['Howto & Style'], listeners: 0, speakers: 0, reactions: 12,
   },
   {
     host: 5, slug: 'demo-the-long-game', title: 'The Long Game',
     description: 'Football tactics for people who like spreadsheets.',
-    status: 'active', tags: ['Sports'], listeners: 0, speakers: 0, reactions: 54,
+    status: 'active', musicMood: 'upbeat', tags: ['Sports'], listeners: 0, speakers: 0, reactions: 54,
   },
   {
     host: 6, slug: 'demo-roguelike-radio', title: 'Roguelike Radio',
     description: 'Permadeath, procedural generation and the games that got it right.',
-    status: 'active', tags: ['Gaming', 'Entertainment'], listeners: 0, speakers: 0, reactions: 7,
+    status: 'active', musicMood: 'groove', tags: ['Gaming', 'Entertainment'], listeners: 0, speakers: 0, reactions: 7,
   },
   {
     host: 1, slug: 'demo-the-weekend-desk', title: 'The Weekend Desk',
@@ -100,12 +100,12 @@ if (!removeOnly) {
     const scheduledAt = s.status === 'scheduled' ? iso(plus(-s.scheduledAgo)) : null;
     const lastLiveAt = isLive ? iso(plus(-s.startedAgo)) : null;
     sql.push(
-      `INSERT INTO "Space" ("id","slug","title","description","hostId","isLive","scheduledAt","expiresAt","emptySince","status","listenerCount","speakerCount","reactionCount","likeCount","sessionCount","totalListeners","hostedSeconds","lastLiveAt","createdAt","updatedAt") VALUES (` +
+      `INSERT INTO "Space" ("id","slug","title","description","hostId","isLive","scheduledAt","expiresAt","emptySince","status","listenerCount","speakerCount","reactionCount","likeCount","sessionCount","totalListeners","hostedSeconds","lastLiveAt","musicMood","createdAt","updatedAt") VALUES (` +
         [
           q(s.id), q(s.slug), q(s.title), q(s.description), q(host.did), isLive ? 1 : 0, q(scheduledAt),
           q(s.status === 'scheduled' ? null : NEXT_YEAR), q(FAR_FUTURE), q(s.status),
           s.listeners, s.speakers, s.reactions, Math.round(s.reactions / 9), isLive ? 4 : 3,
-          s.listeners * 6 + 40, (isLive ? 4 : 3) * 55 * 60, q(lastLiveAt), q(createdAt), q(iso(now)),
+          s.listeners * 6 + 40, (isLive ? 4 : 3) * 55 * 60, q(lastLiveAt), q(s.musicMood ?? null), q(createdAt), q(iso(now)),
         ].join(',') +
         `);`
     );

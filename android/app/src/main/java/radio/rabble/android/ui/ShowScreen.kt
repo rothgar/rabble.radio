@@ -19,6 +19,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableStateMapOf
 import radio.rabble.android.data.Diagnostics
 import radio.rabble.android.data.Me
+import androidx.compose.material3.FilterChip
+import radio.rabble.android.data.Music
 import radio.rabble.android.data.Replay
 import radio.rabble.android.Reminders
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -132,6 +134,8 @@ sealed interface RoomState {
         val invitePending: Boolean = false,
         val stageBusy: Boolean = false,
         val notice: String? = null,
+        /** Someone other than us is publishing audio (so pre-show music should yield). */
+        val remoteAudio: Boolean = false,
     ) : RoomState
     data class Failed(val message: String) : RoomState
 }
@@ -169,6 +173,21 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 Diagnostics.event("remind_failed", e.message ?: "")
             } finally {
                 remindBusy = false
+            }
+        }
+    }
+
+    var moodBusy by remember { mutableStateOf(false) }
+    fun setMusicMood(mood: String?) {
+        if (moodBusy) return
+        moodBusy = true
+        scope.launch {
+            try {
+                state = ShowState.Ready(app.api.setMusicMood(showId, mood))
+            } catch (e: Exception) {
+                Diagnostics.event("music_mood_failed", e.message ?: "")
+            } finally {
+                moodBusy = false
             }
         }
     }
@@ -253,7 +272,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 isLocal = isLocal,
             )
         }.sortedWith(compareByDescending<RoomMember> { it.isHost }.thenByDescending { it.onStage }.thenBy { it.name })
-        room = current.copy(members = members, anonymousListeners = anonymous)
+        val remoteAudio = lkRoom.remoteParticipants.values.any { it.audioTrackPublications.isNotEmpty() }
+        room = current.copy(members = members, anonymousListeners = anonymous, remoteAudio = remoteAudio)
         // Resolve any identities we have not seen yet.
         val missing = members.map { it.identity }.filter { it !in profiles }
         if (missing.isNotEmpty()) {
@@ -290,6 +310,21 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                 room = current.copy(invitePending = true)
                             }
                         "on_air_changed" -> room = current.copy(onAir = msg.optBoolean("onAir", current.onAir))
+                        "space_updated" -> (state as? ShowState.Ready)?.let { ready ->
+                            val tags = msg.optJSONArray("tags")?.let { arr -> List(arr.length()) { arr.getString(it) } } ?: ready.show.tags
+                            state = ShowState.Ready(
+                                ready.show.copy(
+                                    title = msg.optString("title", ready.show.title),
+                                    description = if (msg.isNull("description")) null else msg.optString("description", ready.show.description ?: ""),
+                                    tags = tags,
+                                    musicMood = when {
+                                        !msg.has("musicMood") -> ready.show.musicMood
+                                        msg.isNull("musicMood") -> null
+                                        else -> msg.optString("musicMood")
+                                    },
+                                )
+                            )
+                        }
                         "stage_removed" ->
                             if (msg.optString("identity") == current.join.identity) {
                                 room = current.copy(notice = "The host moved you back to the audience.")
@@ -521,6 +556,17 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                     Text(if (room == RoomState.Joining) "Opening…" else "Open the studio")
                                 }
                             }
+                        }
+                        if (connected != null && (s.show.musicMood != null || (isHostOfShow && !connected.onAir))) {
+                            MusicCard(
+                                baseUrl = app.baseUrl,
+                                spaceId = s.show.id,
+                                moodId = s.show.musicMood,
+                                active = s.show.musicMood != null && (!connected.onAir || !connected.remoteAudio),
+                                canPick = isHostOfShow && !connected.onAir,
+                                busy = moodBusy,
+                                onPick = ::setMusicMood,
+                            )
                         }
                         if (connected != null && connected.invitePending) {
                             InviteBanner(
@@ -980,6 +1026,120 @@ private fun formatClock(ms: Int): String {
  * audio URL redirects to a short-lived signed object URL; MediaPlayer
  * follows it and streams with range requests, so seeking works.
  */
+/**
+ * Pre-show music: plays the mood's tracks locally while [active] (off air,
+ * or on air with nobody publishing audio, as in the demo shows). Each phone
+ * runs its own player; nothing goes into the room or the recording. Hosts
+ * pick the mood here while off air.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun MusicCard(
+    baseUrl: String,
+    spaceId: String,
+    moodId: String?,
+    active: Boolean,
+    canPick: Boolean,
+    busy: Boolean,
+    onPick: (String?) -> Unit,
+) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("rabble", android.content.Context.MODE_PRIVATE) }
+    var muted by remember { mutableStateOf(prefs.getBoolean("musicMuted", false)) }
+    val mood = Music.mood(moodId)
+    val playlist = remember(moodId, spaceId) { mood?.let { Music.playlist(it, spaceId) } ?: emptyList() }
+    var index by remember(moodId) { mutableStateOf(0) }
+    val track = if (playlist.isEmpty()) null else playlist[index % playlist.size]
+    val url = track?.let { Music.url(baseUrl, it) }
+    val playing = active && !muted && url != null
+    var error by remember { mutableStateOf<String?>(null) }
+    val player = remember { MediaPlayer() }
+    var preparedUrl by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Unit) {
+        player.setAudioAttributes(
+            AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build()
+        )
+        onDispose { runCatching { player.release() } }
+    }
+    LaunchedEffect(playing, url) {
+        if (!playing || url == null) {
+            runCatching { if (player.isPlaying) player.pause() }
+            return@LaunchedEffect
+        }
+        if (url == preparedUrl) {
+            runCatching { player.start() }
+            return@LaunchedEffect
+        }
+        runCatching {
+            player.reset()
+            preparedUrl = null
+            player.setOnPreparedListener { mp ->
+                preparedUrl = url
+                mp.setVolume(0.35f, 0.35f)
+                mp.start()
+            }
+            player.setOnCompletionListener { if (playlist.isNotEmpty()) index = (index + 1) % playlist.size }
+            player.setOnErrorListener { _, what, extra ->
+                error = "Could not play music ($what/$extra)."
+                true
+            }
+            player.setDataSource(url)
+            player.prepareAsync()
+        }.onFailure { error = it.message }
+    }
+
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "♪ Pre-show music" + (mood?.let { " · ${it.label}" } ?: ""),
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (mood != null) {
+                    TextButton(onClick = {
+                        muted = !muted
+                        prefs.edit().putBoolean("musicMuted", muted).apply()
+                    }) { Text(if (muted) "Unmute" else "Mute") }
+                }
+            }
+            if (track != null) {
+                Text(
+                    (if (active) "Now playing: " else "Next up: ") + track.attribution,
+                    color = RabbleColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            error?.let { Text(it, color = RabbleColors.Live, style = MaterialTheme.typography.bodySmall) }
+            if (canPick) {
+                Text(
+                    "Plays for everyone waiting in the room until you go on air. It is not recorded.",
+                    color = RabbleColors.TextTertiary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Music.MOODS.forEach { m ->
+                        val selected = m.id == mood?.id
+                        FilterChip(
+                            selected = selected,
+                            enabled = !busy,
+                            onClick = { onPick(if (selected) null else m.id) },
+                            label = { Text(m.label) },
+                        )
+                    }
+                    FilterChip(
+                        selected = mood == null,
+                        enabled = !busy && mood != null,
+                        onClick = { onPick(null) },
+                        label = { Text("Off") },
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ReplayPanel(show: Show, replay: Replay, audioUrl: String) {
     val player = remember(audioUrl) { MediaPlayer() }

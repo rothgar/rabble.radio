@@ -70,6 +70,12 @@ class RabbleApi(
         return Show.fromJson(request(patch("/api/spaces/$showId", body)).getJSONObject("space"))
     }
 
+    /** Host only: set the pre-show music mood (null for silence). */
+    suspend fun setMusicMood(showId: String, mood: String?): Show {
+        val body = JSONObject().put("musicMood", mood ?: JSONObject.NULL)
+        return Show.fromJson(request(patch("/api/spaces/$showId", body)).getJSONObject("space"))
+    }
+
     /** Returns null when there is no valid session. */
     suspend fun me(): Me? = try {
         Me.fromJson(request(get("/api/me")))

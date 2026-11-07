@@ -113,6 +113,8 @@ tests/                       # Vitest unit + API tests
 | `pnpm prisma:migrate` | Run `prisma migrate deploy` (production / CI) |
 | `pnpm gen:jwks` | Write `jwks.json` + `private-key.pem` for OAuth |
 | `./scripts/dev-cluster.sh` | Bootstrap a local kind cluster (image `rabble:local`) |
+| `node scripts/seed-demo.mjs [--local] [--remove]` | Seed (or wipe) six demo hosts and seven demo shows in D1 so the apps have something to browse and join. Demo hosts use `did:plc:demo…` DIDs and `*.demo.rabble.rodeo` handles. |
+| `node scripts/upload-android-build.mjs` | Upload the debug APK to R2 for `/downloads/rabble-android.apk` |
 
 ## License
 

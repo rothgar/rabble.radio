@@ -241,6 +241,23 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.queryByTestId('join-button')).toBeNull();
   });
 
+  it('offers Notify me and a quiet studio link instead of Join on an off-air show', () => {
+    const { unmount } = render(
+      <SpacePageClient {...baseProps()} isHost={false} isLive={false} status="active" reminded={false} />
+    );
+    expect(screen.getByTestId('space-off-air')).toBeTruthy();
+    expect(screen.getByTestId('notify-me-button')).toBeTruthy();
+    expect(screen.queryByTestId('join-button')).toBeNull();
+    expect(screen.getByTestId('enter-studio').textContent).toMatch(/enter the studio/i);
+    unmount();
+    render(
+      <SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} isLive={false} status="ended" reminded={false} />
+    );
+    expect(screen.getByTestId('space-off-air')).toBeTruthy();
+    expect(screen.queryByTestId('enter-studio')).toBeNull();
+    expect(screen.queryByTestId('join-button')).toBeNull();
+  });
+
   it('plays the recording instead of joining when the show is off air with a replay', () => {
     render(
       <SpacePageClient

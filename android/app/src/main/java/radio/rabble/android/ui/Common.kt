@@ -144,6 +144,7 @@ fun ShowCard(show: Show, onOpen: (String) -> Unit) {
                     show.isLive -> LiveBadge()
                     show.replay != null -> Pill("Replay")
                     show.status == "scheduled" -> Pill(if (show.reminded) "Scheduled · 🔔" else "Scheduled")
+                    else -> Pill(if (show.reminded) "Off air · 🔔" else "Off air")
                 }
             }
             if (show.hostFollowed || show.followedInRoom.isNotEmpty()) {

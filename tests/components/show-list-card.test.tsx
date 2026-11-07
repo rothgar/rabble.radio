@@ -25,7 +25,8 @@ describe('actionFor', () => {
     expect(actionFor(show({ replay: { recordingId: 'r', audioUrl: '/a', contentType: 'audio/mp4', startedAt: '', endedAt: null, durationSeconds: null, sizeBytes: null } }))).toMatchObject({ label: 'Replay' });
     expect(actionFor(show({ status: 'scheduled' }))).toMatchObject({ label: 'Notify me' });
     expect(actionFor(show({ status: 'scheduled', reminded: true }))).toMatchObject({ label: 'Notifying you' });
-    expect(actionFor(show({}))).toMatchObject({ label: 'Open' });
+    expect(actionFor(show({}))).toMatchObject({ label: 'Notify me', kind: 'notify' });
+    expect(actionFor(show({ status: 'ended' }))).toMatchObject({ label: 'Notify me' });
   });
 });
 

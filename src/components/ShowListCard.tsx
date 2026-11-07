@@ -39,8 +39,8 @@ export function actionFor(space: PublicSpace): { label: string; href: string; ki
   const base = `/show/${encodeURIComponent(space.id)}`;
   if (space.isLive) return { label: 'Listen', href: `${base}?listen=1`, kind: 'listen' };
   if (space.replay) return { label: 'Replay', href: base, kind: 'replay' };
-  if (space.status === 'scheduled') return { label: space.reminded ? 'Notifying you' : 'Notify me', href: base, kind: 'notify' };
-  return { label: 'Open', href: base, kind: 'open' };
+  // Scheduled or simply off air: nothing to listen to yet, so offer a reminder.
+  return { label: space.reminded ? 'Notifying you' : 'Notify me', href: base, kind: 'notify' };
 }
 
 export function ShowListCard({ space, rank }: ShowListCardProps): ReactElement {

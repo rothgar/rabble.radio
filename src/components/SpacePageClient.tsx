@@ -347,30 +347,6 @@ export function SpacePageClient({
     );
   }
 
-  // Scheduled shows: nothing to join yet (except for the host, who opens the
-  // studio from here). Everyone else gets "Notify me".
-  if (status === 'scheduled' && !isHost && !live) {
-    return (
-      <section
-        className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)] sm:p-6"
-        data-testid="space-scheduled"
-      >
-        <p>
-          This show hasn&apos;t started yet
-          {scheduledAt ? ` — it is planned for ${new Date(scheduledAt).toLocaleString()}` : ''}.
-        </p>
-        <div>
-          <NotifyMeButton
-            spaceId={spaceId}
-            isAuthenticated={isAuthenticated}
-            reminded={reminded}
-            scheduledAt={scheduledAt}
-          />
-        </div>
-      </section>
-    );
-  }
-
   // Off air with a recording: play it back instead of opening an empty stage.
   // The host still gets a way into the studio underneath.
   if (!live && replay) {
@@ -400,6 +376,55 @@ export function SpacePageClient({
           </button>
         ) : null}
       </div>
+    );
+  }
+
+  // Scheduled, or just off air: nothing to listen to yet, so everyone but the
+  // host gets "Notify me". Signed-in guests the host wants on stage before
+  // going on air can still slip into the studio through the quiet link.
+  if (!isHost && !live) {
+    const scheduled = status === 'scheduled';
+    return (
+      <section
+        className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)] sm:p-6"
+        data-testid={scheduled ? 'space-scheduled' : 'space-off-air'}
+      >
+        <p>
+          {scheduled
+            ? `This show hasn't started yet${scheduledAt ? ` — it is planned for ${new Date(scheduledAt).toLocaleString()}` : ''}.`
+            : 'The host is off air right now. Get notified the moment they go live.'}
+        </p>
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-md border border-[var(--color-live-border)] bg-[var(--color-live-muted)] px-3 py-2 text-sm text-[var(--color-live)]"
+            data-testid="join-error"
+          >
+            {error}
+          </p>
+        ) : null}
+        <div>
+          <NotifyMeButton
+            spaceId={spaceId}
+            isAuthenticated={isAuthenticated}
+            reminded={reminded}
+            scheduledAt={scheduledAt}
+          />
+        </div>
+        {isAuthenticated && !scheduled ? (
+          <button
+            type="button"
+            onClick={() => {
+              void onJoin();
+            }}
+            disabled={joining}
+            className="self-start text-xs text-[var(--color-text-tertiary)] underline-offset-2 hover:underline disabled:opacity-50"
+            data-testid="enter-studio"
+          >
+            {joining ? 'Opening…' : 'Invited to the stage? Enter the studio'}
+          </button>
+        ) : null}
+      </section>
     );
   }
 

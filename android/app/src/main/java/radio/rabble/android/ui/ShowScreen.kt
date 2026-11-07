@@ -665,10 +665,12 @@ private fun RoomPanel(
                     if (room is RoomState.Failed) {
                         Text(room.message, color = RabbleColors.Live)
                     }
-                    if (show.status == "scheduled" && !show.isLive && !isHost) {
-                        // Nothing to join yet: offer a reminder instead.
+                    if (!show.isLive && !isHost) {
+                        // Scheduled or just off air: nothing to listen to yet, offer a reminder.
+                        val scheduled = show.status == "scheduled"
                         Text(
-                            "This show hasn't started yet" + (show.scheduledAt?.let { " — planned for ${formatWhen(it)}" } ?: "") + ".",
+                            if (scheduled) "This show hasn't started yet" + (show.scheduledAt?.let { " — planned for ${formatWhen(it)}" } ?: "") + "."
+                            else "The host is off air right now. Get notified the moment they go live.",
                             color = RabbleColors.TextSecondary,
                         )
                         if (signedIn) {
@@ -685,6 +687,16 @@ private fun RoomPanel(
                             )
                         } else {
                             OutlinedButton(onClick = onLogin, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Sign in to get notified") }
+                        }
+                        if (signedIn && !scheduled) {
+                            // Guests the host wants on stage before air can still get in.
+                            TextButton(onClick = onJoin, enabled = room != RoomState.Joining) {
+                                Text(
+                                    if (room == RoomState.Joining) "Opening…" else "Invited to the stage? Enter the studio",
+                                    color = RabbleColors.TextTertiary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     } else if (!signedIn) {
                         Text(

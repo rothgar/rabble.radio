@@ -159,8 +159,9 @@ private fun HomeContent(
     onStartShow: () -> Unit,
     onLogin: () -> Unit,
 ) {
-    val onAir = shows.filter { it.isLive }
-    val offAir = shows.filterNot { it.isLive }
+    val forYou = shows.filter { it.forYou }.sortedWith(compareByDescending<Show> { it.isLive }.thenByDescending { it.listenerCount })
+    val onAir = shows.filter { it.isLive }.sortedByDescending { it.listenerCount * 3 + it.speakerCount * 5 + it.reactionCount }
+    val offAir = shows.filterNot { it.isLive }.sortedByDescending { it.totalListeners * 3 + it.likeCount * 4 + it.reactionCount }
     val stations = Tags.CATEGORIES.mapNotNull { tag ->
         val inStation = shows.filter { Tags.primaryTagOf(it.tags) == tag }
         if (inStation.isEmpty()) null else Station(tag, inStation)
@@ -205,12 +206,21 @@ private fun HomeContent(
                 }
             }
         }
+        if (forYou.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    SectionLabel("FOR YOU")
+                    Text("Hosts you follow on Bluesky, and rooms your follows are in.", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            items(forYou, key = { "fy-" + it.id }) { ShowCard(it, onOpenShow) }
+        }
         if (onAir.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("ON AIR NOW") }
             items(onAir, key = { "live-" + it.id }) { ShowCard(it, onOpenShow) }
         }
         if (offAir.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(if (onAir.isEmpty()) "SHOWS" else "OFF AIR & UPCOMING") }
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(if (onAir.isEmpty()) "POPULAR SHOWS" else "POPULAR · OFF AIR & UPCOMING") }
             items(offAir, key = { it.id }) { ShowCard(it, onOpenShow) }
         }
         if (stations.isNotEmpty()) {

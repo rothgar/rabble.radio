@@ -146,6 +146,26 @@ fun ShowCard(show: Show, onOpen: (String) -> Unit) {
                     show.status == "scheduled" -> Pill(if (show.reminded) "Scheduled · 🔔" else "Scheduled")
                 }
             }
+            if (show.hostFollowed || show.followedInRoom.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (show.followedInRoom.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+                            show.followedInRoom.take(3).forEach { HostAvatar(it, 20) }
+                        }
+                    }
+                    val first = show.followedInRoom.firstOrNull()
+                    Text(
+                        when {
+                            first != null && show.followedInRoom.size == 1 -> "${first.displayName ?: "@" + first.handle} is in the room"
+                            first != null -> "${first.displayName ?: "@" + first.handle} and ${show.followedInRoom.size - 1} more you follow are here"
+                            else -> "You follow the host"
+                        },
+                        color = RabbleColors.Accent,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("${show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
                 Text("${show.speakerCount} on stage", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)

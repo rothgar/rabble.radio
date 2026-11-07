@@ -45,7 +45,7 @@ export function SiteHeader(): ReactElement {
       data-testid="site-header"
     >
       <Link
-        href="/stations"
+        href="/"
         className="flex items-center gap-2 text-[var(--color-text)]"
         data-testid="site-brand"
       >

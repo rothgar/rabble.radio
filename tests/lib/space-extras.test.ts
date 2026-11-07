@@ -6,6 +6,9 @@ import type { PublicSpace } from '@/types';
 const m = vi.hoisted(() => ({
   getLatestAvailableRecordings: vi.fn(),
   getRemindedSpaceIds: vi.fn(),
+  getFollowedDids: vi.fn(),
+  getPresentIdentities: vi.fn(),
+  getUsersByDid: vi.fn(),
 }));
 
 vi.mock('@/lib/recording', async () => {
@@ -13,6 +16,8 @@ vi.mock('@/lib/recording', async () => {
   return { ...actual, getLatestAvailableRecordings: m.getLatestAvailableRecordings };
 });
 vi.mock('@/lib/reminders', () => ({ getRemindedSpaceIds: m.getRemindedSpaceIds }));
+vi.mock('@/lib/follows', () => ({ getFollowedDids: m.getFollowedDids, getPresentIdentities: m.getPresentIdentities }));
+vi.mock('@/lib/users', () => ({ getUsersByDid: m.getUsersByDid }));
 vi.mock('@/lib/db', () => ({ prisma: {} }));
 vi.mock('@/lib/storage', () => ({
   deleteObject: vi.fn(),
@@ -47,6 +52,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.getLatestAvailableRecordings.mockResolvedValue(new Map());
   m.getRemindedSpaceIds.mockResolvedValue(new Set());
+  m.getFollowedDids.mockResolvedValue(new Set());
+  m.getPresentIdentities.mockResolvedValue(new Map());
+  m.getUsersByDid.mockResolvedValue([]);
 });
 
 describe('toPublicReplay', () => {
@@ -91,5 +99,26 @@ describe('decoratePublicSpaces', () => {
   it('skips lookups for an empty list', async () => {
     expect(await decoratePublicSpaces([], 'did:v')).toEqual([]);
     expect(m.getLatestAvailableRecordings).not.toHaveBeenCalled();
+  });
+
+  it('marks followed hosts and followed people in live rooms for signed-in viewers', async () => {
+    m.getFollowedDids.mockResolvedValue(new Set(['did:h', 'did:friend']));
+    m.getPresentIdentities.mockResolvedValue(new Map([['sp2', ['did:friend', 'did:stranger', 'did:v']]]));
+    m.getUsersByDid.mockResolvedValue([{ did: 'did:friend', handle: 'friend.test', displayName: 'Friend', avatarUrl: null }]);
+    const out = await decoratePublicSpaces(
+      [space({ id: 'sp1' }), space({ id: 'sp2', isLive: true, status: 'live', host: { did: 'did:other', handle: 'o', displayName: null, avatarUrl: null } })],
+      'did:v'
+    );
+    expect(m.getPresentIdentities).toHaveBeenCalledWith(['sp2']);
+    expect(out[0].hostFollowed).toBe(true);
+    expect(out[0].followedInRoom).toEqual([]);
+    expect(out[1].hostFollowed).toBe(false);
+    expect(out[1].followedInRoom).toEqual([{ did: 'did:friend', handle: 'friend.test', displayName: 'Friend', avatarUrl: null }]);
+  });
+
+  it('adds no social fields for anonymous viewers', async () => {
+    const out = await decoratePublicSpaces([space({})], null);
+    expect(m.getFollowedDids).not.toHaveBeenCalled();
+    expect('hostFollowed' in out[0]).toBe(false);
   });
 });

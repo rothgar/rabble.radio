@@ -6,9 +6,11 @@
 //   - `reminded`: whether the viewer set "Notify me" on the show.
 // Kept out of `toPublicSpace` so that stays a pure mapper.
 
-import type { PublicReplay, PublicSpace } from '@/types';
+import type { PublicHost, PublicReplay, PublicSpace } from '@/types';
 import { getLatestAvailableRecordings, recordingDurationSeconds, type RecordingRow } from '@/lib/recording';
 import { getRemindedSpaceIds } from '@/lib/reminders';
+import { getFollowedDids, getPresentIdentities } from '@/lib/follows';
+import { getUsersByDid } from '@/lib/users';
 
 export function toPublicReplay(row: RecordingRow): PublicReplay {
   return {
@@ -29,21 +31,55 @@ export async function decoratePublicSpaces(
   if (spaces.length === 0) return spaces;
   const ids = spaces.map((s) => s.id);
   const offAirIds = spaces.filter((s) => !s.isLive).map((s) => s.id);
-  // Both lookups are decorations: if either fails the listing still renders.
-  const [replays, reminded] = await Promise.all([
+  const liveIds = spaces.filter((s) => s.isLive).map((s) => s.id);
+  // Every lookup is a decoration: if one fails the listing still renders.
+  const [replays, reminded, followed, present] = await Promise.all([
     Promise.resolve()
       .then(() => getLatestAvailableRecordings(offAirIds))
       .catch(() => new Map<string, RecordingRow>()),
     Promise.resolve()
       .then(() => getRemindedSpaceIds(viewerDid, ids))
       .catch(() => new Set<string>()),
+    Promise.resolve()
+      .then(() => (viewerDid ? getFollowedDids(viewerDid) : new Set<string>()))
+      .catch(() => new Set<string>()),
+    Promise.resolve()
+      .then(() => (viewerDid && liveIds.length > 0 ? getPresentIdentities(liveIds) : new Map<string, string[]>()))
+      .catch(() => new Map<string, string[]>()),
   ]);
+
+  // Profiles for followed people in rooms, one lookup for all shows.
+  const followedPresent = new Map<string, string[]>();
+  const needProfiles = new Set<string>();
+  for (const [spaceId, identities] of present) {
+    const hits = identities.filter((d) => followed.has(d) && d !== viewerDid);
+    if (hits.length > 0) {
+      followedPresent.set(spaceId, hits);
+      hits.forEach((d) => needProfiles.add(d));
+    }
+  }
+  const profiles = new Map<string, PublicHost>();
+  if (needProfiles.size > 0) {
+    const rows = await Promise.resolve()
+      .then(() => getUsersByDid([...needProfiles]))
+      .catch(() => []);
+    for (const u of rows) {
+      profiles.set(u.did, { did: u.did, handle: u.handle, displayName: u.displayName ?? null, avatarUrl: u.avatarUrl ?? null });
+    }
+  }
+
   return spaces.map((s) => {
     const rec = replays.get(s.id);
+    const inRoom = (followedPresent.get(s.id) ?? [])
+      .map((d) => profiles.get(d))
+      .filter((p): p is PublicHost => Boolean(p));
     return {
       ...s,
       replay: rec ? toPublicReplay(rec) : null,
       reminded: reminded.has(s.id),
+      ...(viewerDid
+        ? { hostFollowed: followed.has(s.host.did), followedInRoom: inRoom }
+        : {}),
     };
   });
 }

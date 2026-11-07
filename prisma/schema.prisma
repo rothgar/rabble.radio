@@ -374,3 +374,13 @@ model PushSubscription {
 
   @@index([did])
 }
+
+/// Cached Bluesky follow list for a signed-in user (DIDs as a JSON array),
+/// refreshed from the public AppView at most once an hour. Lets the home
+/// page surface shows by people they follow and rooms their follows are in.
+model FollowCache {
+  did       String   @id
+  follows   String   @default("[]")
+  count     Int      @default(0)
+  fetchedAt DateTime @default(now())
+}

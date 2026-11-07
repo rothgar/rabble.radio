@@ -73,6 +73,10 @@ data class Show(
     val listenerCount: Int = 0,
     val speakerCount: Int = 0,
     val reactionCount: Int = 0,
+    /** Lifetime totals rolled up from finished shows. */
+    val likeCount: Int = 0,
+    val sessionCount: Int = 0,
+    val totalListeners: Int = 0,
     val tags: List<String> = emptyList(),
     val createdAt: String = "",
     val updatedAt: String = "",
@@ -80,7 +84,14 @@ data class Show(
     val shareableUrl: String = "",
     val replay: Replay? = null,
     val reminded: Boolean = false,
+    /** Signed-in viewers: the host is someone they follow on Bluesky. */
+    val hostFollowed: Boolean = false,
+    /** Signed-in viewers: people they follow who are in the room right now. */
+    val followedInRoom: List<PublicHost> = emptyList(),
 ) {
+    /** Worth surfacing in "For you": a followed host, or a follow in the room. */
+    val forYou: Boolean get() = hostFollowed || followedInRoom.isNotEmpty()
+
     companion object {
         fun fromJson(o: JSONObject) = Show(
             id = o.getString("id"),
@@ -94,6 +105,9 @@ data class Show(
             listenerCount = o.optInt("listenerCount", 0),
             speakerCount = o.optInt("speakerCount", 0),
             reactionCount = o.optInt("reactionCount", 0),
+            likeCount = o.optInt("likeCount", 0),
+            sessionCount = o.optInt("sessionCount", 0),
+            totalListeners = o.optInt("totalListeners", 0),
             tags = o.optJSONArray("tags")?.toStringList() ?: emptyList(),
             createdAt = o.optString("createdAt", ""),
             updatedAt = o.optString("updatedAt", ""),
@@ -101,6 +115,10 @@ data class Show(
             shareableUrl = o.optString("shareableUrl", ""),
             replay = o.optJSONObject("replay")?.let { Replay.fromJson(it) },
             reminded = o.optBoolean("reminded", false),
+            hostFollowed = o.optBoolean("hostFollowed", false),
+            followedInRoom = o.optJSONArray("followedInRoom")?.let { arr ->
+                (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { PublicHost.fromJson(it) } }
+            } ?: emptyList(),
         )
 
         fun listFromJson(arr: JSONArray): List<Show> =

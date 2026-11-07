@@ -68,4 +68,8 @@ export interface PublicSpace {
   replay: PublicReplay | null;
   /** True when the viewer asked to be notified when this show goes on air. */
   reminded: boolean;
+  /** Signed-in viewers: the host is someone they follow on Bluesky. */
+  hostFollowed?: boolean;
+  /** Signed-in viewers: people they follow who are in the room right now. */
+  followedInRoom?: PublicHost[];
 }

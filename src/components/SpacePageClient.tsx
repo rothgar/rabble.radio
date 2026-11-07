@@ -165,6 +165,16 @@ export function SpacePageClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // One-click "Listen" from the home page: /show/[id]?listen=1 joins on
+  // mount (anonymously when signed out) instead of showing the join card.
+  // Not for the host, who should choose when to open the studio.
+  const [autoListen, setAutoListen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('listen') === '1' && !isHost && isLive) setAutoListen(true);
+  }, [isHost, isLive]);
+
   const handleLeave = useCallback(() => {
     setJoined(null);
   }, []);
@@ -295,6 +305,13 @@ export function SpacePageClient({
       setJoining(false);
     }
   }, [isHost, joining, spaceId]);
+
+  useEffect(() => {
+    if (!autoListen || joined || joining) return;
+    setAutoListen(false);
+    void onJoin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoListen]);
 
   if (joined) {
     return (

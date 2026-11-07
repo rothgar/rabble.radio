@@ -285,3 +285,22 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.getByTestId('join-button').textContent).toMatch(/open the studio/i);
   });
 });
+
+describe('SpacePageClient one-click listen', () => {
+  it('joins on mount when the URL carries ?listen=1 and the show is on air', async () => {
+    window.history.replaceState({}, '', '/show/sp-auto-join?listen=1');
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (String(url).includes('/join')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ token: 't', wsUrl: 'wss://x', role: 'audience', roomName: 'r', identity: 'anon-1', handle: 'anon', anonymous: true }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ posts: [] }) };
+    });
+    render(<SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} isLive />);
+    await waitFor(() => expect(screen.getByTestId('space-room')).toBeTruthy());
+    window.history.replaceState({}, '', '/');
+  });
+});

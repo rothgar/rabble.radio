@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.Slider
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import androidx.compose.foundation.background
@@ -88,10 +89,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import io.livekit.android.AudioOptions
+import io.livekit.android.AudioType
 import io.livekit.android.ConnectOptions
 import io.livekit.android.LiveKit
+import io.livekit.android.LiveKitOverrides
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
+import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -158,6 +163,23 @@ sealed interface RoomState {
 }
 
 private val REACTIONS = listOf("👍", "❤️", "😂", "🎉", "👏")
+
+/**
+ * Listeners get a room in media mode, so the show and the pre-show music follow the
+ * phone's media volume like a podcast app would. Anyone publishing a microphone gets
+ * call mode instead, which is what turns on the hardware echo cancellation. LiveKit
+ * fixes the mode when the Room is created, so changing it means a new Room; stage
+ * changes already reconnect, so that is where the swap happens.
+ */
+private fun createRoom(context: Context, callMode: Boolean): Room =
+    LiveKit.create(
+        context.applicationContext,
+        overrides = LiveKitOverrides(
+            audioOptions = AudioOptions(
+                audioOutputType = if (callMode) AudioType.CallAudioType() else AudioType.MediaAudioType(),
+            ),
+        ),
+    )
 private const val STAGE_POLL_MS = 4000L
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -230,7 +252,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             else -> Diagnostics.clearRoom()
         }
     }
-    val lkRoom = remember { LiveKit.create(context.applicationContext) }
+    var lkRoom by remember { mutableStateOf(createRoom(context, callMode = false)) }
+    var roomCallMode by remember { mutableStateOf(false) }
 
     var me by remember { mutableStateOf<Me?>(null) }
     LaunchedEffect(sessionVersion) {
@@ -389,9 +412,11 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     }
 
     DisposableEffect(lkRoom) {
+        // Capture this room: by the time it is disposed, lkRoom may already be its replacement.
+        val disposing = lkRoom
         onDispose {
-            lkRoom.disconnect()
-            lkRoom.release()
+            disposing.disconnect()
+            disposing.release()
         }
     }
 
@@ -409,6 +434,13 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     suspend fun connectWith(join: JoinResponse, enableMic: Boolean) {
+        val callMode = join.role != "audience"
+        if (callMode != roomCallMode) {
+            lkRoom.disconnect()
+            // The old room is released when the DisposableEffect above re-runs for the new one.
+            lkRoom = createRoom(context, callMode)
+            roomCallMode = callMode
+        }
         lkRoom.connect(join.wsUrl, join.token, connectOptionsFor(join))
         val micOn = enableMic && hasMicPermission()
         if (micOn) lkRoom.localParticipant.setMicrophoneEnabled(true)

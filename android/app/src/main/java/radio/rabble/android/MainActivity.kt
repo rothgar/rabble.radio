@@ -1,5 +1,6 @@
 package radio.rabble.android
 
+import android.media.AudioManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +30,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Volume keys adjust media volume, which is what listeners and the pre-show music use.
+        volumeControlStream = AudioManager.STREAM_MUSIC
         pendingShowId.value = intent?.getStringExtra(Reminders.EXTRA_SHOW_ID)
         val app = application as RabbleApp
         setContent {

@@ -32,6 +32,9 @@
     "RECORDING_BUCKET": "rabble-dev-recordings",
     "LOG_LEVEL": "info",
     // Who can read /admin/feedback and GET /api/feedback (DIDs or handles).
-    "FEEDBACK_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3"
+    "FEEDBACK_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
+    // Web Push (VAPID). The private key is the VAPID_PRIVATE_KEY secret.
+    "VAPID_PUBLIC_KEY": "BMtZBKmewyV3-_C2qn97wceZqSA-hW5NEGcyhOyDS_AJOFu8OJ00FuMBmZ0XVuSECiOu4AP3BMn_GcwilLz7ulA",
+    "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
   }
 }

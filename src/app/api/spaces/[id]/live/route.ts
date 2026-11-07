@@ -42,6 +42,7 @@ import {
 } from '@/lib/livekit';
 import { logger } from '@/lib/logger';
 import { endShowSession, startShowSession } from '@/lib/metrics';
+import { pushRemindersOnAir } from '@/lib/push';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -185,6 +186,13 @@ export async function POST(
         spaceId: space.id,
         onAir: true,
       });
+
+      // Web Push to everyone who asked to be notified. Best-effort and
+      // awaited: the Worker may not keep running after the response.
+      await pushRemindersOnAir(
+        { id: space.id, title: space.title, host: { handle: user.handle, displayName: null } },
+        origin
+      );
 
       // Recording is best-effort: if the Egress service is unreachable or
       // misconfigured we still want the host to be live. We only return an

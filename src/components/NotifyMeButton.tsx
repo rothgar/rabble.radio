@@ -11,6 +11,7 @@
 import { useCallback, useState, type ReactElement } from 'react';
 import { Bell, BellRinging } from '@phosphor-icons/react';
 import { Button } from '@/components/ui';
+import { ensurePushSubscription, type PushStatus } from '@/lib/push-client';
 
 export interface NotifyMeButtonProps {
   spaceId: string;
@@ -32,6 +33,7 @@ export function NotifyMeButton({
   const [reminded, setReminded] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [push, setPush] = useState<PushStatus | null>(null);
 
   const toggle = useCallback(async () => {
     if (busy) return;
@@ -52,8 +54,9 @@ export function NotifyMeButton({
       const value = Boolean(body.reminded);
       setReminded(value);
       onChange?.(value);
-      if (value && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        void Notification.requestPermission().catch(() => undefined);
+      if (value) {
+        // Register this browser for push so the alert arrives with the site closed.
+        setPush(await ensurePushSubscription(true));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update the reminder.');
@@ -94,8 +97,17 @@ export function NotifyMeButton({
       <p className="text-caption text-[var(--color-text-secondary)]" data-testid="notify-me-hint">
         {reminded
           ? `We'll tell you when this show goes on air${scheduledAt ? `, planned for ${new Date(scheduledAt).toLocaleString()}` : ''}. Tap again to cancel.`
-          : 'Get a heads-up here and in the app when the host goes on air.'}
+          : 'Get a notification when the host goes on air, even with this site closed.'}
       </p>
+      {reminded && push && push !== 'subscribed' ? (
+        <p className="text-caption text-[var(--color-text-tertiary)]" data-testid="notify-me-push-status">
+          {push === 'denied'
+            ? 'Browser notifications are blocked, so you will only see the alert while the site is open.'
+            : push === 'unsupported'
+              ? 'This browser cannot receive push notifications; you will see the alert while the site is open.'
+              : 'Push setup did not finish; you will still see the alert while the site is open.'}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="text-label text-[var(--color-live)]" data-testid="notify-me-error">
           {error}

@@ -357,3 +357,20 @@ model ShowReminder {
   @@id([spaceId, did])
   @@index([did])
 }
+
+/// A browser's Web Push subscription (one per browser profile per user).
+/// `failures` counts consecutive delivery errors; 404/410 from the push
+/// service deletes the row outright.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  did        String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  failures   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([did])
+}

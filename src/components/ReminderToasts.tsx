@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { X } from '@phosphor-icons/react';
+import { ensurePushSubscription } from '@/lib/push-client';
 
 export interface DueReminderView {
   spaceId: string;
@@ -58,6 +59,12 @@ export function ReminderToasts({ pollMs = REMINDER_POLL_MS }: { pollMs?: number 
   }, []);
 
   useEffect(() => {
+    // If this browser already granted notifications, make sure the server
+    // still has its push subscription (they rotate, and users sign in on
+    // new browsers). Never prompts.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      void ensurePushSubscription(false);
+    }
     void poll();
     const timer = window.setInterval(() => void poll(), pollMs);
     const onVisible = (): void => {

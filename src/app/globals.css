@@ -149,9 +149,15 @@
   50%       { opacity: 0.35; }
 }
 
+/* Reactions: pop in, hold solid for most of the ride, fade late. The chip
+   is anchored above the avatar (translate -50%/-100%) and drifts sideways
+   by --drift so simultaneous reactions don't stack on one line. */
 @keyframes float-up {
-  0%   { transform: translateY(0);     opacity: 1; }
-  100% { transform: translateY(-60px); opacity: 0; }
+  0%   { transform: translate(-50%, -100%) translateY(0)      scale(1.35); opacity: 0; }
+  8%   { transform: translate(-50%, -100%) translateY(-12px)  scale(1.1);  opacity: 1; }
+  15%  { transform: translate(-50%, -100%) translateY(-24px)  scale(1);    opacity: 1; }
+  60%  { transform: translate(-50%, -100%) translateY(-110px) translateX(calc(var(--drift, 0px) * 0.6)) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -100%) translateY(-200px) translateX(var(--drift, 0px)) scale(0.95); opacity: 0; }
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */

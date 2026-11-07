@@ -193,6 +193,14 @@ interface FloatingReactionState {
   emoji: string;
   x: number;
   y: number;
+  name?: string;
+  avatarUrl?: string | null;
+}
+
+/** Who sent a reaction, for the chip that floats up with it. */
+interface Reactor {
+  name: string;
+  avatarUrl?: string | null;
 }
 
 /** A `reaction` data message from POST /api/spaces/[id]/reactions. */
@@ -856,6 +864,8 @@ function Inner({
           emoji={r.emoji}
           x={r.x}
           y={r.y}
+          name={r.name}
+          avatarUrl={r.avatarUrl}
           onDone={removeFloatingReaction}
         />
       ))}
@@ -1038,7 +1048,7 @@ export function SpaceRoom({
    * from the bottom centre instead.
    */
   const spawnReaction = useCallback(
-    (emoji: string, el: HTMLElement | null) => {
+    (emoji: string, el: HTMLElement | null, who?: Reactor) => {
       let x = window.innerWidth / 2;
       let y = window.innerHeight - 120;
       if (el) {
@@ -1049,14 +1059,17 @@ export function SpaceRoom({
       const id = `${reactionId}-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;
-      setFloatingReactions((prev) => [...prev, { id, emoji, x, y }]);
+      setFloatingReactions((prev) => [...prev, { id, emoji, x, y, name: who?.name, avatarUrl: who?.avatarUrl ?? null }]);
     },
     [reactionId]
   );
 
   const handleReact = useCallback(
     (emoji: string) => {
-      spawnReaction(emoji, document.querySelector<HTMLElement>('[data-local-avatar="true"]'));
+      spawnReaction(emoji, document.querySelector<HTMLElement>('[data-local-avatar="true"]'), {
+        name: displayName?.trim() || (handle ? `@${handle}` : 'You'),
+        avatarUrl: avatarUrl ?? null,
+      });
       // Best-effort: record the reaction server-side so it feeds the show's
       // metrics and is broadcast to the rest of the room. Failures are
       // swallowed — the local emoji already rendered.
@@ -1076,7 +1089,10 @@ export function SpaceRoom({
       const el = document.querySelector<HTMLElement>(
         `[data-testid$="-avatar-${CSS.escape(reaction.did)}"]`
       );
-      spawnReaction(reaction.emoji, el);
+      spawnReaction(reaction.emoji, el, {
+        name: reaction.displayName?.trim() || (reaction.handle ? `@${reaction.handle}` : 'Someone'),
+        avatarUrl: reaction.avatarUrl ?? null,
+      });
     },
     [identity, spawnReaction]
   );

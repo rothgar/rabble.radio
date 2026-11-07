@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -120,7 +122,18 @@ data class RoomMember(
  * root coordinates (px); null when their tile is not on screen, in which
  * case it rises from the bottom centre.
  */
-data class FloatingEmoji(val id: Long, val emoji: String, val origin: Offset?, val jitter: Int)
+data class FloatingEmoji(
+    val id: Long,
+    val emoji: String,
+    val origin: Offset?,
+    val jitter: Int,
+    /** Who reacted, shown on the chip beside the emoji. */
+    val name: String,
+    val avatarUrl: String?,
+)
+
+/** How long a reaction stays on screen, in ms. */
+private const val REACTION_FLOAT_MS = 3200
 
 sealed interface RoomState {
     data object Idle : RoomState
@@ -234,9 +247,18 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     /** Float an emoji up from a member's avatar in the stage/audience area for ~1.6s. */
     fun spawnReaction(emoji: String, identity: String) {
         val id = System.nanoTime()
-        floating = floating + FloatingEmoji(id, emoji, avatarCentres[identity], jitter = ((id / 7) % 41).toInt() - 20)
+        val join = (room as? RoomState.Connected)?.join
+        val local = join != null && identity == join.identity
+        val profile = profiles[identity]
+        val name = profile?.displayName?.takeIf { it.isNotBlank() }
+            ?: profile?.handle?.let { "@$it" }
+            ?: (if (local) join.displayName?.takeIf { it.isNotBlank() } ?: "@${join.handle}" else "Someone")
+        val avatarUrl = profile?.avatarUrl ?: if (local) join.avatarUrl else null
+        floating = floating + FloatingEmoji(
+            id, emoji, avatarCentres[identity], jitter = ((id / 7) % 61).toInt() - 30, name = name, avatarUrl = avatarUrl,
+        )
         scope.launch {
-            delay(1700)
+            delay(REACTION_FLOAT_MS.toLong() + 100)
             floating = floating.filterNot { it.id == id }
         }
     }
@@ -929,30 +951,52 @@ private fun ReactionBar(onReact: (String) -> Unit) {
 @Composable
 private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
     val progress = remember(item.id) { Animatable(0f) }
-    LaunchedEffect(item.id) { progress.animateTo(1f, animationSpec = tween(1600, easing = LinearOutSlowInEasing)) }
+    LaunchedEffect(item.id) { progress.animateTo(1f, animationSpec = tween(REACTION_FLOAT_MS, easing = LinearEasing)) }
     val p = progress.value
+    // Pop in over the first 8%, hold solid until 60%, then fade out.
+    val alpha = when {
+        p < 0.08f -> p / 0.08f
+        p < 0.6f -> 1f
+        else -> (1f - p) / 0.4f
+    }
+    val scale = when {
+        p < 0.15f -> 1.35f - 0.35f * (p / 0.15f)
+        else -> 1f - 0.05f * ((p - 0.15f) / 0.85f)
+    }
+    val rise = (p * 220).dp
+    val drift = (item.jitter * p).dp
     val density = LocalDensity.current
+    val chip: @Composable () -> Unit = {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .alpha(alpha)
+                .scale(scale)
+                .clip(RoundedCornerShape(999.dp))
+                .background(RabbleColors.SurfaceRaised)
+                .border(1.dp, RabbleColors.TextTertiary, RoundedCornerShape(999.dp))
+                .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+        ) {
+            Avatar(item.name, item.avatarUrl, 24)
+            Text(
+                item.name,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.widthIn(max = 120.dp),
+            )
+            Text(item.emoji, fontSize = 28.sp)
+        }
+    }
     val origin = item.origin
     if (origin != null) {
         val xDp = with(density) { (origin.x - overlayOrigin.x).toDp() }
         val yDp = with(density) { (origin.y - overlayOrigin.y).toDp() }
-        Text(
-            item.emoji,
-            fontSize = 26.sp,
-            modifier = Modifier
-                .offset(x = xDp - 13.dp + (item.jitter * p).dp, y = yDp - 30.dp - (p * 140).dp)
-                .alpha(if (p < 0.6f) 1f else (1f - p) / 0.4f)
-                .scale(0.8f + 0.4f * (1f - p)),
-        )
+        Box(Modifier.offset(x = xDp - 70.dp + drift, y = yDp - 56.dp - rise)) { chip() }
     } else {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            Text(
-                item.emoji,
-                fontSize = 26.sp,
-                modifier = Modifier
-                    .offset(x = item.jitter.dp, y = (-100 - p * 200).dp)
-                    .alpha(if (p < 0.6f) 1f else (1f - p) / 0.4f),
-            )
+            Box(Modifier.offset(x = drift, y = (-100).dp - rise)) { chip() }
         }
     }
 }

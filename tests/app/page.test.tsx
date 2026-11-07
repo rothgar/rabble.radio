@@ -1,6 +1,7 @@
 // tests/app/page.test.tsx — the home page
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Suspense, type ReactElement } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { PublicSpace } from '@/types';
 
@@ -23,7 +24,7 @@ vi.mock('@/components/StartShowButton', () => ({
   StartShowButton: () => <button data-testid="start-show-button">Start a show</button>,
 }));
 
-import HomePage from '@/app/page';
+import HomePage, { HomeBody, HomeSkeleton } from '@/app/page';
 
 function show(overrides: Partial<PublicSpace>): PublicSpace {
   return {
@@ -55,7 +56,7 @@ describe('HomePage signed out', () => {
   beforeEach(() => m.getCurrentUser.mockResolvedValue(null));
 
   it('offers listen-now, sign in and a login-gated Start a show', async () => {
-    render(await HomePage());
+    render(await HomeBody());
     expect(screen.getByTestId('home-signed-out')).toBeTruthy();
     expect(screen.getByTestId('home-listen-now').getAttribute('href')).toBe('/show/live1?listen=1');
     expect(screen.getByTestId('home-signin').getAttribute('href')).toBe('/login?next=%2F');
@@ -64,7 +65,7 @@ describe('HomePage signed out', () => {
   });
 
   it('ranks on-air shows by room size with one-click Listen links', async () => {
-    render(await HomePage());
+    render(await HomeBody());
     const cards = screen.getByTestId('home-on-air').querySelectorAll('[data-testid^="show-list-card-"]');
     expect(Array.from(cards).map((c) => c.getAttribute('data-testid'))).toEqual(['show-list-card-live1', 'show-list-card-live2']);
     const action = cards[0].querySelector('[data-testid="show-list-action"]');
@@ -84,7 +85,7 @@ describe('HomePage signed in', () => {
     m.decoratePublicSpaces.mockImplementation(async (s: PublicSpace[]) =>
       s.map((x) => (x.id === 'live2' ? { ...x, hostFollowed: true } : { ...x, hostFollowed: false, followedInRoom: [] }))
     );
-    render(await HomePage());
+    render(await HomeBody());
     expect(screen.getByTestId('home-signed-in')).toBeTruthy();
     expect(screen.getByTestId('start-show-button')).toBeTruthy();
     expect(m.decoratePublicSpaces).toHaveBeenCalledWith(expect.any(Array), 'did:v');
@@ -95,7 +96,25 @@ describe('HomePage signed in', () => {
 
   it('shows an empty state when nothing is on air', async () => {
     m.getSpacesForUser.mockResolvedValue([SCHEDULED]);
-    render(await HomePage());
+    render(await HomeBody());
     expect(screen.getByTestId('home-on-air-empty')).toBeTruthy();
+  });
+});
+
+describe('HomePage shell', () => {
+  it('streams a skeleton with the pitch while the body loads', () => {
+    render(<HomeSkeleton />);
+    expect(screen.getByTestId('home-skeleton').getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByText('On air now')).toBeTruthy();
+  });
+
+  it('wraps the body in Suspense with the skeleton as fallback', () => {
+    const el = HomePage();
+    const children = (el.props as { children: ReactElement[] }).children;
+    const layout = children[1];
+    const suspense = (layout.props as { children: ReactElement }).children;
+    expect(suspense.type).toBe(Suspense);
+    expect((suspense.props as { fallback: ReactElement }).fallback.type).toBe(HomeSkeleton);
+    expect((suspense.props as { children: ReactElement }).children.type).toBe(HomeBody);
   });
 });

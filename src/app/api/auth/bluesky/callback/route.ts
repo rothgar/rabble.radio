@@ -10,6 +10,7 @@ import { prisma } from '@/lib/db';
 import { getOAuthClient } from '@/lib/auth';
 import { getSession, setSession, getAndClearLoginRedirect } from '@/lib/session';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
+import { warmFollowCache } from '@/lib/follows';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -94,11 +95,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // Fill the follows cache while the browser follows the redirect, so the
+  // home page's "For you" section is ready on the first load.
+  warmFollowCache(did);
+
   const loginRedirect = await getAndClearLoginRedirect();
   await setSession({ did, handle });
   log.info('oauth.callback.success', { did, handle });
 
   const publicUrl = process.env.PUBLIC_URL || 'https://rabble.invalid';
-  const redirectTo = new URL(loginRedirect ?? '/stations', publicUrl);
+  const redirectTo = new URL(loginRedirect ?? '/', publicUrl);
   return NextResponse.redirect(redirectTo, { status: 302 });
 }

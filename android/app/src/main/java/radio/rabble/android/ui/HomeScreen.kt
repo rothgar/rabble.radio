@@ -80,13 +80,15 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) { Diagnostics.screen = "home" }
     LaunchedEffect(reload, sessionVersion) {
-        state = HomeState.Loading
+        // Keep the current list on screen while it refreshes (after sign-in,
+        // say); only the very first load shows the spinner.
+        if (state !is HomeState.Ready) state = HomeState.Loading
         // Profile and listing are independent requests; fetch them together.
         val meDeferred = async { if (session.hasSession()) runCatching { api.me() }.getOrNull() else null }
         state = try {
             HomeState.Ready(api.listShows())
         } catch (e: Exception) {
-            HomeState.Failed(e.message ?: "Could not load shows.")
+            if (state is HomeState.Ready) state else HomeState.Failed(e.message ?: "Could not load shows.")
         }
         me = meDeferred.await()
     }

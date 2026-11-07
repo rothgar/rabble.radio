@@ -28,6 +28,7 @@ const {
   };
 });
 
+vi.mock('@/lib/follows', () => ({ warmFollowCache: vi.fn() }));
 vi.mock('@/lib/auth', () => {
   return {
     getOAuthClient: () => ({
@@ -255,7 +256,7 @@ describe('GET /api/auth/bluesky/callback', () => {
       },
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toContain('/stations');
+    expect(res.headers.get('location')).toBe('https://rabble.invalid/');
     expect(cookieJar.get('bs_spaces_session')).toBeTruthy();
   });
 

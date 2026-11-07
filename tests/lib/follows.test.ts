@@ -6,8 +6,10 @@ const m = vi.hoisted(() => ({
   findUnique: vi.fn(),
   upsert: vi.fn(),
   participationFindMany: vi.fn(),
+  runInBackground: vi.fn(),
 }));
 
+vi.mock('@/lib/background', () => ({ runInBackground: m.runInBackground }));
 vi.mock('@/lib/db', () => ({
   prisma: {
     followCache: { findUnique: m.findUnique, upsert: m.upsert },
@@ -15,7 +17,13 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { fetchFollowsFromBluesky, FOLLOWS_TTL_MS, getFollowedDids, getPresentIdentities } from '@/lib/follows';
+import {
+  fetchFollowsFromBluesky,
+  FOLLOWS_TTL_MS,
+  getFollowedDids,
+  getPresentIdentities,
+  warmFollowCache,
+} from '@/lib/follows';
 
 const NOW = new Date('2026-11-07T12:00:00Z');
 
@@ -75,10 +83,45 @@ describe('getFollowedDids', () => {
     );
   });
 
+  it('answers within the budget with the pages so far and finishes in the background', async () => {
+    vi.useFakeTimers();
+    try {
+      m.findUnique.mockResolvedValue({ did: 'did:me', follows: '["did:old"]', fetchedAt: new Date(0) });
+      let releaseSecond: (r: Response) => void = () => undefined;
+      const fetchImpl = vi.fn()
+        .mockResolvedValueOnce(page(['did:a'], 'c1'))
+        .mockImplementationOnce(() => new Promise<Response>((resolve) => (releaseSecond = resolve))) as unknown as typeof fetch;
+      const pending = getFollowedDids('did:me', NOW, fetchImpl, 500);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(await pending).toEqual(new Set(['did:old', 'did:a']));
+      expect(m.runInBackground).toHaveBeenCalledTimes(1);
+      expect(m.upsert).not.toHaveBeenCalled();
+      releaseSecond(page(['did:b']));
+      await (m.runInBackground.mock.calls[0][0] as Promise<unknown>);
+      expect(m.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: expect.objectContaining({ follows: '["did:a","did:b"]', count: 2 }) })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls back to the stale cache when Bluesky is down', async () => {
     m.findUnique.mockResolvedValue({ did: 'did:me', follows: '["did:old"]', fetchedAt: new Date(0) });
     const fetchImpl = vi.fn(async () => new Response('', { status: 503 })) as unknown as typeof fetch;
     expect(await getFollowedDids('did:me', NOW, fetchImpl)).toEqual(new Set(['did:old']));
+  });
+});
+
+describe('warmFollowCache', () => {
+  it('refreshes and stores the follows in the background', async () => {
+    const fetchImpl = vi.fn(async () => page(['did:z'])) as unknown as typeof fetch;
+    warmFollowCache('did:me', fetchImpl);
+    expect(m.runInBackground).toHaveBeenCalledWith(expect.any(Promise), 'follows.warm');
+    await (m.runInBackground.mock.calls[0][0] as Promise<unknown>);
+    expect(m.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { did: 'did:me' }, create: expect.objectContaining({ follows: '["did:z"]' }) })
+    );
   });
 });
 

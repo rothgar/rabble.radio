@@ -53,17 +53,28 @@ fun LoginScreen(baseUrl: String, session: SessionStore, onDone: () -> Unit) {
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     webViewClient = object : WebViewClient() {
+                        private var done = false
+
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = false
 
-                        override fun onPageFinished(view: WebView, url: String?) {
-                            // The OAuth callback redirects to /stations on the app's
-                            // origin once the cookie is set; that is our cue to leave.
+                        /** The callback's redirect has set the cookie: leave without rendering the landing page. */
+                        private fun finishIfSignedIn(url: String?) {
+                            if (done) return
                             CookieManager.getInstance().flush()
                             if (url != null && url.startsWith(baseUrl) && !url.contains("/login") &&
                                 !url.contains("/api/auth/") && session.hasSession()
                             ) {
+                                done = true
                                 onDone()
                             }
+                        }
+
+                        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                            finishIfSignedIn(url)
+                        }
+
+                        override fun onPageFinished(view: WebView, url: String?) {
+                            finishIfSignedIn(url)
                         }
                     }
                     loadUrl("$baseUrl/login")

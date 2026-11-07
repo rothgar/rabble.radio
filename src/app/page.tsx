@@ -8,7 +8,7 @@
 // viewer's Bluesky follows (hosts they follow, and rooms their follows
 // are in right now).
 
-import type { ReactElement } from 'react';
+import { Suspense, type ReactElement } from 'react';
 import Link from 'next/link';
 import { getSpacesForUser, toPublicSpace } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
@@ -69,19 +69,70 @@ function HostStrip({ hosts }: { hosts: TopHost[] }): ReactElement {
   );
 }
 
-export default async function HomePage(): Promise<ReactElement> {
+/**
+ * Placeholder streamed first: the header and pitch are real, the show rows
+ * are grey bars. Replaced in place once `HomeBody` resolves.
+ */
+export function HomeSkeleton(): ReactElement {
+  const bar = 'animate-pulse rounded-lg bg-[var(--color-surface)]';
+  return (
+    <div className="flex flex-col gap-8" data-testid="home-skeleton" aria-busy="true" aria-live="polite">
+      <header className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
+        <h1 className="text-display font-bold tracking-tight">Live audio shows for Bluesky</h1>
+        <p className="max-w-prose text-body text-[var(--color-text-secondary)]">
+          Listen to anyone on air right now, no account needed. Finding what&apos;s on…
+        </p>
+        <div className="flex gap-3">
+          <span className={`${bar} h-11 w-36`} />
+          <span className={`${bar} h-11 w-44`} />
+        </div>
+      </header>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-title font-semibold tracking-tight">On air now</h2>
+        <span className={`${bar} h-20 w-full`} />
+        <span className={`${bar} h-20 w-full`} />
+        <span className={`${bar} h-20 w-full`} />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-title font-semibold tracking-tight">Popular shows</h2>
+        <span className={`${bar} h-20 w-full`} />
+        <span className={`${bar} h-20 w-full`} />
+      </section>
+    </div>
+  );
+}
+
+/**
+ * The page shell streams immediately; the data-dependent body renders
+ * inside Suspense so a slow lookup (a cold Bluesky follows fetch, say)
+ * never leaves the visitor on a blank page.
+ */
+export default function HomePage(): ReactElement {
+  return (
+    <>
+      <SiteHeader />
+      <PageLayout>
+        <Suspense fallback={<HomeSkeleton />}>
+          <HomeBody />
+        </Suspense>
+      </PageLayout>
+    </>
+  );
+}
+
+export async function HomeBody(): Promise<ReactElement> {
   const user = await getCurrentUser();
-  const rows = await getSpacesForUser(user?.did ?? null);
+  const [rows, hosts] = await Promise.all([
+    getSpacesForUser(user?.did ?? null),
+    getTopHosts(8).catch(() => [] as TopHost[]),
+  ]);
   const shows = await decoratePublicSpaces(rows.map((s) => toPublicSpace(s)), user?.did ?? null);
   const { forYou, onAir, popular } = buildHomeSections(shows);
-  const hosts = await getTopHosts(8).catch(() => [] as TopHost[]);
   const stations = YOUTUBE_CATEGORIES.filter((tag) => shows.some((s) => primaryTagOf(s.tags) === tag));
   const firstLive = onAir[0] ?? null;
 
   return (
     <>
-      <SiteHeader />
-      <PageLayout>
         {user ? (
           <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between" data-testid="home-signed-in">
             <div>
@@ -184,7 +235,6 @@ export default async function HomePage(): Promise<ReactElement> {
             </ul>
           </section>
         ) : null}
-      </PageLayout>
     </>
   );
 }

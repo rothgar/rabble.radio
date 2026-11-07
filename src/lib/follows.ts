@@ -10,9 +10,16 @@
 
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { runInBackground } from '@/lib/background';
 
 export const FOLLOWS_TTL_MS = 60 * 60 * 1000;
 export const FOLLOWS_MAX = 2000;
+/**
+ * How long a listing waits for a cold follows fetch before answering with
+ * whatever pages came back so far; the rest finishes in the background and
+ * lands in the cache for the next load.
+ */
+export const FOLLOWS_BUDGET_MS = 1200;
 const PAGE = 100;
 const APPVIEW = 'https://public.api.bsky.app';
 
@@ -21,11 +28,15 @@ interface FollowsPage {
   cursor?: string;
 }
 
-/** Page through getFollows until the cap or the end. Throws on HTTP errors. */
+/**
+ * Page through getFollows until the cap or the end. Throws on HTTP errors.
+ * `onPage` sees each page as it arrives so callers can use partial results.
+ */
 export async function fetchFollowsFromBluesky(
   did: string,
   fetchImpl: typeof fetch = fetch,
-  max = FOLLOWS_MAX
+  max = FOLLOWS_MAX,
+  onPage?: (dids: string[]) => void
 ): Promise<string[]> {
   const out: string[] = [];
   let cursor: string | undefined;
@@ -37,9 +48,12 @@ export async function fetchFollowsFromBluesky(
     const res = await fetchImpl(url.toString(), { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`getFollows failed: HTTP ${res.status}`);
     const page = (await res.json()) as FollowsPage;
+    const got: string[] = [];
     for (const f of page.follows ?? []) {
-      if (typeof f.did === 'string') out.push(f.did);
+      if (typeof f.did === 'string') got.push(f.did);
     }
+    out.push(...got);
+    onPage?.(got);
     if (!page.cursor || (page.follows ?? []).length === 0) break;
     cursor = page.cursor;
   }
@@ -50,15 +64,56 @@ function toDate(v: unknown): Date {
   return v instanceof Date ? v : new Date(String(v));
 }
 
+function parseFollows(json: string): Set<string> {
+  try {
+    const arr = JSON.parse(json);
+    return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Fetch the full follow list and store it. Throws when Bluesky fails. */
+async function refreshFollows(
+  did: string,
+  now: Date,
+  fetchImpl: typeof fetch,
+  onPage?: (dids: string[]) => void
+): Promise<string[]> {
+  const follows = await fetchFollowsFromBluesky(did, fetchImpl, FOLLOWS_MAX, onPage);
+  const json = JSON.stringify(follows);
+  await prisma.followCache
+    .upsert({
+      where: { did },
+      create: { did, follows: json, count: follows.length, fetchedAt: now },
+      update: { follows: json, count: follows.length, fetchedAt: now },
+    })
+    .catch(() => undefined);
+  return follows;
+}
+
 /**
- * The DIDs the viewer follows. Serves the cache when fresh, refreshes it
- * otherwise, and falls back to the stale cache (or nothing) when Bluesky
+ * Fill the follow cache for a user who just signed in, without blocking the
+ * response. The home page they land on then finds it warm.
+ */
+export function warmFollowCache(did: string, fetchImpl: typeof fetch = fetch): void {
+  runInBackground(refreshFollows(did, new Date(), fetchImpl), 'follows.warm');
+}
+
+const BUDGET_EXCEEDED = Symbol('budget');
+
+/**
+ * The DIDs the viewer follows. Serves the cache when fresh. Otherwise it
+ * refreshes, but waits at most `budgetMs`: past that it answers with the
+ * pages fetched so far plus the stale cache, and the refresh completes in
+ * the background. Falls back to the stale cache (or nothing) when Bluesky
  * is unreachable. Never throws.
  */
 export async function getFollowedDids(
   did: string | null,
   now: Date = new Date(),
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  budgetMs: number = FOLLOWS_BUDGET_MS
 ): Promise<Set<string>> {
   if (!did) return new Set();
   let cached: { follows: string; fetchedAt: Date } | null = null;
@@ -68,31 +123,30 @@ export async function getFollowedDids(
   } catch {
     cached = null;
   }
-  const parse = (json: string): Set<string> => {
-    try {
-      const arr = JSON.parse(json);
-      return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []);
-    } catch {
-      return new Set();
-    }
-  };
   if (cached && now.getTime() - cached.fetchedAt.getTime() < FOLLOWS_TTL_MS) {
-    return parse(cached.follows);
+    return parseFollows(cached.follows);
   }
+  const stale = cached ? parseFollows(cached.follows) : new Set<string>();
+
+  const partial: string[] = [];
+  const refresh = refreshFollows(did, now, fetchImpl, (dids) => partial.push(...dids));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<typeof BUDGET_EXCEEDED>((resolve) => {
+    timer = setTimeout(() => resolve(BUDGET_EXCEEDED), budgetMs);
+  });
   try {
-    const follows = await fetchFollowsFromBluesky(did, fetchImpl);
-    const json = JSON.stringify(follows);
-    await prisma.followCache
-      .upsert({
-        where: { did },
-        create: { did, follows: json, count: follows.length, fetchedAt: now },
-        update: { follows: json, count: follows.length, fetchedAt: now },
-      })
-      .catch(() => undefined);
-    return new Set(follows);
+    const result = await Promise.race([refresh, budget]);
+    if (result === BUDGET_EXCEEDED) {
+      logger.info('follows.refresh_deferred', { did, partial: partial.length });
+      runInBackground(refresh, 'follows.refresh');
+      return new Set([...stale, ...partial]);
+    }
+    return new Set(result);
   } catch (err) {
     logger.warn('follows.refresh_failed', { did, error: err instanceof Error ? err.message : String(err) });
-    return cached ? parse(cached.follows) : new Set();
+    return stale;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

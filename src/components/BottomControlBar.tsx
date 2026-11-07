@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Broadcast, Hand, SignOut } from '@phosphor-icons/react';
 import { ReactionBar } from '@/components/ReactionBar';
 
@@ -54,6 +54,55 @@ export function BottomControlBar({
   onToggleOnAir,
   onAirBusy = false,
 }: BottomControlBarProps): ReactElement {
+  // Leaving is one tap on a bar people are already tapping, so it asks first.
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const askLeave = (): void => setConfirmLeave(true);
+  const confirmDialog = confirmLeave ? (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="leave-dialog-title"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+      data-testid="leave-dialog"
+      onClick={() => setConfirmLeave(false)}
+    >
+      <div
+        className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="leave-dialog-title" className="text-title font-semibold text-[var(--color-text)]">
+          Leave the show?
+        </h2>
+        <p className="text-body text-[var(--color-text-secondary)]">
+          {role === 'host'
+            ? 'You will leave the studio. The show stays open and you can come back from your shows list.'
+            : 'You will stop listening and leave the room.'}
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmLeave(false)}
+            className={`${ACTION_BTN} ${ACTION_BTN_SECONDARY} flex-none`}
+            data-testid="leave-dialog-stay"
+          >
+            Stay
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmLeave(false);
+              onLeave();
+            }}
+            className={`${ACTION_BTN} flex-none bg-[var(--color-live)] text-white hover:opacity-90`}
+            data-testid="leave-dialog-confirm"
+          >
+            Leave
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const renderActions = (): ReactElement => {
     if (role === 'audience') {
       return (
@@ -95,7 +144,7 @@ export function BottomControlBar({
           )}
           <button
             type="button"
-            onClick={onLeave}
+            onClick={askLeave}
             className={`${ACTION_BTN} ${ACTION_BTN_SECONDARY}`}
             data-testid="bottom-bar-leave"
           >
@@ -158,7 +207,7 @@ export function BottomControlBar({
         ) : null}
         <button
           type="button"
-          onClick={onLeave}
+          onClick={askLeave}
           className={`${ACTION_BTN} ${ACTION_BTN_SECONDARY}`}
           data-testid="bottom-bar-leave"
         >
@@ -187,6 +236,7 @@ export function BottomControlBar({
       <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
         {renderActions()}
       </div>
+      {confirmDialog}
     </div>
   );
 }

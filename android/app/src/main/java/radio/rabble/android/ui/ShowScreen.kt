@@ -52,6 +52,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.zIndex
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -251,8 +255,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         val local = join != null && identity == join.identity
         val profile = profiles[identity]
         val name = profile?.displayName?.takeIf { it.isNotBlank() }
-            ?: profile?.handle?.let { "@$it" }
-            ?: (if (local) join.displayName?.takeIf { it.isNotBlank() } ?: "@${join.handle}" else "Someone")
+            ?: profile?.handle?.takeIf { it.isNotBlank() }?.let { "@$it" }
+            ?: (if (local) join.displayName?.takeIf { it.isNotBlank() } ?: join.handle.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "You" else "Someone")
         val avatarUrl = profile?.avatarUrl ?: if (local) join.avatarUrl else null
         floating = floating + FloatingEmoji(
             id, emoji, avatarCentres[identity], jitter = ((id / 7) % 61).toInt() - 30, name = name, avatarUrl = avatarUrl,
@@ -541,6 +545,19 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
+    var confirmLeave by remember { mutableStateOf(false) }
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text("Leave the show?") },
+            text = { Text(if (isHost) "You'll leave the studio. The show stays open and you can come back from your shows list." else "You'll stop listening and leave the room.") },
+            confirmButton = {
+                TextButton(onClick = { confirmLeave = false; leave(); onBack() }) { Text("Leave", color = RabbleColors.Live) }
+            },
+            dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Stay") } },
+        )
+    }
+
     Scaffold(
         containerColor = RabbleColors.Bg,
         topBar = {
@@ -551,12 +568,16 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     FeedbackAction(app.api, showId)
                 },
                 navigationIcon = {
-                    IconButton(onClick = { leave(); onBack() }) {
+                    IconButton(onClick = { if (room is RoomState.Connected) confirmLeave = true else onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 title = { Text((state as? ShowState.Ready)?.show?.title ?: "Show", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )
+        },
+        bottomBar = {
+            // Pinned: reactions are always one tap away, and leaving asks first.
+            if (room is RoomState.Connected) ReactionBar(onReact = ::react, onLeave = { confirmLeave = true })
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).onGloballyPositioned { overlayOrigin = it.positionInRoot() }) {
@@ -567,8 +588,9 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     val connected = room as? RoomState.Connected
                     val replay = s.show.replay
                     val showReplay = replay != null && connected == null && !(connected?.onAir ?: s.show.isLive)
-                    val controls: @Composable () -> Unit = {
-                        ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive)
+                    // Top box: title, host, on-air state and the stage.
+                    val topBox: @Composable () -> Unit = {
+                        ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive, room = connected, avatarCentres = avatarCentres)
                         if (showReplay && replay != null) {
                             // Off air with a recording: play it instead of opening an empty stage.
                             ReplayPanel(show = s.show, replay = replay, audioUrl = app.api.absolute(replay.audioUrl))
@@ -578,17 +600,6 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                     Text(if (room == RoomState.Joining) "Opening…" else "Open the studio")
                                 }
                             }
-                        }
-                        if (connected != null && (s.show.musicMood != null || (isHostOfShow && !connected.onAir))) {
-                            MusicCard(
-                                baseUrl = app.baseUrl,
-                                spaceId = s.show.id,
-                                moodId = s.show.musicMood,
-                                active = s.show.musicMood != null && (!connected.onAir || !connected.remoteAudio),
-                                canPick = isHostOfShow && !connected.onAir,
-                                busy = moodBusy,
-                                onPick = ::setMusicMood,
-                            )
                         }
                         if (connected != null && connected.invitePending) {
                             InviteBanner(
@@ -607,17 +618,16 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             remindBusy = remindBusy,
                             onToggleRemind = ::toggleRemind,
                             onJoin = ::joinShow,
-                            onLeave = ::leave,
                             onToggleMic = ::toggleMic,
                             onStepDown = { stage("leave") },
                             onToggleOnAir = { setOnAir(!(connected?.onAir ?: false)) },
                             onLogin = onLogin,
                         )
                     }
-                    val people: @Composable () -> Unit = {
+                    // Below: who is listening, then the music (its credit sits last).
+                    val bottom: @Composable () -> Unit = {
                         if (connected != null) {
-                            PeoplePanel(connected, avatarCentres)
-                            ReactionBar(onReact = ::react)
+                            AudiencePanel(connected, avatarCentres)
                         } else if (isWideScreen()) {
                             Card {
                                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -629,9 +639,20 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                 }
                             }
                         }
+                        if (connected != null && (s.show.musicMood != null || (isHostOfShow && !connected.onAir))) {
+                            MusicCard(
+                                baseUrl = app.baseUrl,
+                                spaceId = s.show.id,
+                                moodId = s.show.musicMood,
+                                active = s.show.musicMood != null && (!connected.onAir || !connected.remoteAudio),
+                                canPick = isHostOfShow && !connected.onAir,
+                                busy = moodBusy,
+                                onPick = ::setMusicMood,
+                            )
+                        }
                     }
                     if (isWideScreen()) {
-                        // Unfolded: controls on the left, the room on the right, each scrolling on its own.
+                        // Unfolded: stage and controls on the left, the audience and music on the right.
                         Row(
                             Modifier.fillMaxSize().widthIn(max = ContentMaxWidth).align(Alignment.TopCenter).padding(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(24.dp),
@@ -639,11 +660,11 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             Column(
                                 Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                            ) { controls(); Spacer(Modifier.height(24.dp)) }
+                            ) { topBox(); Spacer(Modifier.height(24.dp)) }
                             Column(
                                 Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                            ) { people(); Spacer(Modifier.height(24.dp)) }
+                            ) { bottom(); Spacer(Modifier.height(24.dp)) }
                         }
                     } else {
                         Column(
@@ -653,26 +674,30 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                 .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            controls()
-                            people()
+                            topBox()
+                            bottom()
                             Spacer(Modifier.height(24.dp))
                         }
                     }
                 }
             }
-            floating.forEach { FloatingReaction(it, overlayOrigin) }
+            // Reactions float above everything, including the scrolled content.
+            Box(Modifier.fillMaxSize().zIndex(1f)) {
+                floating.forEach { FloatingReaction(it, overlayOrigin) }
+            }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun ShowHeader(show: Show, onAir: Boolean) {
+private fun ShowHeader(show: Show, onAir: Boolean, room: RoomState.Connected?, avatarCentres: MutableMap<String, Offset>) {
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (onAir) LiveBadge() else Pill(if (show.status == "active" || show.status == "live") "Off air" else show.status.replaceFirstChar { it.uppercase() })
                 Spacer(Modifier.weight(1f))
-                Text("${show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("${room?.let { it.members.count { m -> !m.onStage } + it.anonymousListeners } ?: show.listenerCount} listening", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
             }
             Text(show.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -683,8 +708,43 @@ private fun ShowHeader(show: Show, onAir: Boolean) {
             show.description?.takeIf { it.isNotBlank() }?.let {
                 Text(it, color = RabbleColors.Text)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { show.tags.forEach { Pill(it) } }
+            if (show.tags.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { show.tags.forEach { Pill(it) } }
+
+            // The stage lives in the top box. Empty seats are drawn as placeholders.
+            Text("ON STAGE", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
+            val stage = room?.members?.filter { it.onStage } ?: emptyList()
+            if (stage.isEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    repeat(3) { PlaceholderSeat() }
+                }
+                Text(
+                    if (room == null) "Join to see who's on stage." else "No one on stage yet.",
+                    color = RabbleColors.TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    stage.forEach { m -> MemberTile(m, large = true, onAvatarCentre = { c -> avatarCentres[m.identity] = c }) }
+                }
+            }
         }
+    }
+}
+
+/** An empty seat on the stage: a faint avatar-sized circle. */
+@Composable
+private fun PlaceholderSeat() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+        Box(
+            Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(RabbleColors.SurfaceRaised.copy(alpha = 0.6f))
+                .border(1.dp, RabbleColors.TextTertiary.copy(alpha = 0.6f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { Text("👤", fontSize = 22.sp, modifier = Modifier.alpha(0.35f)) }
+        Spacer(Modifier.height(4.dp))
+        Text("Open seat", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextTertiary)
     }
 }
 
@@ -720,7 +780,6 @@ private fun RoomPanel(
     remindBusy: Boolean,
     onToggleRemind: () -> Unit,
     onJoin: () -> Unit,
-    onLeave: () -> Unit,
     onToggleMic: () -> Unit,
     onStepDown: () -> Unit,
     onToggleOnAir: () -> Unit,
@@ -826,18 +885,17 @@ private fun RoomPanel(
                             )
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (onStage) {
+                    if (onStage) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = onToggleMic, modifier = Modifier.weight(1f).height(48.dp)) {
                                 Text(if (room.micOn) "Mute mic" else "Unmute mic")
                             }
-                        }
-                        if (room.join.role == "speaker") {
-                            OutlinedButton(onClick = onStepDown, enabled = !room.stageBusy, modifier = Modifier.weight(1f).height(48.dp)) {
-                                Text("Step down")
+                            if (room.join.role == "speaker") {
+                                OutlinedButton(onClick = onStepDown, enabled = !room.stageBusy, modifier = Modifier.weight(1f).height(48.dp)) {
+                                    Text("Step down")
+                                }
                             }
                         }
-                        Button(onClick = onLeave, modifier = Modifier.weight(1f).height(48.dp)) { Text("Leave") }
                     }
                 }
             }
@@ -845,21 +903,13 @@ private fun RoomPanel(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun PeoplePanel(room: RoomState.Connected, avatarCentres: MutableMap<String, Offset>) {
-    val stage = room.members.filter { it.onStage }
+private fun AudiencePanel(room: RoomState.Connected, avatarCentres: MutableMap<String, Offset>) {
     val audience = room.members.filter { !it.onStage }
+    val listening = audience.size + room.anonymousListeners
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("ON STAGE", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
-            if (stage.isEmpty()) {
-                Text("No one on stage yet.", color = RabbleColors.TextSecondary)
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    stage.forEach { m -> MemberTile(m, large = true, onAvatarCentre = { c -> avatarCentres[m.identity] = c }) }
-                }
-            }
-            val listening = audience.size + room.anonymousListeners
             Text("LISTENING · $listening", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
             if (audience.isEmpty()) {
                 Text(
@@ -920,24 +970,39 @@ private fun MemberTile(member: RoomMember, large: Boolean, onAvatarCentre: (Offs
     }
 }
 
+/** Pinned to the bottom of the show: one tap to react, and an exit that asks first. */
 @Composable
-private fun ReactionBar(onReact: (String) -> Unit) {
-    Card {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("REACT", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                REACTIONS.forEach { emoji ->
-                    Box(
-                        Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(RabbleColors.SurfaceRaised)
-                            .clickable { onReact(emoji) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(emoji, fontSize = 26.sp, color = RabbleColors.Text)
-                    }
+private fun ReactionBar(onReact: (String) -> Unit, onLeave: () -> Unit) {
+    Surface(color = RabbleColors.Surface, tonalElevation = 3.dp) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            REACTIONS.forEach { emoji ->
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(RabbleColors.SurfaceRaised)
+                        .clickable { onReact(emoji) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(emoji, fontSize = 26.sp, color = RabbleColors.Text)
                 }
+            }
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(RabbleColors.Live.copy(alpha = 0.18f))
+                    .clickable(onClick = onLeave),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Leave the show", tint = RabbleColors.Live)
             }
         }
     }
@@ -963,7 +1028,6 @@ private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
         p < 0.15f -> 1.35f - 0.35f * (p / 0.15f)
         else -> 1f - 0.05f * ((p - 0.15f) / 0.85f)
     }
-    val rise = (p * 220).dp
     val drift = (item.jitter * p).dp
     val density = LocalDensity.current
     val chip: @Composable () -> Unit = {
@@ -978,7 +1042,7 @@ private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
                 .border(1.dp, RabbleColors.TextTertiary, RoundedCornerShape(999.dp))
                 .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
         ) {
-            Avatar(item.name, item.avatarUrl, 24)
+            if (item.avatarUrl != null || item.name != "You") Avatar(item.name, item.avatarUrl, 24)
             Text(
                 item.name,
                 style = MaterialTheme.typography.labelMedium,
@@ -989,14 +1053,20 @@ private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
             Text(item.emoji, fontSize = 28.sp)
         }
     }
+    // Rise from the sender's avatar when there is room above it; an avatar
+    // at the top of the screen (the host's, usually) has none, so those
+    // reactions rise from the bottom bar instead and stay visible.
     val origin = item.origin
-    if (origin != null) {
+    val yDp = origin?.let { with(density) { (it.y - overlayOrigin.y).toDp() } }
+    if (origin != null && yDp != null && yDp >= 140.dp) {
         val xDp = with(density) { (origin.x - overlayOrigin.x).toDp() }
-        val yDp = with(density) { (origin.y - overlayOrigin.y).toDp() }
+        val room = (yDp - 60.dp).coerceAtMost(220.dp)
+        val rise = room * p
         Box(Modifier.offset(x = xDp - 70.dp + drift, y = yDp - 56.dp - rise)) { chip() }
     } else {
+        val rise = (p * 260).dp
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            Box(Modifier.offset(x = drift, y = (-100).dp - rise)) { chip() }
+            Box(Modifier.offset(x = drift, y = (-16).dp - rise)) { chip() }
         }
     }
 }

@@ -794,15 +794,6 @@ function Inner({
                 {onAirError}
               </p>
             ) : null}
-            {musicMood || (isHost && !isLive) ? (
-              <PreShowMusic
-                spaceId={spaceId}
-                moodId={musicMood}
-                active={musicActive}
-                isHost={isHost && !isLive}
-                onMoodChange={onMusicMoodChange}
-              />
-            ) : null}
             {preShowBanner}
             {pendingInvite ? (
               <StageInviteToast
@@ -814,6 +805,15 @@ function Inner({
             ) : null}
             {onStageSection}
             {audienceSection}
+            {musicMood || (isHost && !isLive) ? (
+              <PreShowMusic
+                spaceId={spaceId}
+                moodId={musicMood}
+                active={musicActive}
+                isHost={isHost && !isLive}
+                onMoodChange={onMusicMoodChange}
+              />
+            ) : null}
             <div
               className="flex flex-col gap-3 rounded-lg border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 sm:p-6"
               data-testid="room-share-card"
@@ -1053,8 +1053,12 @@ export function SpaceRoom({
       let y = window.innerHeight - 120;
       if (el) {
         const rect = el.getBoundingClientRect();
-        x = rect.left + rect.width / 2;
-        y = rect.top;
+        // A tile at the top of the viewport has no room above it for the
+        // chip to rise through; those reactions float up from the bottom.
+        if (rect.top >= 240 && rect.top <= window.innerHeight) {
+          x = rect.left + rect.width / 2;
+          y = rect.top;
+        }
       }
       const id = `${reactionId}-${Date.now()}-${Math.random()
         .toString(36)

@@ -4,7 +4,7 @@
 // keeps a 44px minimum touch target (min-h-touch).
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { BottomControlBar } from '@/components/BottomControlBar';
 
 function baseProps() {
@@ -112,5 +112,22 @@ describe('<BottomControlBar />', () => {
       <BottomControlBar role="audience" {...baseProps()} onAir={false} onToggleOnAir={vi.fn()} />
     );
     expect(screen.queryByTestId('bottom-bar-on-air')).toBeNull();
+  });
+});
+
+describe('leave confirmation', () => {
+  it('asks before leaving and only calls onLeave on confirm', () => {
+    const props = baseProps();
+    render(<BottomControlBar role="audience" {...props} />);
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    expect(screen.getByTestId('leave-dialog')).toBeInTheDocument();
+    expect(props.onLeave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('leave-dialog-stay'));
+    expect(screen.queryByTestId('leave-dialog')).not.toBeInTheDocument();
+    expect(props.onLeave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    fireEvent.click(screen.getByTestId('leave-dialog-confirm'));
+    expect(props.onLeave).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('leave-dialog')).not.toBeInTheDocument();
   });
 });

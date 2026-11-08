@@ -18,6 +18,7 @@ struct LoginView: View {
                     ToolbarItem(placement: .topBarLeading) { Button("Close") { onDone() } }
                 }
         }
+        .onAppear { Diagnostics.screen = "login" }
     }
 }
 
@@ -39,16 +40,29 @@ struct LoginWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         let parent: LoginWebView
+        private var done = false
         init(_ parent: LoginWebView) { self.parent = parent }
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard let url = webView.url, let host = parent.baseURL.host, url.host == host else { return }
+        /// The callback's redirect has set the cookie: leave without rendering the landing page.
+        private func finishIfSignedIn(_ webView: WKWebView) {
+            guard !done, let url = webView.url, let host = parent.baseURL.host, url.host == host else { return }
             let path = url.path
             guard !path.hasPrefix("/login"), !path.hasPrefix("/api/auth/") else { return }
             Task { @MainActor in
                 await parent.session.sync(from: webView.configuration.websiteDataStore.httpCookieStore)
-                if parent.session.hasSession { parent.onDone() }
+                if !done, parent.session.hasSession {
+                    done = true
+                    parent.onDone()
+                }
             }
+        }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            finishIfSignedIn(webView)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            finishIfSignedIn(webView)
         }
     }
 }

@@ -1,118 +1,205 @@
-import AVFoundation
-import LiveKit
 import SwiftUI
+
+/// Top centre of each member's avatar, reported by the tiles so reactions
+/// can rise from the right place.
+struct AvatarCentreKey: PreferenceKey {
+    static let defaultValue: [String: CGPoint] = [:]
+    static func reduce(value: inout [String: CGPoint], nextValue: () -> [String: CGPoint]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+private let showSpace = "show"
 
 struct ShowView: View {
     @EnvironmentObject private var env: AppEnvironment
-    let showId: String
-
-    @State private var show: Show?
-    @State private var error: String?
-    @State private var loading = true
-    @State private var signedIn = false
+    @EnvironmentObject private var nav: Navigator
+    @StateObject private var model: ShowModel
+    let autoJoin: Bool
     @State private var showLogin = false
-    @StateObject private var room = RoomSession()
+
+    init(env: AppEnvironment, showId: String, autoJoin: Bool) {
+        _model = StateObject(wrappedValue: ShowModel(env: env, showId: showId))
+        self.autoJoin = autoJoin
+    }
 
     var body: some View {
         Group {
-            if loading {
-                ProgressView().tint(RabbleColors.accent)
-            } else if let error {
-                ErrorPanel(message: error) { await load() }
-            } else if let show {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        header(show)
-                        roomPanel(show)
-                    }
-                    .padding(16)
-                }
+            if let show = model.show {
+                content(show)
+            } else if let error = model.loadError {
+                ErrorPanel(message: error) { await model.load(autoJoin: autoJoin) }
+            } else {
+                Loading()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RabbleColors.bg.ignoresSafeArea())
-        .navigationTitle(show?.title ?? "Show")
+        .safeAreaInset(edge: .bottom) {
+            // Pinned: reactions are always one tap away, and leaving asks first.
+            if model.room.connected != nil {
+                ReactionBar(onReact: { model.react($0) }, onLeave: { model.confirmLeave = true })
+            }
+        }
+        .navigationTitle(model.show?.title ?? "Show")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    if model.room.connected != nil { model.confirmLeave = true } else { nav.pop() }
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .accessibilityLabel("Back")
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if model.isHost { Button("Edit") { model.editing = true } }
+                FeedbackButton(showId: model.showId)
+            }
+        }
+        .alert("Leave the show?", isPresented: $model.confirmLeave) {
+            Button("Stay", role: .cancel) {}
+            Button("Leave", role: .destructive) {
+                model.leave()
+                nav.pop()
+            }
+        } message: {
+            Text(model.isHost
+                 ? "You'll leave the studio. The show stays open and you can come back from your shows list."
+                 : "You'll stop listening and leave the room.")
+        }
+        .sheet(isPresented: $model.editing) {
+            if let show = model.show {
+                ShowDetailsSheet(title: show.title, description: show.description ?? "") { title, description in
+                    model.saveDetails(title: title, description: description)
+                }
+            }
+        }
         .sheet(isPresented: $showLogin) {
             LoginView { showLogin = false; env.sessionVersion += 1 }
         }
-        .task(id: env.sessionVersion) { await load() }
-        .onDisappear { room.leave() }
-    }
-
-    private func load() async {
-        signedIn = env.session.hasSession
-        do {
-            show = try await env.api.show(id: showId)
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-        }
-        loading = false
+        .task(id: env.sessionVersion) { await model.load(autoJoin: autoJoin) }
+        .onAppear { Diagnostics.screen = "show/\(model.showId)" }
+        .onDisappear { model.leave() }
     }
 
     @ViewBuilder
-    private func header(_ show: Show) -> some View {
+    private func content(_ show: Show) -> some View {
+        let connected = model.room.connected
+        let onAir = connected?.onAir ?? show.isLive
+        let showReplay = show.replay != nil && connected == nil && !onAir
+        ZStack(alignment: .top) {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Top box: title, host, on-air state and the stage.
+                    ShowHeader(show: show, onAir: onAir, room: connected)
+                    if showReplay, let replay = show.replay {
+                        // Off air with a recording: play it instead of opening an empty stage.
+                        ReplayPanel(show: show, replay: replay, audioUrl: env.api.absolute(replay.audioUrl))
+                        if case .failed(let message) = model.room {
+                            Text(message).foregroundStyle(RabbleColors.live)
+                        }
+                        if model.isHostOfShow {
+                            Button(model.room.isJoining ? "Opening…" : "Open the studio") { model.joinShow() }
+                                .buttonStyle(.bordered)
+                                .disabled(model.room.isJoining)
+                                .wideButton()
+                        }
+                    }
+                    if let connected, connected.invitePending {
+                        InviteBanner(
+                            hostName: show.host.label,
+                            busy: connected.stageBusy,
+                            onAccept: { model.stage("accept") },
+                            onDecline: { model.stage("leave") }
+                        )
+                    }
+                    if !showReplay {
+                        RoomPanel(model: model, show: show, onLogin: { showLogin = true })
+                    }
+                    // Below: who is listening, then the music (its credit sits last).
+                    if let connected {
+                        AudiencePanel(room: connected)
+                        if show.musicMood != nil || (model.isHostOfShow && !connected.onAir) {
+                            MusicCard(
+                                baseURL: env.baseURL,
+                                spaceId: show.id,
+                                moodId: show.musicMood,
+                                active: show.musicMood != nil && (!connected.onAir || !connected.remoteAudio),
+                                canPick: model.isHostOfShow && !connected.onAir,
+                                busy: model.moodBusy,
+                                onPick: { model.setMusicMood($0) }
+                            )
+                        }
+                    }
+                    Spacer(minLength: 24)
+                }
+                .frame(maxWidth: contentMaxWidth)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity)
+            }
+            .onPreferenceChange(AvatarCentreKey.self) { centres in
+                model.avatarCentres = centres
+            }
+            // Reactions float above everything, including the scrolled content.
+            GeometryReader { geo in
+                ZStack {
+                    ForEach(model.floating) { item in
+                        FloatingReactionView(item: item, bounds: geo.size)
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .allowsHitTesting(false)
+        }
+        .coordinateSpace(name: showSpace)
+    }
+}
+
+// MARK: - Top box
+
+private struct ShowHeader: View {
+    let show: Show
+    let onAir: Bool
+    let room: ConnectedRoom?
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                if show.isLive { LiveBadge() } else { Pill(text: show.status == "active" ? "Off air" : show.status.capitalized) }
+                if onAir {
+                    LiveBadge()
+                } else {
+                    Pill(text: show.status == "active" || show.status == "live" ? "Off air" : show.status.capitalized)
+                }
                 Spacer()
-                Text("\(show.listenerCount) listening").font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                Text("\(room?.listening ?? show.listenerCount) listening").font(.caption).foregroundStyle(RabbleColors.textSecondary)
             }
             Text(show.title).font(.title2.weight(.semibold))
             HStack(spacing: 8) {
                 HostAvatar(host: show.host, size: 28)
-                Text(show.host.displayName ?? "@\(show.host.handle)").foregroundStyle(RabbleColors.textSecondary)
+                Text(show.host.label).foregroundStyle(RabbleColors.textSecondary)
             }
-            if let description = show.description, !description.isEmpty {
+            if let description = show.description, !description.trimmingCharacters(in: .whitespaces).isEmpty {
                 Text(description)
             }
-            HStack(spacing: 6) { ForEach(show.tags, id: \.self) { Pill(text: $0) } }
-        }
-        .card()
-    }
+            if !show.tags.isEmpty {
+                FlowLayout(spacing: 6) { ForEach(show.tags, id: \.self) { Pill(text: $0) } }
+            }
 
-    @ViewBuilder
-    private func roomPanel(_ show: Show) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            switch room.state {
-            case .idle, .failed:
-                if case .failed(let message) = room.state {
-                    Text(message).foregroundStyle(RabbleColors.live)
+            // The stage lives in the top box. Empty seats are drawn as placeholders.
+            SectionLabel(text: "ON STAGE").padding(.top, 4)
+            let stage = room?.members.filter(\.onStage) ?? []
+            if stage.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(0..<3, id: \.self) { _ in PlaceholderSeat() }
                 }
-                if signedIn {
-                    Text(show.isLive ? "The show is on air. Joining puts you in the audience." : "The host is off air. You can join and wait in the studio; audio starts when they go on air.")
-                        .foregroundStyle(RabbleColors.textSecondary)
-                    Button("Join") { Task { await room.join(showId: showId, api: env.api) } }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                } else {
-                    Text("Listen without an account. You count toward the listener total but stay invisible; sign in with Bluesky to take the stage.")
-                        .foregroundStyle(RabbleColors.textSecondary)
-                    HStack(spacing: 8) {
-                        Button("Listen") { Task { await room.join(showId: showId, api: env.api) } }
-                            .buttonStyle(.borderedProminent)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                        Button("Sign in") { showLogin = true }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                }
-            case .joining:
-                Text("Connecting…").foregroundStyle(RabbleColors.textSecondary)
-            case .connected(let join):
-                let role = join.anonymous ? "anonymous listener" : join.role
-                Text("Connected as \(role) · \(room.participants) in the room")
-                    .foregroundStyle(RabbleColors.success)
-                HStack(spacing: 8) {
-                    if join.role != "audience" {
-                        Button(room.micOn ? "Mute mic" : "Unmute mic") { Task { await room.toggleMic() } }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    Button("Leave") { room.leave() }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                Text(room == nil ? "Join to see who's on stage." : "No one on stage yet.")
+                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+            } else {
+                FlowLayout(spacing: 12) {
+                    ForEach(stage) { MemberTile(member: $0, large: true) }
                 }
             }
         }
@@ -120,72 +207,497 @@ struct ShowView: View {
     }
 }
 
-/// Owns the LiveKit room connection for the show screen.
-@MainActor
-final class RoomSession: ObservableObject, RoomDelegate {
-    enum State {
-        case idle, joining
-        case connected(JoinResponse)
-        case failed(String)
+/// An empty seat on the stage: a faint avatar-sized circle.
+private struct PlaceholderSeat: View {
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle().fill(RabbleColors.surfaceRaised.opacity(0.6))
+                Circle().strokeBorder(RabbleColors.textTertiary.opacity(0.6), lineWidth: 1)
+                Text("👤").font(.system(size: 22)).opacity(0.35)
+            }
+            .frame(width: 64, height: 64)
+            Text("Open seat").font(.caption).foregroundStyle(RabbleColors.textTertiary)
+        }
+        .frame(width: 80)
+    }
+}
+
+private struct InviteBanner: View {
+    let hostName: String
+    let busy: Bool
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("\(hostName) invited you on stage").font(.headline)
+            Text("Accepting turns your microphone on so the room can hear you.")
+                .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+            HStack(spacing: 8) {
+                Button(busy ? "Joining…" : "Take the stage", action: onAccept)
+                    .buttonStyle(.borderedProminent).disabled(busy).wideButton()
+                Button("Not now", action: onDecline)
+                    .buttonStyle(.bordered).disabled(busy).wideButton()
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RabbleColors.accent.opacity(0.18))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+// MARK: - Controls
+
+private struct RoomPanel: View {
+    @ObservedObject var model: ShowModel
+    let show: Show
+    let onLogin: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch model.room {
+            case .idle, .failed:
+                idle
+            case .joining:
+                Text("Connecting…").foregroundStyle(RabbleColors.textSecondary)
+            case .connected(let room):
+                connected(room)
+            }
+        }
+        .card()
     }
 
-    @Published var state: State = .idle
-    @Published var participants = 0
-    @Published var micOn = false
-
-    private lazy var room = Room(delegate: self)
-
-    func join(showId: String, api: RabbleAPI) async {
-        state = .joining
-        do {
-            let join = try await api.join(showId: showId)
-            // Relay credentials from the join response replace the SFU's own
-            // ICE list so devices off the homelab LAN can reach the room.
-            let iceServers = (join.iceServers ?? []).map {
-                IceServer(urls: $0.urls, username: $0.username, credential: $0.credential)
+    @ViewBuilder
+    private var idle: some View {
+        if case .failed(let message) = model.room {
+            Text(message).foregroundStyle(RabbleColors.live)
+        }
+        if !show.isLive, !model.isHostOfShow {
+            // Scheduled or just off air: nothing to listen to yet, offer a reminder.
+            let scheduled = show.status == "scheduled"
+            Text(scheduled
+                 ? "This show hasn't started yet" + (show.scheduledAt.map { " — planned for \(formatWhen($0))" } ?? "") + "."
+                 : "The host is off air right now. Get notified the moment they go live.")
+                .foregroundStyle(RabbleColors.textSecondary)
+            if model.signedIn {
+                Button {
+                    model.toggleRemind()
+                } label: {
+                    Label(model.remindBusy ? "Saving…" : (model.reminded ? "You'll be notified" : "Notify me"),
+                          systemImage: model.reminded ? "bell.fill" : "bell")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.remindBusy)
+                .wideButton()
+                Text(model.reminded
+                     ? "We'll notify you when the host goes on air. Tap again to cancel. Checks run when the app wakes up, about every 15 minutes."
+                     : "Get a notification on this phone when the host goes on air.")
+                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+            } else {
+                Button("Sign in to get notified", action: onLogin).buttonStyle(.bordered).wideButton()
             }
-            try await room.connect(
-                url: join.wsUrl,
-                token: join.token,
-                connectOptions: ConnectOptions(iceServers: iceServers)
+            if model.signedIn, !scheduled {
+                // Guests the host wants on stage before air can still get in.
+                Button(model.room.isJoining ? "Opening…" : "Invited to the stage? Enter the studio") { model.joinShow() }
+                    .font(.caption)
+                    .foregroundStyle(RabbleColors.textTertiary)
+                    .disabled(model.room.isJoining)
+                    .frame(minHeight: 44)
+            }
+        } else if !model.signedIn {
+            Text("Listen without an account. You count toward the listener total but stay invisible; sign in with Bluesky to take the stage.")
+                .foregroundStyle(RabbleColors.textSecondary)
+            HStack(spacing: 8) {
+                Button("Listen") { model.joinShow() }.buttonStyle(.borderedProminent).wideButton()
+                Button("Sign in", action: onLogin).buttonStyle(.bordered).wideButton()
+            }
+        } else {
+            Text(show.isLive
+                 ? "The show is on air. Joining puts you in the audience."
+                 : "The host is off air. You can join and wait in the studio; audio starts when they go on air.")
+                .foregroundStyle(RabbleColors.textSecondary)
+            Button("Join") { model.joinShow() }.buttonStyle(.borderedProminent).wideButton()
+        }
+    }
+
+    @ViewBuilder
+    private func connected(_ room: ConnectedRoom) -> some View {
+        let status: String = room.join.anonymous ? "Listening anonymously"
+            : room.isHost ? "You're hosting"
+            : room.onStage ? "You're on stage"
+            : "You're in the audience"
+        Text(status).font(.headline).foregroundStyle(RabbleColors.success)
+        if !room.onAir {
+            Text(room.isHost
+                 ? "Off air: only the stage can hear each other. Invite co-hosts from the web, name the show with Edit, then go on air to broadcast and record."
+                 : room.onStage ? "Off air: only the stage can hear each other right now."
+                 : "Off air: you'll hear audio as soon as the host goes on air.")
+                .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+        }
+        if let notice = room.notice {
+            Text(notice).font(.caption).foregroundStyle(RabbleColors.textSecondary)
+        }
+        if room.isHost {
+            Button(room.stageBusy ? "Working…" : (room.onAir ? "Go off air" : "Go on air")) { model.setOnAir(!room.onAir) }
+                .buttonStyle(.borderedProminent)
+                .tint(room.onAir ? RabbleColors.surfaceRaised : RabbleColors.live)
+                .disabled(room.stageBusy)
+                .wideButton(height: 52)
+        }
+        if room.onStage {
+            HStack(spacing: 8) {
+                Button(room.micOn ? "Mute mic" : "Unmute mic") { model.toggleMic() }
+                    .buttonStyle(.bordered).wideButton()
+                if room.join.role == "speaker" {
+                    Button("Step down") { model.stage("leave") }
+                        .buttonStyle(.bordered).disabled(room.stageBusy).wideButton()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Audience
+
+private struct AudiencePanel: View {
+    let room: ConnectedRoom
+
+    var body: some View {
+        let audience = room.members.filter { !$0.onStage }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(text: "LISTENING · \(audience.count + room.anonymousListeners)")
+            if audience.isEmpty {
+                Text(room.anonymousListeners > 0 ? "\(room.anonymousListeners) listening without an account." : "Nobody in the audience yet.")
+                    .foregroundStyle(RabbleColors.textSecondary)
+            } else {
+                FlowLayout(spacing: 10) {
+                    ForEach(audience) { MemberTile(member: $0, large: false) }
+                }
+                if room.anonymousListeners > 0 {
+                    Text("+\(room.anonymousListeners) listening without an account")
+                        .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                }
+            }
+        }
+        .card()
+    }
+}
+
+private struct MemberTile: View {
+    let member: RoomMember
+    let large: Bool
+
+    var body: some View {
+        let size: CGFloat = large ? 64 : 44
+        VStack(spacing: 4) {
+            ZStack(alignment: .bottomTrailing) {
+                Avatar(name: member.name, avatarUrl: member.avatarUrl, size: size, ring: member.speaking ? RabbleColors.success : nil)
+                if member.onStage, !member.micOn {
+                    Text("🔇")
+                        .font(.system(size: 10))
+                        .frame(width: 18, height: 18)
+                        .background(RabbleColors.surface)
+                        .clipShape(Circle())
+                }
+            }
+            .background(
+                GeometryReader { geo in
+                    let frame = geo.frame(in: .named(showSpace))
+                    Color.clear.preference(key: AvatarCentreKey.self, value: [member.identity: CGPoint(x: frame.midX, y: frame.minY)])
+                }
             )
-            if join.role == "host" {
-                try await room.localParticipant.setMicrophone(enabled: true)
-                micOn = true
+            Text(member.isLocal ? "You" : member.name)
+                .font(.caption)
+                .foregroundStyle(RabbleColors.text)
+                .lineLimit(1)
+                .multilineTextAlignment(.center)
+            if member.isHost {
+                Text("Host").font(.caption).foregroundStyle(RabbleColors.accent)
             }
-            participants = room.remoteParticipants.count + 1
-            state = .connected(join)
-        } catch {
-            state = .failed(error.localizedDescription)
+        }
+        .frame(width: size + 16)
+    }
+}
+
+// MARK: - Reactions
+
+/// Pinned to the bottom of the show: one tap to react, and an exit that asks first.
+private struct ReactionBar: View {
+    let onReact: (String) -> Void
+    let onLeave: () -> Void
+
+    var body: some View {
+        HStack {
+            ForEach(reactions, id: \.self) { emoji in
+                Spacer(minLength: 0)
+                Button {
+                    onReact(emoji)
+                } label: {
+                    Text(emoji)
+                        .font(.system(size: 26))
+                        .frame(width: 52, height: 52)
+                        .background(RabbleColors.surfaceRaised)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+            Button(action: onLeave) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(RabbleColors.live)
+                    .frame(width: 52, height: 52)
+                    .background(RabbleColors.live.opacity(0.18))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Leave the show")
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(RabbleColors.surface)
+    }
+}
+
+private struct ReactionValues {
+    var alpha: Double = 0
+    var scale: Double = 1.35
+    var progress: Double = 0
+}
+
+/// A reaction chip rising from someone's avatar. It pops in at full
+/// strength, holds solid for most of its life so the room can read who sent
+/// what, then fades as it drifts off. Rises from the sender's avatar when
+/// there is room above it; an avatar at the top of the screen has none, so
+/// those rise from the bottom bar instead and stay visible.
+private struct FloatingReactionView: View {
+    let item: FloatingEmoji
+    let bounds: CGSize
+    @State private var fired = false
+
+    var body: some View {
+        KeyframeAnimator(initialValue: ReactionValues(), trigger: fired) { values in
+            let drift = item.jitter * values.progress
+            chip
+                .opacity(values.alpha)
+                .scaleEffect(values.scale)
+                .position(position(progress: values.progress, drift: drift))
+        } keyframes: { _ in
+            KeyframeTrack(\.alpha) {
+                LinearKeyframe(1, duration: reactionFloatSeconds * 0.08)
+                LinearKeyframe(1, duration: reactionFloatSeconds * 0.52)
+                LinearKeyframe(0, duration: reactionFloatSeconds * 0.40)
+            }
+            KeyframeTrack(\.scale) {
+                LinearKeyframe(1.0, duration: reactionFloatSeconds * 0.15)
+                LinearKeyframe(0.95, duration: reactionFloatSeconds * 0.85)
+            }
+            KeyframeTrack(\.progress) {
+                LinearKeyframe(1, duration: reactionFloatSeconds)
+            }
+        }
+        .onAppear { fired = true }
+    }
+
+    private func position(progress: Double, drift: CGFloat) -> CGPoint {
+        if let origin = item.origin, origin.y >= 140, origin.y <= bounds.height {
+            let room = min(origin.y - 60, 220)
+            return CGPoint(x: origin.x + drift, y: origin.y - 32 - room * progress)
+        }
+        return CGPoint(x: bounds.width / 2 + drift, y: bounds.height - 40 - 260 * progress)
+    }
+
+    private var chip: some View {
+        HStack(spacing: 6) {
+            if item.avatarUrl != nil || item.name != "You" {
+                Avatar(name: item.name, avatarUrl: item.avatarUrl, size: 24)
+            }
+            Text(item.name).font(.subheadline.weight(.semibold)).lineLimit(1).frame(maxWidth: 120)
+            Text(item.emoji).font(.system(size: 28))
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 10)
+        .padding(.vertical, 4)
+        .background(RabbleColors.surfaceRaised)
+        .clipShape(Capsule())
+        .overlay(Capsule().strokeBorder(RabbleColors.textTertiary, lineWidth: 1))
+        .fixedSize()
+    }
+}
+
+// MARK: - Music and replay
+
+/// Pre-show music: plays the mood's tracks locally while `active` (off air,
+/// or on air with nobody publishing audio, as in the demo shows). Hosts
+/// pick the mood here while off air.
+private struct MusicCard: View {
+    let baseURL: URL
+    let spaceId: String
+    let moodId: String?
+    let active: Bool
+    let canPick: Bool
+    let busy: Bool
+    let onPick: (String?) -> Void
+    @StateObject private var player = MusicPlayer()
+
+    private var mood: MusicMood? { Music.mood(moodId) }
+    private var playlist: [MusicTrack] { mood.map { Music.playlist($0, spaceId: spaceId) } ?? [] }
+    private var track: MusicTrack? { playlist.isEmpty ? nil : playlist[player.index % playlist.count] }
+    private var url: URL? { track.map { Music.url(baseURL: baseURL, track: $0) } }
+    private var playing: Bool { active && !player.muted && url != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("♪ Pre-show music" + (mood.map { " · \($0.label)" } ?? "")).font(.headline)
+                Spacer()
+                if mood != nil {
+                    Button(player.muted ? "Unmute" : "Mute") { player.muted.toggle() }.frame(minHeight: 44)
+                }
+            }
+            if let track {
+                Text((active ? "Now playing: " : "Next up: ") + track.attribution)
+                    .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+            }
+            if let error = player.error {
+                Text(error).font(.caption).foregroundStyle(RabbleColors.live)
+            }
+            if canPick {
+                Text("Plays for everyone waiting in the room until you go on air. It is not recorded.")
+                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+                FlowLayout(spacing: 8) {
+                    ForEach(Music.moods) { m in
+                        let selected = m.id == mood?.id
+                        Button(m.label) { onPick(selected ? nil : m.id) }
+                            .buttonStyle(.bordered)
+                            .tint(selected ? RabbleColors.accent : RabbleColors.textSecondary)
+                            .disabled(busy)
+                            .frame(minHeight: 44)
+                    }
+                    Button("Off") { onPick(nil) }
+                        .buttonStyle(.bordered)
+                        .tint(mood == nil ? RabbleColors.accent : RabbleColors.textSecondary)
+                        .disabled(busy || mood == nil)
+                        .frame(minHeight: 44)
+                }
+            }
+        }
+        .card()
+        .onChange(of: moodId) { _, _ in player.index = 0 }
+        .onChange(of: playing) { _, _ in sync() }
+        .onChange(of: url) { _, _ in sync() }
+        .onAppear { sync() }
+        .onDisappear { player.stop() }
+    }
+
+    private func sync() {
+        let count = playlist.count
+        player.sync(url: url, playing: playing) {
+            if count > 0 { player.index = (player.index + 1) % count }
         }
     }
+}
 
-    func toggleMic() async {
-        do {
-            try await room.localParticipant.setMicrophone(enabled: !micOn)
-            micOn.toggle()
-        } catch {
-            state = .failed(error.localizedDescription)
+private struct ReplayPanel: View {
+    let show: Show
+    let replay: Replay
+    @StateObject private var player: ReplayPlayer
+
+    init(show: Show, replay: Replay, audioUrl: URL) {
+        self.show = show
+        self.replay = replay
+        _player = StateObject(wrappedValue: ReplayPlayer(url: audioUrl, durationSeconds: replay.durationSeconds))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Pill(text: "Replay")
+                Text("This show is off air.").font(.caption).foregroundStyle(RabbleColors.textSecondary)
+            }
+            Text("Listen to the recording of \(show.title).")
+            HStack(spacing: 12) {
+                Button {
+                    player.toggle()
+                } label: {
+                    Image(systemName: player.playing ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22))
+                        .frame(width: 56, height: 56)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel(player.playing ? "Pause" : "Play")
+                VStack(spacing: 4) {
+                    Slider(
+                        value: Binding(
+                            get: { player.duration > 0 ? player.position / player.duration : 0 },
+                            set: { player.seek(to: $0) }
+                        ),
+                        in: 0...1
+                    )
+                    .disabled(player.duration <= 0)
+                    HStack {
+                        Text(formatClock(player.position))
+                        Spacer()
+                        Text(player.loading ? "Loading…" : formatClock(player.duration))
+                    }
+                    .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                }
+            }
+            let meta = [
+                replay.startedAt.isEmpty ? nil : "Recorded \(formatWhen(replay.startedAt))",
+                replay.sizeBytes.map { String(format: "%.1f MB", Double($0) / 1_048_576) },
+            ].compactMap { $0 }.joined(separator: " · ")
+            if !meta.isEmpty {
+                Text(meta).font(.caption).foregroundStyle(RabbleColors.textTertiary)
+            }
+            if let error = player.error {
+                Text(error).font(.caption).foregroundStyle(RabbleColors.live)
+            }
         }
+        .card()
+    }
+}
+
+// MARK: - Edit
+
+private struct ShowDetailsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var description: String
+    let onSave: (String, String) -> Void
+
+    init(title: String, description: String, onSave: @escaping (String, String) -> Void) {
+        _title = State(initialValue: title)
+        _description = State(initialValue: description)
+        self.onSave = onSave
     }
 
-    func leave() {
-        Task { await room.disconnect() }
-        state = .idle
-        micOn = false
-    }
-
-    nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor in self.participants = room.remoteParticipants.count + 1 }
-    }
-
-    nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        Task { @MainActor in self.participants = room.remoteParticipants.count + 1 }
-    }
-
-    nonisolated func room(_ room: Room, didUpdateConnectionState connectionState: ConnectionState, from oldConnectionState: ConnectionState) {
-        Task { @MainActor in
-            if case .disconnected = connectionState, case .connected = self.state { self.state = .idle }
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title)
+                    .onChange(of: title) { _, v in if v.count > 200 { title = String(v.prefix(200)) } }
+                TextField("What's the show about?", text: $description, axis: .vertical)
+                    .lineLimit(2...6)
+                    .onChange(of: description) { _, v in if v.count > 2000 { description = String(v.prefix(2000)) } }
+                Text("Topics (stations) can be set from the web for now.")
+                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+            }
+            .scrollContentBackground(.hidden)
+            .background(RabbleColors.bg.ignoresSafeArea())
+            .navigationTitle("Show details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") { onSave(title, description) }
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
         }
+        .preferredColorScheme(.dark)
     }
 }

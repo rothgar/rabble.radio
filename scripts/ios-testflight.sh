@@ -4,4 +4,5 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 rsync -a --delete --exclude build --exclude .build --exclude shots ios/ m1:rabble-ios/
-ssh m1 "cd rabble-ios && env $* scripts/testflight.sh"
+# -t so the keychain unlock prompt inside the script can reach the terminal.
+ssh -t m1 "cd rabble-ios && env $* scripts/testflight.sh"

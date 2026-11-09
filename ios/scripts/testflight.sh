@@ -20,6 +20,16 @@ ENV_FILE="${ASC_ENV_FILE:-$HOME/.config/rabble/testflight.env}"
 ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8}"
 [[ -f "$ASC_KEY_PATH" ]] || { echo "missing API key file $ASC_KEY_PATH" >&2; exit 1; }
 
+# Each ssh login has its own security session, so the login keychain must be
+# unlocked in this very session for Xcode to store and use signing keys. Run
+# the script with `ssh -t` so the password prompt can reach you.
+KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
+if ! security show-keychain-info "$KEYCHAIN" >/dev/null 2>&1; then
+  echo "==> unlocking the login keychain (enter the Mac login password)"
+  security unlock-keychain "$KEYCHAIN"
+  security set-keychain-settings "$KEYCHAIN"
+fi
+
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
 OUT=build/testflight
 ARCHIVE=$OUT/Rabble.xcarchive
@@ -27,7 +37,7 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 AUTH=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration
       -authenticationKeyPath "$ASC_KEY_PATH"
       -authenticationKeyID "$ASC_KEY_ID"
-      -authenticationKeyIssuer "$ASC_ISSUER_ID")
+      -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 VERSION_ARGS=(CURRENT_PROJECT_VERSION="$BUILD_NUMBER")
 [[ -n "${MARKETING_VERSION:-}" ]] && VERSION_ARGS+=(MARKETING_VERSION="$MARKETING_VERSION")
 

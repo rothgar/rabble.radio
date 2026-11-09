@@ -58,6 +58,13 @@ One-time setup on the Mac:
 3. Register the app once in App Store Connect (My Apps, +, bundle id
    `radio.rabble.ios`, SKU anything). The API cannot create app records.
 
+4. The login keychain must be unlocked in the same ssh session as the
+   build (macOS gives every ssh login its own security session), so the
+   script prompts for the Mac login password when needed and must run over
+   `ssh -t`; `scripts/ios-testflight.sh` does that. `scripts/asc.py` is a
+   minimal App Store Connect API client (`asc.py GET /v1/certificates`) for
+   chores such as revoking a certificate whose key was lost.
+
 Then `scripts/ios-testflight.sh` uploads a build numbered by the UTC
 timestamp; pass `BUILD_NUMBER=42` or `MARKETING_VERSION=0.2.0` to override,
 or `SKIP_UPLOAD=1` to only produce `ios/build/testflight/Rabble.ipa`. Add

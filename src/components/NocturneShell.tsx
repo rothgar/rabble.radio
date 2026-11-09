@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Wordmark } from '@/components/ui';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import type { ReactElement, ReactNode } from 'react';
 
 export interface NocturneShellProps {
@@ -34,7 +35,10 @@ export function NocturneShell({
         >
           <Wordmark compact />
         </Link>
-        <div data-testid="nocturne-nav-avatar">{navAvatar}</div>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <div data-testid="nocturne-nav-avatar">{navAvatar}</div>
+        </div>
       </header>
 
       <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-4 py-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">

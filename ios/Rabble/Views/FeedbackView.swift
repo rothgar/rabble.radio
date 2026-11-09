@@ -83,7 +83,6 @@ struct FeedbackSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.light)
     }
 
     private func send() {

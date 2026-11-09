@@ -37,8 +37,13 @@ struct ShowView: View {
         .background(RabbleColors.bg.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             // Pinned: reactions are always one tap away, and leaving asks first.
-            if model.room.connected != nil {
-                ReactionBar(onReact: { model.react($0) }, onLeave: { model.confirmLeave = true })
+            if let connected = model.room.connected {
+                ReactionBar(
+                    onReact: { model.react($0) },
+                    onLeave: { model.confirmLeave = true },
+                    handRaised: connected.join.anonymous || connected.onStage ? nil : connected.handRaised,
+                    onToggleHand: { model.toggleHand() }
+                )
             }
         }
         .navigationTitle(model.show?.title ?? "Show")
@@ -120,7 +125,7 @@ struct ShowView: View {
                     }
                     // Below: who is listening, then the music (its credit sits last).
                     if let connected {
-                        AudiencePanel(room: connected)
+                        AudiencePanel(room: connected, onInvite: connected.isHost ? { model.invite($0) } : nil)
                         if show.musicMood != nil || (model.isHostOfShow && !connected.onAir) {
                             MusicCard(
                                 baseURL: env.baseURL,
@@ -363,10 +368,37 @@ private struct RoomPanel: View {
 
 private struct AudiencePanel: View {
     let room: ConnectedRoom
+    /// Present for the host: invites a listener onto the stage.
+    var onInvite: ((String) -> Void)?
 
     var body: some View {
         let audience = room.members.filter { !$0.onStage }
+        let hands = room.raisedHands
         VStack(alignment: .leading, spacing: 12) {
+            if let onInvite, !hands.isEmpty {
+                SectionLabel(text: "RAISED HANDS · \(hands.count)")
+                ForEach(hands) { member in
+                    HStack(spacing: 10) {
+                        Avatar(name: member.name, avatarUrl: member.avatarUrl, size: 36)
+                        Text("✋ \(member.name)")
+                            .font(RabbleFont.style(.subheadline, .semibold))
+                            .foregroundStyle(RabbleColors.text)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        if room.invited.contains(member.identity) {
+                            Pill(text: "Invited", color: RabbleColors.textOnInk, background: RabbleColors.ink)
+                        } else {
+                            Button("Invite") { onInvite(member.identity) }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                        }
+                    }
+                    .padding(10)
+                    .background(RabbleColors.highlightMuted)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .accessibilityIdentifier("raised-hand-\(member.identity)")
+                }
+            }
             SectionLabel(text: "LISTENING · \(audience.count + room.anonymousListeners)")
             if audience.isEmpty {
                 Text(room.anonymousListeners > 0 ? "\(room.anonymousListeners) listening without an account." : "Nobody in the audience yet.")
@@ -400,6 +432,13 @@ private struct MemberTile: View {
                         .frame(width: 18, height: 18)
                         .background(RabbleColors.surface)
                         .clipShape(Circle())
+                } else if member.handRaised {
+                    Text("✋")
+                        .font(RabbleFont.sans(11))
+                        .frame(width: 20, height: 20)
+                        .background(RabbleColors.highlight)
+                        .clipShape(Circle())
+                        .accessibilityLabel("Hand raised")
                 }
             }
             .background(
@@ -427,9 +466,26 @@ private struct MemberTile: View {
 private struct ReactionBar: View {
     let onReact: (String) -> Void
     let onLeave: () -> Void
+    /// nil hides the control (anonymous listeners and people already on stage).
+    var handRaised: Bool? = nil
+    var onToggleHand: () -> Void = {}
 
     var body: some View {
         HStack {
+            if let handRaised {
+                Button(action: onToggleHand) {
+                    Image(systemName: handRaised ? "hand.raised.fill" : "hand.raised")
+                        .font(RabbleFont.sans(20, .semibold))
+                        .foregroundStyle(handRaised ? RabbleColors.textOnInk : RabbleColors.text)
+                        .frame(width: 52, height: 52)
+                        .background(handRaised ? RabbleColors.ink : RabbleColors.highlightMuted)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(RabbleColors.border, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(handRaised ? "Lower hand" : "Raise hand to speak")
+                .accessibilityAddTraits(handRaised ? .isSelected : [])
+            }
             ForEach(reactions, id: \.self) { emoji in
                 Spacer(minLength: 0)
                 Button {
@@ -511,15 +567,9 @@ private struct FloatingReactionView: View {
     }
 
     private var chip: some View {
-        HStack(spacing: 6) {
-            if item.avatarUrl != nil || item.name != "You" {
-                Avatar(name: item.name, avatarUrl: item.avatarUrl, size: 24)
-            }
-            Text(item.name).font(RabbleFont.style(.subheadline, .semibold)).lineLimit(1).frame(maxWidth: 120)
-            Text(item.emoji).font(RabbleFont.sans(28))
-        }
-        .padding(.leading, 4)
-        .padding(.trailing, 10)
+        Text(item.emoji)
+        .font(RabbleFont.sans(28))
+        .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(RabbleColors.surfaceRaised)
         .clipShape(Capsule())
@@ -698,6 +748,5 @@ private struct ShowDetailsSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.light)
     }
 }

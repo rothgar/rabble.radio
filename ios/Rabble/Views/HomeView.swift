@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var showLogin = false
     @State private var starting = false
     @State private var startError: String?
+    @AppStorage(Appearance.storageKey) private var appearance: String = Appearance.system.rawValue
 
     var body: some View {
         NavigationStack(path: $nav.path) {
@@ -31,6 +32,7 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) { Wordmark() }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    appearanceButton
                     FeedbackButton(showId: nil)
                     if let me {
                         Button {
@@ -164,6 +166,17 @@ struct HomeView: View {
     private func showLink(_ show: Show) -> some View {
         NavigationLink(value: Route.show(id: show.id, autoJoin: false)) { ShowCard(show: show) }
             .buttonStyle(.plain)
+    }
+
+    /// Cycles system -> light -> dark; the same setting lives on the account screen.
+    private var appearanceButton: some View {
+        let current = Appearance(rawValue: appearance) ?? .system
+        return Button {
+            appearance = current.next.rawValue
+        } label: {
+            Image(systemName: current.symbol)
+        }
+        .accessibilityLabel("Appearance: \(current.label)")
     }
 
     private var startCard: some View {

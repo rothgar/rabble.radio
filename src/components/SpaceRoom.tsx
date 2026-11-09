@@ -193,14 +193,6 @@ interface FloatingReactionState {
   emoji: string;
   x: number;
   y: number;
-  name?: string;
-  avatarUrl?: string | null;
-}
-
-/** Who sent a reaction, for the chip that floats up with it. */
-interface Reactor {
-  name: string;
-  avatarUrl?: string | null;
 }
 
 /** A `reaction` data message from POST /api/spaces/[id]/reactions. */
@@ -272,12 +264,15 @@ function RoomSync({
   onLiveChange,
   onSpaceUpdated,
   onRemoteReaction,
+  onAttributesChanged,
 }: {
   spaceId: string;
   isHost: boolean;
   onLiveChange: (next: boolean) => void;
   onSpaceUpdated?: (details: ShowDetails) => void;
   onRemoteReaction?: (reaction: RemoteReaction) => void;
+  /** A participant changed attributes (raised or lowered a hand). */
+  onAttributesChanged?: () => void;
 }): null {
   const room = useRoomContext();
 
@@ -325,13 +320,16 @@ function RoomSync({
       if (!perms || perms.canPublish) return; // stage members always subscribe
       if (typeof perms.canSubscribe === 'boolean') onLiveChange(perms.canSubscribe);
     };
+    const onAttributes = (): void => onAttributesChanged?.();
     room.on(RoomEvent.DataReceived, onData);
     room.on(RoomEvent.ParticipantPermissionsChanged, onPermissions);
+    room.on(RoomEvent.ParticipantAttributesChanged, onAttributes);
     return () => {
       room.off(RoomEvent.DataReceived, onData);
       room.off(RoomEvent.ParticipantPermissionsChanged, onPermissions);
+      room.off(RoomEvent.ParticipantAttributesChanged, onAttributes);
     };
-  }, [isHost, onLiveChange, onRemoteReaction, onSpaceUpdated, room, spaceId]);
+  }, [isHost, onAttributesChanged, onLiveChange, onRemoteReaction, onSpaceUpdated, room, spaceId]);
 
   return null;
 }
@@ -437,6 +435,10 @@ function Inner({
     Boolean(localParticipant?.isMicrophoneEnabled)
   );
   const [invitedSet, setInvitedSet] = useState<Set<string>>(new Set());
+  // Bumped when any participant's attributes change so raised hands show
+  // up without waiting for another participant event.
+  const [, setAttributesVersion] = useState(0);
+  const onAttributesChanged = useCallback(() => setAttributesVersion((v) => v + 1), []);
 
   useEffect(() => {
     setMicOn(Boolean(localParticipant?.isMicrophoneEnabled));
@@ -504,6 +506,17 @@ function Inner({
     if (localOnStage) return 'speaker';
     return 'audience';
   }, [isHost, localOnStage]);
+
+  // A hand comes down once its owner is on stage.
+  useEffect(() => {
+    if (localOnStage && handRaised) toggleHand();
+  }, [handRaised, localOnStage, toggleHand]);
+
+  const handFor = useCallback(
+    (p: Participant): boolean =>
+      (p as { attributes?: Record<string, string> }).attributes?.hand === '1',
+    []
+  );
 
   const resolveIdentity = useCallback(
     (p: Participant): string => p.identity || identity,
@@ -677,6 +690,7 @@ function Inner({
           name: displayFor(p),
           handle: handleFor(p),
           avatarUrl: avatarFor(p) ?? null,
+          handRaised: handFor(p),
         }))}
         invitedSet={invitedSet}
         onInvite={async (target) => {
@@ -719,6 +733,7 @@ function Inner({
           name: displayFor(p),
           handle: handleFor(p),
           avatarUrl: avatarFor(p) ?? null,
+          handRaised: handFor(p),
         }))}
       />
     </section>
@@ -770,6 +785,7 @@ function Inner({
         onLiveChange={onLiveChange}
         onSpaceUpdated={onSpaceUpdated}
         onRemoteReaction={onRemoteReaction}
+        onAttributesChanged={onAttributesChanged}
       />
       {stageSlot}
       <NocturneShell
@@ -864,8 +880,6 @@ function Inner({
           emoji={r.emoji}
           x={r.x}
           y={r.y}
-          name={r.name}
-          avatarUrl={r.avatarUrl}
           onDone={removeFloatingReaction}
         />
       ))}
@@ -927,7 +941,21 @@ export function SpaceRoom({
   } | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
 
-  const toggleHand = useCallback(() => setHandRaised((v) => !v), []);
+  /**
+   * The raised hand is a LiveKit participant attribute (`hand: "1"`), so
+   * the host and everyone else see it, including people who join later.
+   */
+  const setHand = useCallback(
+    (next: boolean) => {
+      setHandRaised(next);
+      const local = room.localParticipant as {
+        setAttributes?: (attrs: Record<string, string>) => Promise<void>;
+      };
+      void local.setAttributes?.({ hand: next ? '1' : '' }).catch(() => {});
+    },
+    [room]
+  );
+  const toggleHand = useCallback(() => setHand(!handRaised), [handRaised, setHand]);
 
   const handleConnected = useCallback(() => {
     setConnectionError(null);
@@ -1048,7 +1076,7 @@ export function SpaceRoom({
    * from the bottom centre instead.
    */
   const spawnReaction = useCallback(
-    (emoji: string, el: HTMLElement | null, who?: Reactor) => {
+    (emoji: string, el: HTMLElement | null) => {
       let x = window.innerWidth / 2;
       let y = window.innerHeight - 120;
       if (el) {
@@ -1063,17 +1091,14 @@ export function SpaceRoom({
       const id = `${reactionId}-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;
-      setFloatingReactions((prev) => [...prev, { id, emoji, x, y, name: who?.name, avatarUrl: who?.avatarUrl ?? null }]);
+      setFloatingReactions((prev) => [...prev, { id, emoji, x, y }]);
     },
     [reactionId]
   );
 
   const handleReact = useCallback(
     (emoji: string) => {
-      spawnReaction(emoji, document.querySelector<HTMLElement>('[data-local-avatar="true"]'), {
-        name: displayName?.trim() || (handle ? `@${handle}` : 'You'),
-        avatarUrl: avatarUrl ?? null,
-      });
+      spawnReaction(emoji, document.querySelector<HTMLElement>('[data-local-avatar="true"]'));
       // Best-effort: record the reaction server-side so it feeds the show's
       // metrics and is broadcast to the rest of the room. Failures are
       // swallowed — the local emoji already rendered.
@@ -1093,10 +1118,7 @@ export function SpaceRoom({
       const el = document.querySelector<HTMLElement>(
         `[data-testid$="-avatar-${CSS.escape(reaction.did)}"]`
       );
-      spawnReaction(reaction.emoji, el, {
-        name: reaction.displayName?.trim() || (reaction.handle ? `@${reaction.handle}` : 'Someone'),
-        avatarUrl: reaction.avatarUrl ?? null,
-      });
+      spawnReaction(reaction.emoji, el);
     },
     [identity, spawnReaction]
   );
@@ -1131,9 +1153,10 @@ export function SpaceRoom({
     setInviteBusy(true);
     const bus = getStageControlsBus();
     if (bus) await bus.accept();
+    setHand(false);
     setPendingInvite(null);
     setInviteBusy(false);
-  }, []);
+  }, [setHand]);
 
   const handleDeclineInvite = useCallback(async () => {
     const bus = getStageControlsBus();

@@ -97,6 +97,11 @@ final class RabbleAPI {
         try await request(StageActionResponse.self, path: "/api/spaces/\(showId)/stage", method: "POST", json: ["action": action])
     }
 
+    /// Host only: invite a listener onto the stage. Mirrors the web host's POST /api/spaces/{id}/stage with action "invite".
+    func invite(showId: String, identity: String) async throws {
+        _ = try await request(StageActionResponse.self, path: "/api/spaces/\(showId)/stage", method: "POST", json: ["action": "invite", "targetIdentity": identity])
+    }
+
     /// Record a reaction; the server counts it and broadcasts it to the room with our profile.
     func react(showId: String, emoji: String) async throws {
         _ = try await raw(path: "/api/spaces/\(showId)/reactions", method: "POST", json: ["emoji": emoji])

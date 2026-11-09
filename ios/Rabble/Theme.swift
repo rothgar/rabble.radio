@@ -1,31 +1,84 @@
 import SwiftUI
+import UIKit
 
 /// Mirrors the brand tokens in src/app/globals.css (docs/brand.md): cream
 /// paper, Retro Teal ink, Rebel Red accent, Vintage Orange secondary, Mustard
 /// highlight. Light theme only.
 enum RabbleColors {
-    static let bg = Color(hex: 0xF1FAEE)            // Cream White
-    static let surface = Color(hex: 0xF8FCF5)
-    static let surfaceRaised = Color(hex: 0xFFFEF9)
-    static let ink = Color(hex: 0x073B4C)           // Retro Teal fill
-    static let inkMuted = Color(hex: 0x073B4C).opacity(0.08)
-    static let text = Color(hex: 0x073B4C)
-    static let textSecondary = Color(hex: 0x3D6472)
-    static let textTertiary = Color(hex: 0x7A9AA4)
-    static let textOnInk = Color(hex: 0xF1FAEE)
-    static let accent = Color(hex: 0xE63946)        // Rebel Red
-    static let accentHover = Color(hex: 0xCF2E3B)
-    static let accentMuted = Color(hex: 0xE63946).opacity(0.12)
-    static let accent2 = Color(hex: 0xFF7F00)       // Vintage Orange
-    static let accent2Dark = Color(hex: 0xAD5600)
-    static let highlight = Color(hex: 0xF9C74F)     // Mustard Yellow
-    static let highlightMuted = Color(hex: 0xF9C74F).opacity(0.35)
-    static let border = Color(hex: 0x073B4C)
-    static let divider = Color(hex: 0x073B4C).opacity(0.18)
-    static let live = Color(hex: 0xE63946)
-    static let success = Color(hex: 0x2A9D8F)
-    static let warning = Color(hex: 0xF9C74F)
-    static let error = Color(hex: 0xE63946)
+    static let bg = dynamic(0xF1FAEE, 0x062B38)            // Cream White / deep teal
+    static let surface = dynamic(0xF8FCF5, 0x0B3A4A)
+    static let surfaceRaised = dynamic(0xFFFEF9, 0x114757)
+    static let ink = dynamic(0x073B4C, 0xF1FAEE)           // Solid fill: teal on cream, cream on teal
+    static let inkMuted = dynamic(0x073B4C, 0xF1FAEE, lightAlpha: 0.08, darkAlpha: 0.10)
+    static let text = dynamic(0x073B4C, 0xF1FAEE)
+    static let textSecondary = dynamic(0x3D6472, 0xB9D1D8)
+    static let textTertiary = dynamic(0x7A9AA4, 0x7FA3AE)
+    static let textOnInk = dynamic(0xF1FAEE, 0x073B4C)
+    static let accent = dynamic(0xE63946, 0xE63946)        // Rebel Red
+    static let accentHover = dynamic(0xCF2E3B, 0xF0515D)
+    static let accentMuted = dynamic(0xE63946, 0xE63946, lightAlpha: 0.12, darkAlpha: 0.18)
+    static let accent2 = dynamic(0xFF7F00, 0xFF7F00)       // Vintage Orange
+    static let accent2Dark = dynamic(0xAD5600, 0xFFB266)
+    static let highlight = dynamic(0xF9C74F, 0xF9C74F)     // Mustard Yellow
+    static let highlightMuted = dynamic(0xF9C74F, 0xF9C74F, lightAlpha: 0.35, darkAlpha: 0.22)
+    static let border = dynamic(0x073B4C, 0xE9F4EC)
+    static let divider = dynamic(0x073B4C, 0xF1FAEE, lightAlpha: 0.18, darkAlpha: 0.18)
+    static let live = dynamic(0xE63946, 0xF0515D)
+    static let success = dynamic(0x2A9D8F, 0x3DB9A9)
+    static let warning = dynamic(0xF9C74F, 0xF9C74F)
+    static let error = dynamic(0xE63946, 0xF0515D)
+
+    /// A colour that follows the light/dark appearance (the user's choice in Appearance, or the system).
+    static func dynamic(_ light: UInt32, _ dark: UInt32, lightAlpha: Double = 1, darkAlpha: Double = 1) -> Color {
+        Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? UIColor(hex: dark, alpha: darkAlpha) : UIColor(hex: light, alpha: lightAlpha)
+        })
+    }
+}
+
+extension UIColor {
+    convenience init(hex: UInt32, alpha: Double = 1) {
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha)
+    }
+}
+
+/// The appearance preference: follow the system, or force light or dark.
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    static let storageKey = "appearance"
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max"
+        case .dark: return "moon"
+        }
+    }
+    var next: Appearance {
+        switch self {
+        case .system: return .light
+        case .light: return .dark
+        case .dark: return .system
+        }
+    }
 }
 
 extension Color {

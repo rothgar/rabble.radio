@@ -6,6 +6,7 @@ struct RabbleApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var env: AppEnvironment
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(Appearance.storageKey) private var appearance: String = Appearance.system.rawValue
 
     init() {
         let env = AppEnvironment()
@@ -19,7 +20,7 @@ struct RabbleApp: App {
         WindowGroup {
             HomeView()
                 .environmentObject(env)
-                .preferredColorScheme(.light)
+                .preferredColorScheme((Appearance(rawValue: appearance) ?? .system).colorScheme)
                 .tint(RabbleColors.accent)
         }
         .onChange(of: scenePhase) { _, phase in

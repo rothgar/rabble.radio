@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ReactElement } from 'react';
-import { Plus } from '@phosphor-icons/react';
+import { Hand, Plus } from '@phosphor-icons/react';
 import type { AudienceMember } from '@/components/AudienceBubbles';
 
 export interface AudienceRowsProps {
@@ -48,8 +48,17 @@ function Row({
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-[var(--color-text)]">
-          {member.name}
+        <span className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--color-text)]">
+          {member.handRaised ? (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-highlight)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-highlight-text)]"
+              data-testid={`audience-hand-${member.identity}`}
+            >
+              <Hand size={11} weight="bold" aria-hidden />
+              Hand up
+            </span>
+          ) : null}
+          <span className="truncate">{member.name}</span>
         </span>
         {member.handle ? (
           <span className="truncate text-xs text-[var(--color-accent-2-700)]">
@@ -79,6 +88,11 @@ function Row({
   );
 }
 
+/**
+ * The host's listener list. People with their hand up come first in their
+ * own "Raised hands" group so the host can bring them on stage without
+ * scanning the whole room; everyone else follows.
+ */
 export function AudienceRows({
   audience,
   invitedSet,
@@ -94,20 +108,37 @@ export function AudienceRows({
       </div>
     );
   }
+  const raised = audience.filter((m) => m.handRaised);
+  const rest = audience.filter((m) => !m.handRaised);
+  const renderRows = (members: AudienceMember[]): ReactElement[] =>
+    members.map((member) => (
+      <Row
+        key={member.identity}
+        member={member}
+        invited={invitedSet.has(member.identity)}
+        onInvite={() => onInvite(member.identity)}
+      />
+    ));
   return (
-    <div
-      className="grid grid-cols-1 gap-3 md:grid-cols-2"
-      data-testid="audience-rows"
-      data-count={audience.length}
-    >
-      {audience.map((member) => (
-        <Row
-          key={member.identity}
-          member={member}
-          invited={invitedSet.has(member.identity)}
-          onInvite={() => onInvite(member.identity)}
-        />
-      ))}
+    <div className="flex flex-col gap-4" data-testid="audience-rows" data-count={audience.length}>
+      {raised.length > 0 ? (
+        <section
+          className="flex flex-col gap-2 rounded-[var(--radius-md)] border-2 border-[var(--color-border)] bg-[var(--color-highlight-muted)] p-3"
+          data-testid="raised-hands"
+          data-count={raised.length}
+        >
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--color-text)]">
+            <Hand size={14} weight="bold" aria-hidden />
+            Raised hands · {raised.length}
+          </h3>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{renderRows(raised)}</div>
+        </section>
+      ) : null}
+      {rest.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2" data-testid="audience-rows-rest">
+          {renderRows(rest)}
+        </div>
+      ) : null}
     </div>
   );
 }

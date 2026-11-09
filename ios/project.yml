@@ -34,7 +34,6 @@ targets:
       properties:
         CFBundleDisplayName: Rabble
         UILaunchScreen: { UIColorName: LaunchBackground }
-        UIUserInterfaceStyle: Light
         UIAppFonts: [Fraunces72ptSoft-Black.ttf, Inter-Regular.ttf, Inter-Medium.ttf, Inter-SemiBold.ttf, Inter-Bold.ttf]
         UIBackgroundModes: [audio, fetch]
         BGTaskSchedulerPermittedIdentifiers: [radio.rabble.ios.reminders]

@@ -36,6 +36,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.Icons
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.async
@@ -116,6 +123,7 @@ fun HomeScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
                 title = { Text("rabble radio", style = MaterialTheme.typography.headlineSmall) },
                 actions = {
+                    ThemeAction()
                     FeedbackAction(api)
                     val user = me
                     if (user != null) {
@@ -280,5 +288,23 @@ private fun StationChip(station: Station, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Pill("${station.tag} · ${station.shows.size}" + if (station.liveCount > 0) " · on air" else "")
+    }
+}
+
+/** Cycles the appearance preference: system -> light -> dark. */
+@Composable
+private fun ThemeAction() {
+    val context = LocalContext.current
+    val pref = ThemePreference.current.value
+    IconButton(onClick = { ThemePreference.set(context, ThemePreference.next(pref)) }) {
+        Icon(
+            when (pref) {
+                ThemePreference.LIGHT -> Icons.Outlined.LightMode
+                ThemePreference.DARK -> Icons.Outlined.DarkMode
+                else -> Icons.Outlined.BrightnessAuto
+            },
+            contentDescription = "Appearance: " + ThemePreference.label(pref),
+            tint = RabbleColors.TextSecondary,
+        )
     }
 }

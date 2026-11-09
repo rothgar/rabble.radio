@@ -8,6 +8,8 @@ export interface AudienceMember {
   name: string;
   handle?: string;
   avatarUrl?: string | null;
+  /** Listener has their hand up (LiveKit participant attribute `hand`). */
+  handRaised?: boolean;
 }
 
 export interface AudienceBubblesProps {
@@ -34,6 +36,7 @@ function Bubble({
   avatarRef,
   highlight,
   label,
+  handRaised,
 }: {
   name: string;
   handle?: string;
@@ -43,9 +46,11 @@ function Bubble({
   avatarRef?: RefObject<HTMLDivElement | null>;
   highlight?: boolean;
   label?: string;
+  handRaised?: boolean;
 }): ReactElement {
   const [broken, setBroken] = useState(false);
   const inner = (
+    <div className="relative">
     <div
       ref={avatarRef}
       className={
@@ -70,6 +75,16 @@ function Bubble({
           {label ?? initialsFor(name)}
         </span>
       )}
+    </div>
+    {handRaised ? (
+      <span
+        className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-highlight)] text-[11px] leading-none"
+        aria-label="Hand raised"
+        data-testid={`${testId}-hand-${identity}`}
+      >
+        ✋
+      </span>
+    ) : null}
     </div>
   );
   return (
@@ -127,6 +142,7 @@ export function AudienceBubbles({
           name={member.name}
           handle={member.handle}
           avatarUrl={member.avatarUrl ?? null}
+          handRaised={member.handRaised}
           testId="audience-bubble"
         />
       ))}

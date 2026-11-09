@@ -14,7 +14,7 @@ Single source of truth: `src/app/globals.css` (tokens) and `tailwind.config.ts`
 Cream paper (`--color-bg` #F1FAEE), Retro Teal ink (`--color-text`,
 `--color-border` #073B4C), Rebel Red accent (`--color-accent`, `--color-live`
 #E63946), Vintage Orange secondary accent (`--color-accent-2` #FF7F00),
-Mustard highlight (`--color-highlight` #F9C74F). Light theme only. Display
+Mustard highlight (`--color-highlight` #F9C74F). Dark appearance overrides the same tokens under `:root[data-theme="dark"]` and `prefers-color-scheme: dark` (ThemeToggle); never branch on theme in components, only use tokens. Display
 face Fraunces Black (`font-display`, applied to h1/h2 automatically) stands in
 for Cooper Black; body is Inter. The default `border` is 1.5px teal and
 `rounded-md` is 8px: cards and buttons are solid rounded containers with thick

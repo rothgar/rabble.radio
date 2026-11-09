@@ -12,6 +12,7 @@ struct MeView: View {
     @State private var error: String?
     @State private var startingId: String?
     @State private var startError: String?
+    @AppStorage(Appearance.storageKey) private var appearance: String = Appearance.system.rawValue
 
     var body: some View {
         Group {
@@ -94,6 +95,12 @@ struct MeView: View {
                         .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).card()
                 }
                 ForEach(shows.joined) { joined in joinedCard(joined) }
+                SectionLabel(text: "APPEARANCE")
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(Appearance.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .card()
                 Button("Log out") { logout() }
                     .buttonStyle(.bordered)
                     .foregroundStyle(RabbleColors.live)

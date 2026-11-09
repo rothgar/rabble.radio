@@ -19,6 +19,18 @@ everything else. This file is the hand-off spec; the implementation lives in
 Derived: secondary text `#3D6472`, tertiary `#7A9AA4`, success `#2A9D8F`,
 quiet dividers `rgba(7,59,76,0.18)`.
 
+### Dark appearance
+
+The same palette inverted: deep teal paper, cream ink, the red / orange /
+mustard accents unchanged. Page `#062B38`, cards `#0B3A4A`, raised `#114757`,
+text `#F1FAEE`, secondary `#B9D1D8`, tertiary `#7FA3AE`, outlines `#E9F4EC`,
+teal fills become cream with teal text, red lifts to `#F0515D` for live /
+error text, links use `#FFB266`. Each platform offers System / Light / Dark:
+web `ThemeToggle` (localStorage `rabble-theme`, `data-theme` on `<html>`),
+Android the appearance action on the home bar (SharedPreferences `theme`),
+iOS the home toolbar button and the Appearance picker on the account screen
+(`@AppStorage("appearance")`).
+
 ## Typography
 
 - **Display** (logo, h1/h2, hero buttons): Cooper Black in the spec. We ship
@@ -56,3 +68,11 @@ mustard waves on teal.
 - Buttons: rounded rectangles; primary red with white text, accent orange with
   teal text, secondary cream with teal text. Hero buttons use the display face.
 - Shadows are hard offsets in teal (`--shadow-md`), not blurs.
+
+## Room conventions
+
+- A raised hand is the LiveKit participant attribute `hand` = `"1"` (cleared
+  with `""`). Hosts see a "Raised hands" group above the listener list with
+  Invite buttons; everyone sees a ✋ badge on that listener. Hands drop when
+  the person reaches the stage.
+- Reactions float as the bare emoji from the sender's avatar.

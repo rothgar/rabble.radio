@@ -80,6 +80,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -124,6 +126,8 @@ data class RoomMember(
     val speaking: Boolean,
     val micOn: Boolean,
     val isLocal: Boolean,
+    /** Audience member asking to speak (LiveKit participant attribute `hand`). */
+    val handRaised: Boolean = false,
 )
 
 /**
@@ -136,9 +140,6 @@ data class FloatingEmoji(
     val emoji: String,
     val origin: Offset?,
     val jitter: Int,
-    /** Who reacted, shown on the chip beside the emoji. */
-    val name: String,
-    val avatarUrl: String?,
 )
 
 /** How long a reaction stays on screen, in ms. */
@@ -158,6 +159,10 @@ sealed interface RoomState {
         val notice: String? = null,
         /** Someone other than us is publishing audio (so pre-show music should yield). */
         val remoteAudio: Boolean = false,
+        /** Our own raised hand (audience only). */
+        val handRaised: Boolean = false,
+        /** Audience members the host has already invited this session. */
+        val invited: Set<String> = emptySet(),
     ) : RoomState
     data class Failed(val message: String) : RoomState
 }
@@ -274,16 +279,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     /** Float an emoji up from a member's avatar in the stage/audience area for ~1.6s. */
     fun spawnReaction(emoji: String, identity: String) {
         val id = System.nanoTime()
-        val join = (room as? RoomState.Connected)?.join
-        val local = join != null && identity == join.identity
-        val profile = profiles[identity]
-        val name = profile?.displayName?.takeIf { it.isNotBlank() }
-            ?: profile?.handle?.takeIf { it.isNotBlank() }?.let { "@$it" }
-            ?: (if (local) join.displayName?.takeIf { it.isNotBlank() } ?: join.handle.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "You" else "Someone")
-        val avatarUrl = profile?.avatarUrl ?: if (local) join.avatarUrl else null
-        floating = floating + FloatingEmoji(
-            id, emoji, avatarCentres[identity], jitter = ((id / 7) % 61).toInt() - 30, name = name, avatarUrl = avatarUrl,
-        )
+        floating = floating + FloatingEmoji(id, emoji, avatarCentres[identity], jitter = ((id / 7) % 61).toInt() - 30)
         scope.launch {
             delay(REACTION_FLOAT_MS.toLong() + 100)
             floating = floating.filterNot { it.id == id }
@@ -319,10 +315,19 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 speaking = p.isSpeaking,
                 micOn = p.isMicrophoneEnabled,
                 isLocal = isLocal,
+                handRaised = !canPublish && p.attributes["hand"] == "1",
             )
         }.sortedWith(compareByDescending<RoomMember> { it.isHost }.thenByDescending { it.onStage }.thenBy { it.name })
         val remoteAudio = lkRoom.remoteParticipants.values.any { it.audioTrackPublications.isNotEmpty() }
-        room = current.copy(members = members, anonymousListeners = anonymous, remoteAudio = remoteAudio)
+        val localCanPublish = members.any { it.isLocal && it.onStage }
+        room = current.copy(
+            members = members,
+            anonymousListeners = anonymous,
+            remoteAudio = remoteAudio,
+            // Taking the stage answers the request; drop the hand.
+            handRaised = current.handRaised && !localCanPublish,
+        )
+        if (current.handRaised && localCanPublish) lkRoom.localParticipant.updateAttributes(mapOf("hand" to ""))
         // Resolve any identities we have not seen yet.
         val missing = members.map { it.identity }.filter { it !in profiles }
         if (missing.isNotEmpty()) {
@@ -349,7 +354,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 is RoomEvent.TrackUnmuted,
                 is RoomEvent.TrackPublished,
                 is RoomEvent.TrackUnpublished,
-                is RoomEvent.ParticipantPermissionsChanged -> refreshMembers()
+                is RoomEvent.ParticipantPermissionsChanged,
+                is RoomEvent.ParticipantAttributesChanged -> refreshMembers()
                 is RoomEvent.DataReceived -> {
                     val current = room as? RoomState.Connected ?: return@collect
                     val msg = runCatching { JSONObject(String(event.data)) }.getOrNull() ?: return@collect
@@ -486,6 +492,31 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
+    /** Audience: ask to speak. Everyone sees the `hand` participant attribute; the host gets a list. */
+    fun toggleHand() {
+        val current = room as? RoomState.Connected ?: return
+        if (current.join.anonymous || current.join.role != "audience") return
+        val next = !current.handRaised
+        room = current.copy(handRaised = next)
+        lkRoom.localParticipant.updateAttributes(mapOf("hand" to if (next) "1" else ""))
+        Diagnostics.event("hand", if (next) "raised" else "lowered")
+    }
+
+    /** Host: invite an audience member to the stage. */
+    fun invite(identity: String) {
+        val current = room as? RoomState.Connected ?: return
+        room = current.copy(invited = current.invited + identity, notice = null)
+        scope.launch {
+            try {
+                app.api.inviteToStage(showId, identity)
+            } catch (e: Exception) {
+                (room as? RoomState.Connected)?.let {
+                    room = it.copy(invited = it.invited - identity, notice = e.message ?: "Could not send the invite.")
+                }
+            }
+        }
+    }
+
     /** accept = take the stage; leave = decline an invite or step down. Both reconnect with the new token. */
     fun stage(action: String) {
         val current = room as? RoomState.Connected ?: return
@@ -609,7 +640,14 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         },
         bottomBar = {
             // Pinned: reactions are always one tap away, and leaving asks first.
-            if (room is RoomState.Connected) ReactionBar(onReact = ::react, onLeave = { confirmLeave = true })
+            (room as? RoomState.Connected)?.let { c ->
+                ReactionBar(
+                    onReact = ::react,
+                    onLeave = { confirmLeave = true },
+                    handRaised = if (!c.join.anonymous && c.join.role == "audience") c.handRaised else null,
+                    onToggleHand = ::toggleHand,
+                )
+            }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).onGloballyPositioned { overlayOrigin = it.positionInRoot() }) {
@@ -659,6 +697,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     // Below: who is listening, then the music (its credit sits last).
                     val bottom: @Composable () -> Unit = {
                         if (connected != null) {
+                            if (isHostOfShow) RaisedHandsPanel(connected, onInvite = ::invite)
                             AudiencePanel(connected, avatarCentres)
                         } else if (isWideScreen()) {
                             Card {
@@ -935,6 +974,37 @@ private fun RoomPanel(
     }
 }
 
+/** Host only: audience members asking to speak, each with an invite button. */
+@Composable
+private fun RaisedHandsPanel(room: RoomState.Connected, onInvite: (String) -> Unit) {
+    val hands = room.members.filter { !it.onStage && it.handRaised }
+    if (hands.isEmpty()) return
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("RAISED HANDS · ${hands.size}", style = MaterialTheme.typography.labelSmall, color = RabbleColors.Accent2Dark, fontWeight = FontWeight.SemiBold)
+            hands.forEach { m ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Avatar(name = m.name, avatarUrl = m.avatarUrl, size = 36)
+                    Text(
+                        "✋ " + m.name,
+                        color = RabbleColors.Text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (m.identity in room.invited) {
+                        Text("Invited", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelMedium)
+                    } else {
+                        Button(onClick = { onInvite(m.identity) }, modifier = Modifier.height(40.dp)) { Text("Invite") }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun AudiencePanel(room: RoomState.Connected, avatarCentres: MutableMap<String, Offset>) {
@@ -986,6 +1056,16 @@ private fun MemberTile(member: RoomMember, large: Boolean, onAvatarCentre: (Offs
                     contentAlignment = Alignment.Center,
                 ) { Text("🔇", fontSize = 10.sp) }
             }
+            if (member.handRaised) {
+                Box(
+                    Modifier
+                        .size(20.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(RabbleColors.Highlight)
+                        .border(1.dp, RabbleColors.Border, RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center,
+                ) { Text("✋", fontSize = 11.sp) }
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -1004,7 +1084,13 @@ private fun MemberTile(member: RoomMember, large: Boolean, onAvatarCentre: (Offs
 
 /** Pinned to the bottom of the show: one tap to react, and an exit that asks first. */
 @Composable
-private fun ReactionBar(onReact: (String) -> Unit, onLeave: () -> Unit) {
+private fun ReactionBar(
+    onReact: (String) -> Unit,
+    onLeave: () -> Unit,
+    /** null hides the hand button (anonymous listeners and the stage). */
+    handRaised: Boolean? = null,
+    onToggleHand: () -> Unit = {},
+) {
     Surface(color = RabbleColors.Surface, tonalElevation = 3.dp) {
         Row(
             Modifier
@@ -1024,6 +1110,20 @@ private fun ReactionBar(onReact: (String) -> Unit, onLeave: () -> Unit) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(emoji, fontSize = 26.sp, color = RabbleColors.Text)
+                }
+            }
+            if (handRaised != null) {
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(if (handRaised) RabbleColors.Highlight else RabbleColors.SurfaceRaised)
+                        .border(if (handRaised) 2.dp else 0.dp, if (handRaised) RabbleColors.Border else RabbleColors.SurfaceRaised, CircleShape)
+                        .clickable(onClick = onToggleHand)
+                        .semantics { contentDescription = if (handRaised) "Lower hand" else "Raise hand to speak" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✋", fontSize = 26.sp)
                 }
             }
             Box(
@@ -1072,16 +1172,8 @@ private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
                 .clip(RoundedCornerShape(999.dp))
                 .background(RabbleColors.SurfaceRaised)
                 .border(1.dp, RabbleColors.TextTertiary, RoundedCornerShape(999.dp))
-                .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
-            if (item.avatarUrl != null || item.name != "You") Avatar(item.name, item.avatarUrl, 24)
-            Text(
-                item.name,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                modifier = Modifier.widthIn(max = 120.dp),
-            )
             Text(item.emoji, fontSize = 28.sp)
         }
     }

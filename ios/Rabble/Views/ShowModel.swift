@@ -13,6 +13,8 @@ struct RoomMember: Identifiable, Hashable {
     let speaking: Bool
     let micOn: Bool
     let isLocal: Bool
+    /// Listener asking to speak (LiveKit participant attribute `hand`).
+    let handRaised: Bool
     var id: String { identity }
 }
 
@@ -24,9 +26,6 @@ struct FloatingEmoji: Identifiable {
     let emoji: String
     let origin: CGPoint?
     let jitter: CGFloat
-    /// Who reacted, shown on the chip beside the emoji.
-    let name: String
-    let avatarUrl: String?
 }
 
 /// How long a reaction stays on screen.
@@ -45,10 +44,15 @@ struct ConnectedRoom {
     var notice: String?
     /// Someone other than us is publishing audio (so pre-show music should yield).
     var remoteAudio: Bool = false
+    /// The local listener's hand is up.
+    var handRaised: Bool = false
+    /// Listeners the host has invited this session.
+    var invited: Set<String> = []
 
     var isHost: Bool { join.role == "host" }
     var onStage: Bool { join.onStage }
     var listening: Int { members.filter { !$0.onStage }.count + anonymousListeners }
+    var raisedHands: [RoomMember] { members.filter { !$0.onStage && $0.handRaised } }
 }
 
 enum RoomState {
@@ -202,6 +206,35 @@ final class ShowModel: ObservableObject {
         }
     }
 
+    /// Listener only: raise or lower a hand. Carried as a LiveKit participant
+    /// attribute so the host (and late joiners) see it without a server round trip.
+    func toggleHand() {
+        guard let current = room.connected, !current.join.anonymous, !current.onStage else { return }
+        let next = !current.handRaised
+        Task {
+            do {
+                try await lkRoom.localParticipant.set(attributes: ["hand": next ? "1" : ""])
+                update { $0.handRaised = next }
+                refreshMembers()
+            } catch {
+                update { $0.notice = error.localizedDescription }
+            }
+        }
+    }
+
+    /// Host only: ask a listener onto the stage.
+    func invite(_ identity: String) {
+        guard let current = room.connected, current.isHost, !current.invited.contains(identity) else { return }
+        update { $0.invited.insert(identity) }
+        Task {
+            do {
+                try await env.api.invite(showId: showId, identity: identity)
+            } catch {
+                update { $0.invited.remove(identity); $0.notice = error.localizedDescription }
+            }
+        }
+    }
+
     /// accept = take the stage; leave = decline an invite or step down. Both reconnect with the new token.
     func stage(_ action: String) {
         guard let current = room.connected else { return }
@@ -322,14 +355,9 @@ final class ShowModel: ObservableObject {
     /// Float a reaction chip up from the sender's avatar (or the bottom bar) for a few seconds.
     func spawnReaction(_ emoji: String, from identity: String) {
         let id = DispatchTime.now().uptimeNanoseconds
-        let join = room.connected?.join
-        let local = join != nil && identity == join!.identity
-        let profile = profiles[identity]
-        let name = profile?.label ?? (local ? (join?.label ?? "You") : "Someone")
-        let avatarUrl = profile?.avatarUrl ?? (local ? join?.avatarUrl : nil)
         floating.append(FloatingEmoji(
             id: id, emoji: emoji, origin: avatarCentres[identity],
-            jitter: CGFloat(Int((id / 7) % 61)) - 30, name: name, avatarUrl: avatarUrl
+            jitter: CGFloat(Int((id / 7) % 61)) - 30
         ))
         Task {
             try? await Task.sleep(for: .seconds(reactionFloatSeconds + 0.1))
@@ -366,7 +394,8 @@ final class ShowModel: ObservableObject {
                 onStage: canPublish,
                 speaking: p.isSpeaking,
                 micOn: p.isMicrophoneEnabled(),
-                isLocal: isLocal
+                isLocal: isLocal,
+                handRaised: !canPublish && p.attributes["hand"] == "1"
             ))
         }
         members.sort { a, b in
@@ -375,10 +404,12 @@ final class ShowModel: ObservableObject {
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
         let remoteAudio = lkRoom.remoteParticipants.values.contains { !$0.audioTracks.isEmpty }
+        let localHand = !current.onStage && local.attributes["hand"] == "1"
         update {
             $0.members = members
             $0.anonymousListeners = anonymous
             $0.remoteAudio = remoteAudio
+            $0.handRaised = localHand
         }
         // Resolve any identities we have not seen yet.
         let missing = members.map(\.identity).filter { profiles[$0] == nil }
@@ -471,6 +502,7 @@ private final class RoomEvents: RoomDelegate {
     func room(_ room: Room, participant: LocalParticipant, didUnpublishTrack publication: LocalTrackPublication) { refresh() }
     func room(_ room: Room, participant: Participant, trackPublication: TrackPublication, didUpdateIsMuted isMuted: Bool) { refresh() }
     func room(_ room: Room, participant: Participant, didUpdatePermissions permissions: ParticipantPermissions) { refresh() }
+    func room(_ room: Room, participant: Participant, didUpdateAttributes attributes: [String: String]) { refresh() }
 
     func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
         Task { @MainActor [model] in model?.handleData(data) }

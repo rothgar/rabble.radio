@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
 import { StartShowButton } from '@/components/StartShowButton';
 import { FeedbackButton } from '@/components/FeedbackButton';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button, Wordmark } from '@/components/ui';
 
 interface Me {
@@ -53,6 +54,7 @@ export function SiteHeader(): ReactElement {
       </Link>
 
       <nav className="flex items-center gap-3">
+        <ThemeToggle />
         <FeedbackButton className="hidden sm:inline-flex" />
         {me ? (
           <>

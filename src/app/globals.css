@@ -173,6 +173,132 @@
   --shadow-lg: 0 0 0 2px var(--color-border),   8px 8px 0 rgba(7, 59, 76, 0.18);
 }
 
+/* ─── Dark appearance ─────────────────────────────────────────────────────
+   `data-theme` on <html> is the explicit choice (ThemeToggle); without it
+   the system preference applies. */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Dark: the same palette inverted. Deep teal paper, cream ink, the red /
+     orange / mustard accents unchanged. */
+  --color-bg:             #062b38;
+  --color-surface:        #0b3a4a;
+  --color-surface-raised: #114757;
+  --color-ink:            var(--brand-cream);
+  --color-ink-muted:      rgba(241, 250, 238, 0.10);
+  --color-scrim:          rgba(0, 0, 0, 0.60);
+  --color-bg-translucent:      rgba(6, 43, 56, 0.94);
+  --color-surface-translucent: rgba(11, 58, 74, 0.55);
+
+  --color-text:           var(--brand-cream);
+  --color-text-secondary: #b9d1d8;
+  --color-text-tertiary:  #7fa3ae;
+  --color-text-on-ink:    var(--brand-teal);
+
+  --color-accent-hover:   #f0515d;
+  --color-accent-muted:   rgba(230, 57, 70, 0.18);
+  --color-accent-100:     rgba(230, 57, 70, 0.18);
+  --color-accent-200:     rgba(230, 57, 70, 0.30);
+  --color-accent-700:     #f5a6ad;
+  --color-accent-2-hover: #ff9e38;
+  --color-accent-2-muted: rgba(255, 127, 0, 0.18);
+  --color-accent-2-100:   rgba(255, 127, 0, 0.16);
+  --color-accent-2-700:   #ffb266;
+  --color-highlight-muted: rgba(249, 199, 79, 0.22);
+
+  --color-border:         #e9f4ec;
+  --color-border-strong:  var(--brand-cream);
+  --color-divider:        rgba(241, 250, 238, 0.18);
+
+  --color-live:    #f0515d;
+  --color-success: #3db9a9;
+  --color-error:   #f0515d;
+  --color-live-muted:     rgba(240, 81, 93, 0.18);
+  --color-live-border:    #f0515d;
+  --color-success-muted:  rgba(61, 185, 169, 0.18);
+  --color-success-text:   #7fe0d2;
+  --color-warning-muted:  rgba(249, 199, 79, 0.22);
+  --color-warning-text:   #f9c74f;
+  --color-error-muted:    rgba(240, 81, 93, 0.18);
+  --color-error-text:     #f5a6ad;
+
+  --color-neutral-100: #17424f;
+  --color-neutral-200: #1e4f60;
+  --color-neutral-300: #2a6074;
+  --color-neutral-800: #b9d1d8;
+  --color-neutral-900: #cfe3e8;
+  --color-section:       var(--brand-cream);
+  --color-section-glow:  #d8e9e4;
+  --color-section-ghost: #b9d1d8;
+
+  --shadow-sm: 0 0 0 1.5px var(--color-border);
+  --shadow-md: 0 0 0 1.5px var(--color-border), 4px 4px 0 rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 0 0 2px var(--color-border),   8px 8px 0 rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    /* Dark: the same palette inverted. Deep teal paper, cream ink, the red /
+       orange / mustard accents unchanged. */
+    --color-bg:             #062b38;
+    --color-surface:        #0b3a4a;
+    --color-surface-raised: #114757;
+    --color-ink:            var(--brand-cream);
+    --color-ink-muted:      rgba(241, 250, 238, 0.10);
+    --color-scrim:          rgba(0, 0, 0, 0.60);
+    --color-bg-translucent:      rgba(6, 43, 56, 0.94);
+    --color-surface-translucent: rgba(11, 58, 74, 0.55);
+
+    --color-text:           var(--brand-cream);
+    --color-text-secondary: #b9d1d8;
+    --color-text-tertiary:  #7fa3ae;
+    --color-text-on-ink:    var(--brand-teal);
+
+    --color-accent-hover:   #f0515d;
+    --color-accent-muted:   rgba(230, 57, 70, 0.18);
+    --color-accent-100:     rgba(230, 57, 70, 0.18);
+    --color-accent-200:     rgba(230, 57, 70, 0.30);
+    --color-accent-700:     #f5a6ad;
+    --color-accent-2-hover: #ff9e38;
+    --color-accent-2-muted: rgba(255, 127, 0, 0.18);
+    --color-accent-2-100:   rgba(255, 127, 0, 0.16);
+    --color-accent-2-700:   #ffb266;
+    --color-highlight-muted: rgba(249, 199, 79, 0.22);
+
+    --color-border:         #e9f4ec;
+    --color-border-strong:  var(--brand-cream);
+    --color-divider:        rgba(241, 250, 238, 0.18);
+
+    --color-live:    #f0515d;
+    --color-success: #3db9a9;
+    --color-error:   #f0515d;
+    --color-live-muted:     rgba(240, 81, 93, 0.18);
+    --color-live-border:    #f0515d;
+    --color-success-muted:  rgba(61, 185, 169, 0.18);
+    --color-success-text:   #7fe0d2;
+    --color-warning-muted:  rgba(249, 199, 79, 0.22);
+    --color-warning-text:   #f9c74f;
+    --color-error-muted:    rgba(240, 81, 93, 0.18);
+    --color-error-text:     #f5a6ad;
+
+    --color-neutral-100: #17424f;
+    --color-neutral-200: #1e4f60;
+    --color-neutral-300: #2a6074;
+    --color-neutral-800: #b9d1d8;
+    --color-neutral-900: #cfe3e8;
+    --color-section:       var(--brand-cream);
+    --color-section-glow:  #d8e9e4;
+    --color-section-ghost: #b9d1d8;
+
+    --shadow-sm: 0 0 0 1.5px var(--color-border);
+    --shadow-md: 0 0 0 1.5px var(--color-border), 4px 4px 0 rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 0 0 2px var(--color-border),   8px 8px 0 rgba(0, 0, 0, 0.45);
+}
+}
+
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 
 @keyframes pulse-live {

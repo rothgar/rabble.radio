@@ -18,6 +18,10 @@ import radio.rabble.android.ui.HomeScreen
 import radio.rabble.android.ui.LoginScreen
 import radio.rabble.android.ui.MeScreen
 import radio.rabble.android.ui.RabbleTheme
+import radio.rabble.android.ui.rabblePalette
+import radio.rabble.android.ui.ThemePreference
+import androidx.core.view.WindowCompat
+import androidx.compose.runtime.LaunchedEffect
 import radio.rabble.android.ui.ShowScreen
 import radio.rabble.android.ui.StationScreen
 import java.net.URLDecoder
@@ -34,7 +38,16 @@ class MainActivity : ComponentActivity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         pendingShowId.value = intent?.getStringExtra(Reminders.EXTRA_SHOW_ID)
         val app = application as RabbleApp
+        ThemePreference.load(this)
         setContent {
+            val dark = rabblePalette().isDark
+            // enableEdgeToEdge draws behind transparent bars; only the icon contrast needs to follow the palette.
+            LaunchedEffect(dark) {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
             RabbleTheme { RabbleNav(app, pendingShowId) }
         }
     }

@@ -38,6 +38,32 @@ xcrun simctl launch booted radio.rabble.ios -showId demo_space_1 -autoJoin
 Xcode 27 no longer ships a Simulator.app GUI alongside the command-line
 tools on this machine, so verification is screenshot-based.
 
+## TestFlight
+
+`scripts/ios-testflight.sh` (run from the repo root on Linux) rsyncs `ios/`
+to the Mac mini and runs `ios/scripts/testflight.sh` there, which archives a
+Release build signed for team `9T45PRDLM6`, exports it with
+`ExportOptions.plist` and uploads it to App Store Connect. The simulator
+build stays unsigned (`CODE_SIGNING_ALLOWED[sdk=iphonesimulator*] = NO`);
+device builds use automatic signing, so Xcode creates the distribution
+certificate and profile itself the first time.
+
+One-time setup on the Mac:
+
+1. In App Store Connect create an API key (Users and Access, Integrations,
+   App Store Connect API) with the App Manager role. Save it as
+   `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`.
+2. Write `~/.config/rabble/testflight.env` with `ASC_KEY_ID=...` and
+   `ASC_ISSUER_ID=...` (never commit these).
+3. Register the app once in App Store Connect (My Apps, +, bundle id
+   `radio.rabble.ios`, SKU anything). The API cannot create app records.
+
+Then `scripts/ios-testflight.sh` uploads a build numbered by the UTC
+timestamp; pass `BUILD_NUMBER=42` or `MARKETING_VERSION=0.2.0` to override,
+or `SKIP_UPLOAD=1` to only produce `ios/build/testflight/Rabble.ipa`. Add
+yourself as an internal tester under the app's TestFlight tab to install
+builds without review.
+
 Point the app at another server by changing `RABBLE_BASE_URL` in
 `project.yml` (or passing `RABBLE_BASE_URL=http://localhost:3000` to
 xcodebuild).

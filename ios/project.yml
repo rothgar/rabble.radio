@@ -18,7 +18,9 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
-    CODE_SIGNING_ALLOWED: "NO"
+    DEVELOPMENT_TEAM: 9T45PRDLM6
+    "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "NO"
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 targets:
   Rabble:
     type: application
@@ -38,6 +40,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         RabbleBaseURL: $(RABBLE_BASE_URL)
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: radio.rabble.ios

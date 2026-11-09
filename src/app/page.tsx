@@ -167,6 +167,9 @@ export async function HomeBody(): Promise<ReactElement> {
               <Button href="/login?next=%2Fme" size="lg" variant="ghost" data-testid="home-start-show">
                 Start a show
               </Button>
+              <Button href="/downloads" size="lg" variant="ghost" data-testid="home-get-app">
+                Get the app
+              </Button>
             </div>
             <p className="text-caption text-[var(--color-text-tertiary)]">
               Starting a show needs a Bluesky account. Listening never does.

@@ -7,6 +7,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { StartShowButton } from '@/components/StartShowButton';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AppInstallBanner } from '@/components/AppInstallBanner';
 import { Button, Wordmark } from '@/components/ui';
 
 interface Me {
@@ -41,6 +42,7 @@ export function SiteHeader(): ReactElement {
   }, []);
 
   return (
+    <>
     <header
       className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg-translucent)] px-4 py-3 backdrop-blur sm:px-6"
       data-testid="site-header"
@@ -72,6 +74,8 @@ export function SiteHeader(): ReactElement {
         )}
       </nav>
     </header>
+    <AppInstallBanner />
+    </>
   );
 }
 

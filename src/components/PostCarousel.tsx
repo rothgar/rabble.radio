@@ -56,7 +56,7 @@ function PostRow({
     >
       <div className="flex items-start gap-3">
         <div
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-700)] text-[10px] font-semibold text-[var(--color-accent-100)]"
+          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-ink)] text-[10px] font-semibold text-[var(--color-text-on-ink)]"
           aria-hidden
           data-testid={`post-avatar-${post.id}`}
         >
@@ -68,15 +68,15 @@ function PostRow({
               {author}
             </span>
             {handle ? (
-              <span className="truncate text-[11px] text-[var(--color-accent-300)]">
+              <span className="truncate text-[11px] text-[var(--color-accent-2-700)]">
                 @{handle}
               </span>
             ) : null}
-            <span aria-hidden className="text-[var(--color-neutral-600)]">
+            <span aria-hidden className="text-[var(--color-text-secondary)]">
               ·
             </span>
             <span
-              className="text-[11px] text-[var(--color-neutral-500)]"
+              className="text-[11px] text-[var(--color-text-secondary)]"
               data-testid={`post-time-${post.id}`}
             >
               {formatDate(indexedAt)}
@@ -90,7 +90,7 @@ function PostRow({
               {text}
             </p>
           ) : (
-            <p className="mt-1 text-xs italic text-[var(--color-neutral-500)]">
+            <p className="mt-1 text-xs italic text-[var(--color-text-secondary)]">
               (Post text not available)
             </p>
           )}
@@ -98,7 +98,7 @@ function PostRow({
             href={href}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-1 self-start text-[11px] text-[var(--color-accent-300)] hover:underline"
+            className="mt-1 self-start text-[11px] text-[var(--color-accent-2-700)] hover:underline"
             data-testid={`post-link-${post.id}`}
           >
             Open on Bluesky
@@ -116,7 +116,7 @@ export function PostCarousel({
   if (posts.length === 0) {
     return (
       <div
-        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-3 text-xs text-[var(--color-neutral-500)]"
+        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-3 text-xs text-[var(--color-text-secondary)]"
         data-testid="post-carousel-empty"
       >
         {emptyMessage}

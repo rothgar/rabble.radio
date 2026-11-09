@@ -86,7 +86,7 @@ export function AddToCalendar({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
         data-testid="add-to-calendar-trigger"
       >
         Add to calendar
@@ -94,7 +94,7 @@ export function AddToCalendar({
       {open ? (
         <div
           ref={menuRef}
-          className="absolute left-0 top-full z-20 mt-2 w-56 rounded-md border border-slate-700 bg-slate-900 p-2 text-sm shadow-lg"
+          className="absolute left-0 top-full z-20 mt-2 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm shadow-lg"
           data-testid="add-to-calendar-menu"
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -103,7 +103,7 @@ export function AddToCalendar({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setOpen(false)}
-            className="block rounded-md px-2 py-1.5 text-slate-200 hover:bg-slate-800"
+            className="block rounded-md px-2 py-1.5 text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
             data-testid="calendar-google"
           >
             Google Calendar
@@ -114,7 +114,7 @@ export function AddToCalendar({
               setOpen(false);
               downloadIcs();
             }}
-            className="block w-full rounded-md px-2 py-1.5 text-left text-slate-200 hover:bg-slate-800"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
             data-testid="calendar-ics"
           >
             Download .ics

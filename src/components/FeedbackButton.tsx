@@ -127,7 +127,7 @@ export function FeedbackButton({
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-scrim)] p-4 sm:items-center"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) close();

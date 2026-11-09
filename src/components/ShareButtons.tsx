@@ -41,7 +41,7 @@ export function ShareButtons({
         href={bskyHref}
         target="_blank"
         rel="noreferrer noopener"
-        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-900)] transition-colors hover:bg-[var(--color-accent-400)]"
+        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
       >
         <ShareNetwork size={14} weight="bold" />
         Share
@@ -51,7 +51,7 @@ export function ShareButtons({
         onClick={() => {
           void onCopy();
         }}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent-800)]"
+        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-ink-muted)]"
         data-testid="share-copy-button"
         data-share-url={shareableUrl}
       >

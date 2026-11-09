@@ -9,6 +9,18 @@ Single source of truth: `src/app/globals.css` (tokens) and `tailwind.config.ts`
 (aliases). Primitives live in `src/components/ui/` (`Button`, `Card`,
 `PageLayout`). Read those three files before writing UI.
 
+## Brand (docs/brand.md)
+
+Cream paper (`--color-bg` #F1FAEE), Retro Teal ink (`--color-text`,
+`--color-border` #073B4C), Rebel Red accent (`--color-accent`, `--color-live`
+#E63946), Vintage Orange secondary accent (`--color-accent-2` #FF7F00),
+Mustard highlight (`--color-highlight` #F9C74F). Light theme only. Display
+face Fraunces Black (`font-display`, applied to h1/h2 automatically) stands in
+for Cooper Black; body is Inter. The default `border` is 1.5px teal and
+`rounded-md` is 8px: cards and buttons are solid rounded containers with thick
+outlines. Wordmark is `<Wordmark />` / `<Monogram />` from `ui/Logo.tsx`,
+lower-case "rabble radio".
+
 ## Tokens, never raw colors
 
 - Colors are CSS variables used as Tailwind arbitrary values:
@@ -18,8 +30,10 @@ Single source of truth: `src/app/globals.css` (tokens) and `tailwind.config.ts`
 - Main tokens: `--color-bg`, `--color-surface`, `--color-surface-raised`,
   `--color-text`, `--color-text-secondary`, `--color-text-tertiary`,
   `--color-accent` (+ `-hover`, `-100…-900`, `-muted`), `--color-border`,
-  `--color-border-strong`, `--color-live`, `--color-success`,
-  `--color-warning`, `--color-error`.
+  `--color-border-strong`, `--color-divider` (quiet separators),
+  `--color-ink` / `--color-text-on-ink` (teal fills), `--color-accent-2`,
+  `--color-highlight`, `--color-live`, `--color-success`, `--color-warning`,
+  `--color-error` (each with `-muted`, and `-text` for status copy).
 - Translucent fills must use explicit tokens: `--color-bg-translucent`
   (sticky bars), `--color-surface-translucent` (dashed placeholders),
   `--color-live-muted`, `--color-live-border`, `--color-success-muted`,

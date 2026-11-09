@@ -576,7 +576,7 @@ function Inner({
     <div className="flex items-center gap-2" data-testid="nav-avatar">
       <div
         ref={localAvatarRef}
-        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-700)] ring-1 ring-[var(--color-neutral-800)]"
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-ink)] ring-1 ring-[var(--color-border)]"
         data-testid="nav-avatar-tile"
       >
         {localAvatar ? (
@@ -587,12 +587,12 @@ function Inner({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="text-[10px] font-semibold text-[var(--color-accent-100)]">
+          <span className="text-[10px] font-semibold text-[var(--color-text-on-ink)]">
             YOU
           </span>
         )}
       </div>
-      <span className="hidden text-sm text-[var(--color-neutral-300)] sm:inline">
+      <span className="hidden text-sm text-[var(--color-text-tertiary)] sm:inline">
         {localName}
       </span>
     </div>
@@ -603,12 +603,12 @@ function Inner({
       className="flex flex-col gap-3"
       data-testid="on-stage-section"
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
         On stage
       </h2>
       {speakers.length === 0 ? (
         <p
-          className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-neutral-500)]"
+          className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-text-secondary)]"
           data-testid="on-stage-empty"
         >
           No speakers yet.
@@ -667,7 +667,7 @@ function Inner({
       data-testid="audience-section"
       data-view="rows"
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
         Listening · {audience.length + anonymousListeners}
       </h2>
       {anonymousNote}
@@ -704,7 +704,7 @@ function Inner({
       data-testid="audience-section"
       data-view="bubbles"
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral-400)]">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
         Listening · {audience.length + anonymousListeners + 1}
       </h2>
       {anonymousNote}
@@ -726,7 +726,7 @@ function Inner({
 
   const preShowBanner = isLive ? null : (
     <section
-      className="flex flex-col gap-2 rounded-md border border-[var(--color-accent-700)] bg-[var(--color-accent-muted)] p-4"
+      className="flex flex-col gap-2 rounded-md border border-[var(--color-accent)] bg-[var(--color-accent-muted)] p-4"
       data-testid="pre-show-banner"
       data-role={bottomRole}
     >
@@ -818,7 +818,7 @@ function Inner({
               className="flex flex-col gap-3 rounded-lg border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 sm:p-6"
               data-testid="room-share-card"
             >
-              <p className="text-sm font-semibold text-[var(--color-neutral-400)]">
+              <p className="text-sm font-semibold text-[var(--color-text-tertiary)]">
                 {isHost && !isLive ? 'Invite people' : 'Share this show'}
               </p>
               <ShareButtons shareableUrl={shareableUrl} title={title} />
@@ -1153,7 +1153,7 @@ export function SpaceRoom({
       {connectionError ? (
         <div
           role="alert"
-          className="mx-4 my-3 max-w-md rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-xs text-red-200 sm:mx-auto"
+          className="mx-4 my-3 max-w-md rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-3 py-2 text-xs text-[var(--color-error-text)] sm:mx-auto"
           data-testid="space-room-error"
         >
           {connectionError}

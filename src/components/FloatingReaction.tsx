@@ -65,7 +65,7 @@ export function FloatingReaction({
         data-testid="floating-reaction-chip"
       >
         {name ? (
-          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-900)] text-[10px] font-semibold text-[var(--color-accent-100)]">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-highlight-muted)] text-[10px] font-semibold text-[var(--color-text-on-ink)]">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt="" className="h-full w-full object-cover" data-testid="floating-reaction-avatar" />

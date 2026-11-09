@@ -51,8 +51,8 @@ function Bubble({
       className={
         'relative flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full ' +
         (highlight
-          ? 'bg-[var(--color-accent-700)] ring-2 ring-[var(--color-accent)]'
-          : 'bg-[var(--color-accent-800)] ring-1 ring-[var(--color-neutral-800)]')
+          ? 'bg-[var(--color-ink)] ring-2 ring-[var(--color-accent)]'
+          : 'bg-[var(--color-ink)] ring-1 ring-[var(--color-border)]')
       }
       data-testid={`${testId}-avatar-${identity}`}
       data-local-avatar={highlight ? 'true' : undefined}
@@ -66,7 +66,7 @@ function Bubble({
           onError={() => setBroken(true)}
         />
       ) : (
-        <span className="text-xs font-medium text-[var(--color-accent-100)]">
+        <span className="text-xs font-medium text-[var(--color-text-on-ink)]">
           {label ?? initialsFor(name)}
         </span>
       )}
@@ -89,7 +89,7 @@ function Bubble({
       ) : (
         inner
       )}
-      <span className="max-w-[60px] truncate text-[10px] text-[var(--color-neutral-400)]">
+      <span className="max-w-[60px] truncate text-[10px] text-[var(--color-text-tertiary)]">
         {handle ? `@${handle}` : name}
       </span>
     </div>

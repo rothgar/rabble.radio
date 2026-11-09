@@ -174,9 +174,9 @@ private struct ShowHeader: View {
                     Pill(text: show.status == "active" || show.status == "live" ? "Off air" : show.status.capitalized)
                 }
                 Spacer()
-                Text("\(room?.listening ?? show.listenerCount) listening").font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                Text("\(room?.listening ?? show.listenerCount) listening").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
             }
-            Text(show.title).font(.title2.weight(.semibold))
+            Text(show.title).font(RabbleFont.style(.title2, .semibold))
             HStack(spacing: 8) {
                 HostAvatar(host: show.host, size: 28)
                 Text(show.host.label).foregroundStyle(RabbleColors.textSecondary)
@@ -196,7 +196,7 @@ private struct ShowHeader: View {
                     ForEach(0..<3, id: \.self) { _ in PlaceholderSeat() }
                 }
                 Text(room == nil ? "Join to see who's on stage." : "No one on stage yet.")
-                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
             } else {
                 FlowLayout(spacing: 12) {
                     ForEach(stage) { MemberTile(member: $0, large: true) }
@@ -214,10 +214,10 @@ private struct PlaceholderSeat: View {
             ZStack {
                 Circle().fill(RabbleColors.surfaceRaised.opacity(0.6))
                 Circle().strokeBorder(RabbleColors.textTertiary.opacity(0.6), lineWidth: 1)
-                Text("👤").font(.system(size: 22)).opacity(0.35)
+                Text("👤").font(RabbleFont.sans(22)).opacity(0.35)
             }
             .frame(width: 64, height: 64)
-            Text("Open seat").font(.caption).foregroundStyle(RabbleColors.textTertiary)
+            Text("Open seat").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
         }
         .frame(width: 80)
     }
@@ -231,9 +231,9 @@ private struct InviteBanner: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(hostName) invited you on stage").font(.headline)
+            Text("\(hostName) invited you on stage").font(RabbleFont.style(.headline))
             Text("Accepting turns your microphone on so the room can hear you.")
-                .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
             HStack(spacing: 8) {
                 Button(busy ? "Joining…" : "Take the stage", action: onAccept)
                     .buttonStyle(.borderedProminent).disabled(busy).wideButton()
@@ -294,14 +294,14 @@ private struct RoomPanel: View {
                 Text(model.reminded
                      ? "We'll notify you when the host goes on air. Tap again to cancel. Checks run when the app wakes up, about every 15 minutes."
                      : "Get a notification on this phone when the host goes on air.")
-                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
             } else {
                 Button("Sign in to get notified", action: onLogin).buttonStyle(.bordered).wideButton()
             }
             if model.signedIn, !scheduled {
                 // Guests the host wants on stage before air can still get in.
                 Button(model.room.isJoining ? "Opening…" : "Invited to the stage? Enter the studio") { model.joinShow() }
-                    .font(.caption)
+                    .font(RabbleFont.style(.caption))
                     .foregroundStyle(RabbleColors.textTertiary)
                     .disabled(model.room.isJoining)
                     .frame(minHeight: 44)
@@ -328,16 +328,16 @@ private struct RoomPanel: View {
             : room.isHost ? "You're hosting"
             : room.onStage ? "You're on stage"
             : "You're in the audience"
-        Text(status).font(.headline).foregroundStyle(RabbleColors.success)
+        Text(status).font(RabbleFont.style(.headline)).foregroundStyle(RabbleColors.success)
         if !room.onAir {
             Text(room.isHost
                  ? "Off air: only the stage can hear each other. Invite co-hosts from the web, name the show with Edit, then go on air to broadcast and record."
                  : room.onStage ? "Off air: only the stage can hear each other right now."
                  : "Off air: you'll hear audio as soon as the host goes on air.")
-                .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
         }
         if let notice = room.notice {
-            Text(notice).font(.caption).foregroundStyle(RabbleColors.textSecondary)
+            Text(notice).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
         }
         if room.isHost {
             Button(room.stageBusy ? "Working…" : (room.onAir ? "Go off air" : "Go on air")) { model.setOnAir(!room.onAir) }
@@ -377,7 +377,7 @@ private struct AudiencePanel: View {
                 }
                 if room.anonymousListeners > 0 {
                     Text("+\(room.anonymousListeners) listening without an account")
-                        .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                        .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
                 }
             }
         }
@@ -396,7 +396,7 @@ private struct MemberTile: View {
                 Avatar(name: member.name, avatarUrl: member.avatarUrl, size: size, ring: member.speaking ? RabbleColors.success : nil)
                 if member.onStage, !member.micOn {
                     Text("🔇")
-                        .font(.system(size: 10))
+                        .font(RabbleFont.sans(10))
                         .frame(width: 18, height: 18)
                         .background(RabbleColors.surface)
                         .clipShape(Circle())
@@ -409,12 +409,12 @@ private struct MemberTile: View {
                 }
             )
             Text(member.isLocal ? "You" : member.name)
-                .font(.caption)
+                .font(RabbleFont.style(.caption))
                 .foregroundStyle(RabbleColors.text)
                 .lineLimit(1)
                 .multilineTextAlignment(.center)
             if member.isHost {
-                Text("Host").font(.caption).foregroundStyle(RabbleColors.accent)
+                Text("Host").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.accent)
             }
         }
         .frame(width: size + 16)
@@ -436,7 +436,7 @@ private struct ReactionBar: View {
                     onReact(emoji)
                 } label: {
                     Text(emoji)
-                        .font(.system(size: 26))
+                        .font(RabbleFont.sans(26))
                         .frame(width: 52, height: 52)
                         .background(RabbleColors.surfaceRaised)
                         .clipShape(Circle())
@@ -446,7 +446,7 @@ private struct ReactionBar: View {
             Spacer(minLength: 0)
             Button(action: onLeave) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(RabbleFont.sans(20, .semibold))
                     .foregroundStyle(RabbleColors.live)
                     .frame(width: 52, height: 52)
                     .background(RabbleColors.live.opacity(0.18))
@@ -515,8 +515,8 @@ private struct FloatingReactionView: View {
             if item.avatarUrl != nil || item.name != "You" {
                 Avatar(name: item.name, avatarUrl: item.avatarUrl, size: 24)
             }
-            Text(item.name).font(.subheadline.weight(.semibold)).lineLimit(1).frame(maxWidth: 120)
-            Text(item.emoji).font(.system(size: 28))
+            Text(item.name).font(RabbleFont.style(.subheadline, .semibold)).lineLimit(1).frame(maxWidth: 120)
+            Text(item.emoji).font(RabbleFont.sans(28))
         }
         .padding(.leading, 4)
         .padding(.trailing, 10)
@@ -552,7 +552,7 @@ private struct MusicCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("♪ Pre-show music" + (mood.map { " · \($0.label)" } ?? "")).font(.headline)
+                Text("♪ Pre-show music" + (mood.map { " · \($0.label)" } ?? "")).font(RabbleFont.style(.headline))
                 Spacer()
                 if mood != nil {
                     Button(player.muted ? "Unmute" : "Mute") { player.muted.toggle() }.frame(minHeight: 44)
@@ -560,14 +560,14 @@ private struct MusicCard: View {
             }
             if let track {
                 Text((active ? "Now playing: " : "Next up: ") + track.attribution)
-                    .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
             }
             if let error = player.error {
-                Text(error).font(.caption).foregroundStyle(RabbleColors.live)
+                Text(error).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
             }
             if canPick {
                 Text("Plays for everyone waiting in the room until you go on air. It is not recorded.")
-                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
                 FlowLayout(spacing: 8) {
                     ForEach(Music.moods) { m in
                         let selected = m.id == mood?.id
@@ -616,7 +616,7 @@ private struct ReplayPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Pill(text: "Replay")
-                Text("This show is off air.").font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                Text("This show is off air.").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
             }
             Text("Listen to the recording of \(show.title).")
             HStack(spacing: 12) {
@@ -624,7 +624,7 @@ private struct ReplayPanel: View {
                     player.toggle()
                 } label: {
                     Image(systemName: player.playing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 22))
+                        .font(RabbleFont.sans(22))
                         .frame(width: 56, height: 56)
                 }
                 .buttonStyle(.borderedProminent)
@@ -643,7 +643,7 @@ private struct ReplayPanel: View {
                         Spacer()
                         Text(player.loading ? "Loading…" : formatClock(player.duration))
                     }
-                    .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
                 }
             }
             let meta = [
@@ -651,10 +651,10 @@ private struct ReplayPanel: View {
                 replay.sizeBytes.map { String(format: "%.1f MB", Double($0) / 1_048_576) },
             ].compactMap { $0 }.joined(separator: " · ")
             if !meta.isEmpty {
-                Text(meta).font(.caption).foregroundStyle(RabbleColors.textTertiary)
+                Text(meta).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
             }
             if let error = player.error {
-                Text(error).font(.caption).foregroundStyle(RabbleColors.live)
+                Text(error).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
             }
         }
         .card()
@@ -684,7 +684,7 @@ private struct ShowDetailsSheet: View {
                     .lineLimit(2...6)
                     .onChange(of: description) { _, v in if v.count > 2000 { description = String(v.prefix(2000)) } }
                 Text("Topics (stations) can be set from the web for now.")
-                    .font(.caption).foregroundStyle(RabbleColors.textTertiary)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
             }
             .scrollContentBackground(.hidden)
             .background(RabbleColors.bg.ignoresSafeArea())
@@ -698,6 +698,6 @@ private struct ShowDetailsSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 }

@@ -73,7 +73,7 @@ export default async function MePage(): Promise<ReactElement> {
       <PageLayout>
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between" data-testid="me-header">
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-800)] text-label font-semibold text-[var(--color-accent-100)]">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-ink)] text-label font-semibold text-[var(--color-text-on-ink)]">
               {profile?.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -105,7 +105,7 @@ export default async function MePage(): Promise<ReactElement> {
             </p>
             <a
               href={feedUrl}
-              className="break-all text-caption text-[var(--color-accent-300)] hover:underline"
+              className="break-all text-caption text-[var(--color-accent-2-700)] hover:underline"
               data-testid="me-podcast-feed-url"
             >
               {feedUrl}

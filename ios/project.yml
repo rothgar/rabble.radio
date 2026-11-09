@@ -33,7 +33,9 @@ targets:
       path: Config/Info.plist
       properties:
         CFBundleDisplayName: Rabble
-        UILaunchScreen: {}
+        UILaunchScreen: { UIColorName: LaunchBackground }
+        UIUserInterfaceStyle: Light
+        UIAppFonts: [Fraunces72ptSoft-Black.ttf, Inter-Regular.ttf, Inter-Medium.ttf, Inter-SemiBold.ttf, Inter-Bold.ttf]
         UIBackgroundModes: [audio, fetch]
         BGTaskSchedulerPermittedIdentifiers: [radio.rabble.ios.reminders]
         NSMicrophoneUsageDescription: Rabble uses the microphone when you speak on stage.

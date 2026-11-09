@@ -37,7 +37,7 @@ const ACTION_BTN =
   'inline-flex min-h-touch min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]';
 
 const ACTION_BTN_SECONDARY =
-  'border border-[var(--color-divider)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-accent-800)]';
+  'border border-[var(--color-divider)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]';
 
 export function BottomControlBar({
   role,
@@ -62,7 +62,7 @@ export function BottomControlBar({
       role="dialog"
       aria-modal="true"
       aria-labelledby="leave-dialog-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-scrim)] p-4 sm:items-center"
       data-testid="leave-dialog"
       onClick={() => setConfirmLeave(false)}
     >
@@ -124,8 +124,8 @@ export function BottomControlBar({
               ACTION_BTN +
               ' ' +
               (handRaised
-                ? 'border border-[var(--color-accent)] bg-[var(--color-accent-800)] text-[var(--color-accent-100)] hover:bg-[var(--color-accent-700)]'
-                : 'bg-[var(--color-accent)] text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]')
+                ? 'border border-[var(--color-accent)] bg-[var(--color-ink)] text-[var(--color-text-on-ink)] hover:bg-[var(--color-accent-hover)]'
+                : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]')
             }
             data-testid="bottom-bar-raise-hand"
           >
@@ -189,7 +189,7 @@ export function BottomControlBar({
             ' ' +
             (micOn
               ? ACTION_BTN_SECONDARY
-              : 'bg-[var(--color-accent)] text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]')
+              : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]')
           }
           data-testid="bottom-bar-mic-toggle"
         >

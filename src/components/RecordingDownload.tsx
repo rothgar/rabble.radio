@@ -121,7 +121,7 @@ export function RecordingDownload({
 
   const containerClass = compact
     ? 'flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text)]'
-    : 'flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900 p-4 text-sm text-slate-200';
+    : 'flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)]';
 
   return (
     <section
@@ -133,7 +133,7 @@ export function RecordingDownload({
       <header className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Recording</h3>
         <span
-          className="rounded-full bg-slate-800 px-2 py-0.5 text-xs"
+          className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs"
           data-testid="recording-status"
         >
           {recording.status}
@@ -141,7 +141,7 @@ export function RecordingDownload({
       </header>
 
       {recording.status === 'starting' ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[var(--color-text-secondary)]">
           Recording is being prepared. Available until{' '}
           {formatDate(recording.expiresAt)}.
         </p>
@@ -149,7 +149,7 @@ export function RecordingDownload({
 
       {recording.status === 'available' ? (
         <>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[var(--color-text-secondary)]">
             Recorded {formatDate(recording.startedAt)} —{' '}
             {formatBytes(recording.sizeBytes)}. Available until{' '}
             {formatDate(recording.expiresAt)}.
@@ -158,7 +158,7 @@ export function RecordingDownload({
             <a
               href={recording.downloadUrl ?? '#'}
               download
-              className="inline-block rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+              className="inline-block rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-accent-hover)]"
               data-testid="recording-download-link"
             >
               Download recording
@@ -169,7 +169,7 @@ export function RecordingDownload({
                 void onRefresh();
               }}
               disabled={refreshing}
-              className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-ink-muted)] disabled:opacity-50"
               data-testid="recording-refresh-button"
             >
               {refreshing ? 'Refreshing…' : 'Refresh link'}
@@ -179,13 +179,13 @@ export function RecordingDownload({
       ) : null}
 
       {recording.status === 'expired' ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[var(--color-text-secondary)]">
           This recording has been deleted (past the 30-day retention window).
         </p>
       ) : null}
 
       {recording.status === 'failed' ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[var(--color-text-secondary)]">
           Recording failed. The host can try ending and starting live again.
         </p>
       ) : null}
@@ -193,7 +193,7 @@ export function RecordingDownload({
       {error ? (
         <p
           role="alert"
-          className="rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
+          className="rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-2 py-1 text-xs text-[var(--color-error-text)]"
         >
           {error}
         </p>

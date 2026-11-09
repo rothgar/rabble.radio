@@ -36,7 +36,7 @@ function statusBadge(space: PublicSpace): BadgeSpec {
   if (!space.isLive && space.replay) {
     return {
       label: 'Replay',
-      className: 'bg-[var(--color-accent-900)] text-[var(--color-accent)]',
+      className: 'bg-[var(--color-highlight-muted)] text-[var(--color-accent)]',
       title: 'Off air — listen to the recording',
     };
   }
@@ -44,12 +44,12 @@ function statusBadge(space: PublicSpace): BadgeSpec {
     case 'live':
       return {
         label: 'On air',
-        className: 'bg-red-600/20 text-red-300',
+        className: 'bg-[var(--color-error-muted)] text-[var(--color-error-text)]',
       };
     case 'scheduled':
       return {
         label: 'Scheduled',
-        className: 'bg-sky-700/40 text-sky-200',
+        className: 'bg-[var(--color-accent-muted)] text-[var(--color-accent)]',
         title: space.scheduledAt
           ? `Scheduled for ${new Date(space.scheduledAt).toLocaleString()}`
           : undefined,
@@ -57,23 +57,23 @@ function statusBadge(space: PublicSpace): BadgeSpec {
     case 'active':
       return {
         label: 'Off air',
-        className: 'bg-emerald-700/30 text-emerald-200',
+        className: 'bg-[var(--color-success-muted)] text-[var(--color-success-text)]',
       };
     case 'ended':
       return {
         label: 'Ended',
-        className: 'bg-slate-700 text-slate-300',
+        className: 'bg-[var(--color-neutral-200)] text-[var(--color-text-secondary)]',
       };
     case 'expired':
       return {
         label: 'Expired',
-        className: 'bg-slate-800 text-slate-500',
+        className: 'bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]',
       };
     default:
       // Backwards-compat fallback when status is missing on legacy rows.
       return space.isLive
-        ? { label: 'On air', className: 'bg-red-600/20 text-red-300' }
-        : { label: 'Upcoming', className: 'bg-slate-700 text-slate-300' };
+        ? { label: 'On air', className: 'bg-[var(--color-error-muted)] text-[var(--color-error-text)]' }
+        : { label: 'Upcoming', className: 'bg-[var(--color-neutral-200)] text-[var(--color-text-secondary)]' };
   }
 }
 
@@ -85,22 +85,22 @@ export function SpaceCard({ space, featured = false }: SpaceCardProps): ReactEle
       className={
         'group flex flex-col gap-3 rounded-lg border p-4 transition ' +
         (featured
-          ? 'border-sky-500 bg-gradient-to-br from-sky-900/60 to-slate-900 ring-1 ring-sky-500/60 hover:ring-sky-400'
-          : 'border-slate-800 bg-slate-900 hover:border-sky-600 hover:bg-slate-800/80')
+          ? 'border-[var(--color-accent)] bg-gradient-to-br from-[var(--color-accent-muted)] to-[var(--color-surface)] ring-1 ring-[var(--color-accent)] hover:ring-[var(--color-accent)]'
+          : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)] hover:bg-[var(--color-ink-muted)]/80')
       }
       data-testid="space-card"
       data-featured={featured ? 'true' : 'false'}
     >
       {featured ? (
         <span
-          className="inline-flex w-fit items-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+          className="inline-flex w-fit items-center rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
           data-testid="featured-badge"
         >
           Most popular
         </span>
       ) : null}
       <div className="flex items-start justify-between gap-2">
-        <h3 className="line-clamp-2 text-base font-semibold text-slate-100 group-hover:text-sky-300">
+        <h3 className="line-clamp-2 text-base font-semibold text-[var(--color-text)] group-hover:text-[var(--color-accent)]">
           {space.title}
         </h3>
         <span
@@ -112,25 +112,25 @@ export function SpaceCard({ space, featured = false }: SpaceCardProps): ReactEle
         </span>
       </div>
       {space.description ? (
-        <p className="line-clamp-2 text-sm text-slate-400">
+        <p className="line-clamp-2 text-sm text-[var(--color-text-secondary)]">
           {space.description}
         </p>
       ) : null}
       {space.status === 'scheduled' && space.scheduledAt ? (
         <p
-          className="text-xs text-sky-300"
+          className="text-xs text-[var(--color-accent)]"
           data-testid="scheduled-time"
         >
           Starts {new Date(space.scheduledAt).toLocaleString()}
           {space.reminded ? ' · 🔔 notifying you' : ''}
         </p>
       ) : null}
-      <div className="mt-auto flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-auto flex items-center justify-between text-xs text-[var(--color-text-tertiary)]">
         <span>@{space.host.handle}</span>
         <span>{formatRelative(space.createdAt)}</span>
       </div>
       <div
-        className="flex items-center gap-3 border-t border-slate-800 pt-2 text-xs text-slate-400"
+        className="flex items-center gap-3 border-t border-[var(--color-border)] pt-2 text-xs text-[var(--color-text-secondary)]"
         data-testid="space-metrics"
       >
         <span title="Speakers on stage">
@@ -148,7 +148,7 @@ export function SpaceCard({ space, featured = false }: SpaceCardProps): ReactEle
           {space.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300"
+              className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]"
               data-testid={`space-tag-${tag}`}
             >
               {tag}

@@ -36,7 +36,7 @@ export function JoinedShowCard({ show }: { show: JoinedShowView }): ReactElement
       className="flex items-center gap-3"
       data-testid={`joined-show-${show.sessionId}`}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-800)] text-caption font-semibold text-[var(--color-accent-100)]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-ink)] text-caption font-semibold text-[var(--color-text-on-ink)]">
         {show.space.host.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={show.space.host.avatarUrl} alt="" className="h-full w-full object-cover" />

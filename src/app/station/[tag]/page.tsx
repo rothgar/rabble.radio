@@ -140,7 +140,7 @@ export default async function StationPage({
           </p>
           <Link
             href="/stations/new"
-            className="inline-flex min-h-touch items-center rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)]"
+            className="inline-flex min-h-touch items-center rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
           >
             Create a show
           </Link>
@@ -166,7 +166,7 @@ export default async function StationPage({
             <span key={c}>
               <Link
                 href={`/station/${encodeURIComponent(c)}`}
-                className="text-[var(--color-accent-300)] hover:underline"
+                className="text-[var(--color-accent-2-700)] hover:underline"
               >
                 {c}
               </Link>

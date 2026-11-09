@@ -259,7 +259,7 @@ export function CreateSpaceForm(): ReactElement {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <label htmlFor="title" className="text-sm font-medium text-slate-200">
+        <label htmlFor="title" className="text-sm font-medium text-[var(--color-text)]">
           Title
         </label>
         <input
@@ -271,16 +271,16 @@ export function CreateSpaceForm(): ReactElement {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Weekly Bluesky Builders Roundup"
-          className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-tertiary)] focus:border-[var(--color-accent-2)] focus:outline-none"
           data-testid="title-input"
         />
       </div>
       <div className="flex flex-col gap-1">
         <label
           htmlFor="description"
-          className="text-sm font-medium text-slate-200"
+          className="text-sm font-medium text-[var(--color-text)]"
         >
-          Description <span className="text-slate-500">(optional)</span>
+          Description <span className="text-[var(--color-text-tertiary)]">(optional)</span>
         </label>
         <textarea
           id="description"
@@ -290,7 +290,7 @@ export function CreateSpaceForm(): ReactElement {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What is this show about?"
-          className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-tertiary)] focus:border-[var(--color-accent-2)] focus:outline-none"
           data-testid="description-input"
         />
       </div>
@@ -298,7 +298,7 @@ export function CreateSpaceForm(): ReactElement {
         <div className="flex flex-col gap-1">
           <label
             htmlFor="scheduleInput"
-            className="text-sm font-medium text-slate-200"
+            className="text-sm font-medium text-[var(--color-text)]"
           >
             Schedule for later
           </label>
@@ -309,18 +309,18 @@ export function CreateSpaceForm(): ReactElement {
             step={900}
             value={scheduleInput}
             onChange={(e) => setScheduleInput(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-tertiary)] focus:border-[var(--color-accent-2)] focus:outline-none"
             data-testid="schedule-input"
           />
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[var(--color-text-tertiary)]">
             15-minute increments, up to 30 days in the future.
           </p>
         </div>
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-slate-200">
-          Tags <span className="text-slate-500">(pick up to {MAX_TAGS_PER_SHOW})</span>
+        <span className="text-sm font-medium text-[var(--color-text)]">
+          Tags <span className="text-[var(--color-text-tertiary)]">(pick up to {MAX_TAGS_PER_SHOW})</span>
         </span>
         <div
           className="flex flex-wrap gap-2"
@@ -339,10 +339,10 @@ export function CreateSpaceForm(): ReactElement {
                 disabled={disabled}
                 onClick={() => toggleTag(tag)}
                 className={
-                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ' +
+                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ' +
                   (selected
-                    ? 'border-sky-500 bg-sky-600 text-white'
-                    : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 ' +
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-ink-muted)] ' +
                       (disabled ? 'opacity-40' : ''))
                 }
                 data-testid={`tag-option-${tag}`}
@@ -352,7 +352,7 @@ export function CreateSpaceForm(): ReactElement {
             );
           })}
         </div>
-        <p className="text-xs text-slate-500" data-testid="tag-count">
+        <p className="text-xs text-[var(--color-text-tertiary)]" data-testid="tag-count">
           {tags.length}/{MAX_TAGS_PER_SHOW} selected
         </p>
       </div>
@@ -360,7 +360,7 @@ export function CreateSpaceForm(): ReactElement {
       {error ? (
         <p
           role="alert"
-          className="rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-200"
+          className="rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-3 py-2 text-sm text-[var(--color-error-text)]"
           data-testid="form-error"
         >
           {error}
@@ -369,7 +369,7 @@ export function CreateSpaceForm(): ReactElement {
       <div className="flex items-center justify-end gap-2">
         <Link
           href="/stations"
-          className="rounded-md border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm hover:bg-[var(--color-ink-muted)]"
         >
           Cancel
         </Link>
@@ -377,7 +377,7 @@ export function CreateSpaceForm(): ReactElement {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-l-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+            className="rounded-l-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
             data-testid="submit-button"
           >
             {submitLabel}
@@ -389,7 +389,7 @@ export function CreateSpaceForm(): ReactElement {
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label="More create options"
-            className="rounded-r-md border-l border-sky-700 bg-sky-600 px-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+            className="rounded-r-md border-l border-[var(--color-accent)] bg-[var(--color-accent)] px-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
             data-testid="caret-button"
           >
             <span aria-hidden="true">▾</span>
@@ -397,14 +397,14 @@ export function CreateSpaceForm(): ReactElement {
           {menuOpen ? (
             <div
               role="menu"
-              className="absolute right-0 top-full z-10 mt-1 min-w-[12rem] max-w-[calc(100vw-1rem)] rounded-md border border-slate-700 bg-slate-900 py-1 text-sm shadow-lg"
+              className="absolute right-0 top-full z-10 mt-1 min-w-[12rem] max-w-[calc(100vw-1rem)] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] py-1 text-sm shadow-lg"
               data-testid="schedule-menu"
             >
               <button
                 type="button"
                 role="menuitem"
                 onClick={chooseSchedule}
-                className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
+                className="block w-full px-3 py-2 text-left text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
                 data-testid="schedule-menu-item"
               >
                 Schedule for later

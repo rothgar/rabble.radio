@@ -65,7 +65,7 @@ export function RoomHeader({
       </h1>
 
       <div
-        className="flex items-center gap-2 text-sm text-[var(--color-neutral-400)]"
+        className="flex items-center gap-2 text-sm text-[var(--color-text-tertiary)]"
         data-testid="room-listener-count"
       >
         {listenerCount} listening

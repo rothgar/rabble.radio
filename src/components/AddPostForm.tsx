@@ -82,14 +82,14 @@ export function AddPostForm({
           value={postUrl}
           onChange={(e) => setPostUrl(e.target.value)}
           placeholder="Paste a Bluesky post URL"
-          className="w-full rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-neutral-600)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="w-full rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)] focus:border-[var(--color-accent)] focus:outline-none"
           data-testid="add-post-input"
           aria-label="Bluesky post URL"
         />
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-900)] transition-colors hover:bg-[var(--color-accent-400)] disabled:opacity-50"
+          className="w-full rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           data-testid="add-post-submit"
         >
           {busy ? 'Sharing…' : 'Share to room'}
@@ -98,7 +98,7 @@ export function AddPostForm({
       {error ? (
         <p
           role="alert"
-          className="rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
+          className="rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-2 py-1 text-xs text-[var(--color-error-text)]"
           data-testid="add-post-error"
         >
           {error}
@@ -107,7 +107,7 @@ export function AddPostForm({
       {success ? (
         <p
           role="status"
-          className="rounded-md border border-emerald-700 bg-emerald-900/30 px-2 py-1 text-xs text-emerald-200"
+          className="rounded-md border border-[var(--color-success)] bg-[var(--color-success-muted)] px-2 py-1 text-xs text-[var(--color-success-text)]"
           data-testid="add-post-success"
         >
           {success}

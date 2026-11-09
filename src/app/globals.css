@@ -10,86 +10,118 @@
    Spacing:   4 px base grid  →  iOS pt / Android dp are 1:1 at 1× density
    Touch:     44 px minimum   →  Apple HIG + Android accessibility guideline
    Radius:    see scale below →  matches typical iOS sheet / card radii
-   Type:      Inter, fallback to system-ui / SF Pro / Roboto on device
+   Type:      Fraunces Black (display) + Inter (body); see docs/brand.md
    ──────────────────────────────────────────────────────────────────────────── */
 
 :root {
+  color-scheme: light;
+
+  /* ── Brand palette (docs/brand.md) ───────────────────────────────────── */
+  --brand-red:     #e63946;  /* Rebel Red      — primary accent, live, key buttons */
+  --brand-orange:  #ff7f00;  /* Vintage Orange — secondary accent, active tabs    */
+  --brand-teal:    #073b4c;  /* Retro Teal     — text, borders, header fill       */
+  --brand-mustard: #f9c74f;  /* Mustard Yellow — card backdrops, secondary badges */
+  --brand-cream:   #f1faee;  /* Cream White    — page and card backgrounds        */
+
   /* ── Backgrounds ─────────────────────────────────────────────────────── */
-  --color-bg:             #161826;  /* Page / window background */
-  --color-surface:        #232532;  /* Card, panel, list-row background */
-  --color-surface-raised: #2c2f43;  /* Sheet, popover, elevated surface */
+  --color-bg:             var(--brand-cream);  /* Page / window background */
+  --color-surface:        #f8fcf5;  /* Card, panel, list-row background (lighter cream) */
+  --color-surface-raised: #fffef9;  /* Sheet, popover, elevated surface */
+  --color-ink:            var(--brand-teal);   /* Solid teal fill (header blocks, inverted cards) */
+  --color-ink-muted:      rgba(7, 59, 76, 0.08);
+  --color-scrim:          rgba(7, 59, 76, 0.55);
   /* Translucent variants for sticky bars and placeholder panels (Tailwind 3
      cannot apply an opacity modifier to a var() color). */
-  --color-bg-translucent:      rgba(22, 24, 38, 0.95);
-  --color-surface-translucent: rgba(35, 37, 50, 0.40);
+  --color-bg-translucent:      rgba(241, 250, 238, 0.94);
+  --color-surface-translucent: rgba(248, 252, 245, 0.55);
 
   /* ── Text ────────────────────────────────────────────────────────────── */
-  --color-text:           #e9e9ed;  /* Primary label */
-  --color-text-secondary: #9397ab;  /* Secondary label */
-  --color-text-tertiary:  #595d6c;  /* Placeholder / disabled */
+  --color-text:           var(--brand-teal);  /* Primary label */
+  --color-text-secondary: #3d6472;  /* Secondary label */
+  --color-text-tertiary:  #7a9aa4;  /* Placeholder / disabled */
+  --color-text-on-ink:    var(--brand-cream);  /* Text on a teal fill */
 
-  /* ── Accent (brand purple) ───────────────────────────────────────────── */
-  --color-accent:         #9184d9;
-  --color-accent-hover:   #a396e0;
-  --color-accent-muted:   rgba(145, 132, 217, 0.15);
-  --color-accent-100:     #f5f4ff;
-  --color-accent-200:     #e7e5fe;
-  --color-accent-300:     #d2cefd;
-  --color-accent-400:     #b5abfc;
-  --color-accent-500:     #968ae0;
-  --color-accent-600:     #796cbf;
-  --color-accent-700:     #5d5294;
-  --color-accent-800:     #423a6a;
-  --color-accent-900:     #2b2741;
+  /* ── Accent (Rebel Red) ──────────────────────────────────────────────── */
+  --color-accent:         var(--brand-red);
+  --color-accent-hover:   #cf2e3b;
+  --color-accent-muted:   rgba(230, 57, 70, 0.12);
+  --color-accent-100:     #fdecee;
+  --color-accent-200:     #fad0d4;
+  --color-accent-300:     #f5a6ad;
+  --color-accent-400:     #ee717c;
+  --color-accent-500:     #e63946;
+  --color-accent-600:     #c9303c;
+  --color-accent-700:     #a32731;
+  --color-accent-800:     #7a1d25;
+  --color-accent-900:     #4f1218;
+
+  /* ── Secondary accent (Vintage Orange) — highlights, active tabs ─────── */
+  --color-accent-2:       var(--brand-orange);
+  --color-accent-2-hover: #e67200;
+  --color-accent-2-muted: rgba(255, 127, 0, 0.14);
+  --color-accent-2-100:   #fff1e0;
+  --color-accent-2-200:   #ffd9b0;
+  --color-accent-2-300:   #ffbd75;
+  --color-accent-2-400:   #ff9e38;
+  --color-accent-2-500:   #ff7f00;
+  --color-accent-2-600:   #d96c00;
+  --color-accent-2-700:   #ad5600;
+  --color-accent-2-800:   #803f00;
+  --color-accent-2-900:   #5c2e00;
+
+  /* ── Highlight (Mustard Yellow) — card backdrops, secondary badges ───── */
+  --color-highlight:       var(--brand-mustard);
+  --color-highlight-muted: rgba(249, 199, 79, 0.35);
+  --color-highlight-text:  var(--brand-teal);
 
   /* ── Borders ─────────────────────────────────────────────────────────── */
-  --color-border:         rgba(233, 233, 237, 0.10);
-  --color-border-strong:  rgba(233, 233, 237, 0.20);
-  --color-divider:        rgba(233, 233, 237, 0.12); /* alias kept for compat */
+  /* Thick teal outlines are part of the look: the default Tailwind `border`
+     is 1.5px (tailwind.config.ts) and `border-2` is 2px. Use --color-divider
+     for quiet inner separators. */
+  --color-border:         var(--brand-teal);
+  --color-border-strong:  var(--brand-teal);
+  --color-divider:        rgba(7, 59, 76, 0.18);
+  --border-width:         1.5px;
 
   /* ── Status ──────────────────────────────────────────────────────────── */
-  --color-live:    #f87171;  /* Red — live indicator */
-  --color-success: #34d399;  /* Green */
-  --color-warning: #fbbf24;  /* Amber */
-  --color-error:   #f87171;  /* Red */
+  --color-live:    var(--brand-red);
+  --color-success: #2a9d8f;
+  --color-warning: var(--brand-mustard);
+  --color-error:   var(--brand-red);
   /* Translucent fills/borders for status badges and alerts. Tailwind 3 cannot
      apply an opacity modifier to a var() color, so these are explicit. */
-  --color-live-muted:     rgba(248, 113, 113, 0.15);
-  --color-live-border:    rgba(248, 113, 113, 0.40);
-  --color-success-muted:  rgba(52, 211, 153, 0.15);
+  --color-live-muted:     rgba(230, 57, 70, 0.12);
+  --color-live-border:    var(--brand-red);
+  --color-success-muted:  rgba(42, 157, 143, 0.15);
+  --color-success-text:   #1f7a6f;
+  --color-warning-muted:  rgba(249, 199, 79, 0.35);
+  --color-warning-text:   #8a5a00;
+  --color-error-muted:    rgba(230, 57, 70, 0.12);
+  --color-error-text:     #a32731;
 
   /* ── Legacy compat aliases (used by existing components) ─────────────── */
-  --color-neutral-100: #f3f5fe;
-  --color-neutral-200: #e4e7f5;
-  --color-neutral-300: #cfd3e5;
-  --color-neutral-400: #b2b6ca;
-  --color-neutral-500: #9397ab;
-  --color-neutral-600: #75798c;
-  --color-neutral-700: #595d6c;
-  --color-neutral-800: #3f424d;
-  --color-neutral-900: #292b31;
-  --color-accent-2:          #a7a1db;
-  --color-accent-2-100: #f5f4ff;
-  --color-accent-2-200: #e7e5fe;
-  --color-accent-2-300: #d2cefd;
-  --color-accent-2-400: #b5afe8;
-  --color-accent-2-500: #9690c9;
-  --color-accent-2-600: #7972a9;
-  --color-accent-2-700: #5c5783;
-  --color-accent-2-800: #423e5d;
-  --color-accent-2-900: #2b293a;
-  --color-section:       #262a60;
-  --color-section-glow:  #353b80;
-  --color-section-ghost: #4c5397;
+  --color-neutral-100: #e8f0f2;
+  --color-neutral-200: #d3e1e5;
+  --color-neutral-300: #b4cbd2;
+  --color-neutral-400: #8fafb9;
+  --color-neutral-500: #6a929e;
+  --color-neutral-600: #4c7482;
+  --color-neutral-700: #335866;
+  --color-neutral-800: #1e4453;
+  --color-neutral-900: #0a2f3c;
+  --color-section:       var(--brand-teal);
+  --color-section-glow:  #0f556b;
+  --color-section-ghost: #2a7a93;
 
   /* ── Typography ──────────────────────────────────────────────────────── */
-  /* iOS equivalent:  SF Pro / Dynamic Type categories
-     Android equiv:  Roboto / Material 3 type scale (sp values match px at 1×)
-     Web:            Inter                                                     */
-  --font-sans:           "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-heading:        "Inter", system-ui, sans-serif;
-  --font-heading-weight: 600;
-  --font-body:           "Inter", system-ui, sans-serif; /* compat */
+  /* Display: Fraunces Black (soft optical axis) stands in for Cooper Black —
+     wordmark, page/section headers, hero buttons. Body: Inter.
+     iOS: Fraunces72ptSoft-Black / Inter (bundled). Android: res/font.      */
+  --font-sans:           var(--font-inter), "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display:        var(--font-fraunces), "Fraunces", "Cooper Black", "Recoleta", Georgia, serif;
+  --font-heading:        var(--font-display);
+  --font-heading-weight: 900;
+  --font-body:           var(--font-sans); /* compat */
 
   /* Type scale */
   --text-xs:   11px;  /* Caption 2        — badges, timestamps */
@@ -126,20 +158,19 @@
   --touch-min: 44px;
 
   /* ── Border radius ───────────────────────────────────────────────────── */
-  /* Matches common iOS / Android component radii.
-     Tip: SwiftUI's .cornerRadius() and Android's RoundedCornerShape()
-     accept these numbers directly.                                         */
+  /* Brand: solid rounded containers with 8px corners. */
   --radius-xs:  4px;    /* Chips, badges, tags */
   --radius-sm:  8px;    /* Buttons, text inputs */
-  --radius-md:  12px;   /* Cards, list containers */
-  --radius-lg:  16px;   /* Panels, action sheets */
-  --radius-xl:  24px;   /* Bottom sheets, modals */
+  --radius-md:  8px;    /* Cards, list containers */
+  --radius-lg:  12px;   /* Panels, action sheets */
+  --radius-xl:  16px;   /* Bottom sheets, modals */
   --radius-full: 9999px;
 
   /* ── Elevation / shadows ─────────────────────────────────────────────── */
-  --shadow-sm: 0 0 0 1px var(--color-border);
-  --shadow-md: 0 0 0 1px var(--color-border-strong), 0 6px 18px rgba(0,0,0,0.50);
-  --shadow-lg: 0 0 0 1px rgba(233,233,237,0.30),     0 16px 40px rgba(0,0,0,0.65);
+  /* Flat print look: hard offset shadows in teal instead of soft blur. */
+  --shadow-sm: 0 0 0 1.5px var(--color-border);
+  --shadow-md: 0 0 0 1.5px var(--color-border), 4px 4px 0 rgba(7, 59, 76, 0.18);
+  --shadow-lg: 0 0 0 2px var(--color-border),   8px 8px 0 rgba(7, 59, 76, 0.18);
 }
 
 /* ─── Animations ─────────────────────────────────────────────────────────── */
@@ -173,3 +204,20 @@ html, body {
 }
 
 * { box-sizing: border-box; }
+
+/* Display headings: the retro serif. h3 and below stay in Inter so dense
+   lists keep their rhythm; opt in with `font-display` where a section header
+   should carry the brand. */
+h1:not(.font-sans), h2:not(.font-sans), .font-display {
+  font-family: var(--font-display);
+  font-weight: var(--font-heading-weight);
+  font-variation-settings: "SOFT" 100, "WONK" 0;
+  letter-spacing: -0.01em;
+}
+
+/* Form controls inherit the brand: cream fill, 1.5px teal outline. */
+input, textarea, select {
+  font-family: inherit;
+  color: var(--color-text);
+}
+::placeholder { color: var(--color-text-tertiary); }

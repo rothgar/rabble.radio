@@ -58,13 +58,13 @@ export function AuthButton(): ReactElement {
           <img
             src={me.avatarUrl}
             alt=""
-            className="h-8 w-8 rounded-full border border-slate-700"
+            className="h-8 w-8 rounded-full border border-[var(--color-border)]"
           />
         ) : null}
-        <span className="text-sm text-slate-200">@{me.handle}</span>
+        <span className="text-sm text-[var(--color-text)]">@{me.handle}</span>
         <a
           href="/logout"
-          className="rounded-md border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800"
+          className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-ink-muted)]"
         >
           Sign out
         </a>
@@ -80,14 +80,14 @@ export function AuthButton(): ReactElement {
         onChange={(e) => setHandle(e.target.value)}
         placeholder="alice.bsky.social"
         aria-label="Bluesky handle"
-        className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-sm text-[var(--color-text)] placeholder-[var(--color-text-tertiary)] focus:border-[var(--color-accent-2)] focus:outline-none"
         required
         pattern="[a-zA-Z0-9._-]+"
       />
       <button
         type="submit"
         disabled={loading}
-        className="rounded-md bg-sky-600 px-3 py-1 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+        className="rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
       >
         Sign in with Bluesky
       </button>

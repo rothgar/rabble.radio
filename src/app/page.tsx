@@ -51,7 +51,7 @@ function HostStrip({ hosts }: { hosts: TopHost[] }): ReactElement {
               className="flex w-28 flex-col items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center hover:border-[var(--color-accent)]"
               data-testid={`home-host-${h.host.handle}`}
             >
-              <span className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-900)] text-sm font-semibold ring-1 ring-[var(--color-border-strong)]">
+              <span className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--color-highlight-muted)] text-sm font-semibold ring-1 ring-[var(--color-border-strong)]">
                 {h.host.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={h.host.avatarUrl} alt="" className="h-full w-full object-cover" />

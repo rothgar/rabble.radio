@@ -22,9 +22,9 @@ export default function LogoutPage(): ReactElement {
   return (
     <>
       <meta httpEquiv="refresh" content={`0;url=${url}`} />
-      <p className="p-4 text-sm text-slate-300">
+      <p className="p-4 text-sm text-[var(--color-text-secondary)]">
         Signing you out… If you are not redirected,{' '}
-        <a href={url} className="text-sky-400 hover:text-sky-300">
+        <a href={url} className="text-[var(--color-accent)] hover:text-[var(--color-accent)]">
           click here
         </a>
         .

@@ -13,10 +13,11 @@ interface CardLinkProps extends HTMLAttributes<HTMLAnchorElement> {
 
 type Props = CardProps | CardLinkProps;
 
+/* Brand card: solid cream container, 8px corners, 1.5px teal outline. */
 const base =
   'rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4';
 const interactive =
-  'transition-colors duration-150 hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] active:opacity-80';
+  'transition-[background-color,box-shadow] duration-150 hover:bg-[var(--color-surface-raised)] hover:shadow-[var(--shadow-md)] active:opacity-80';
 
 export function Card({ href, interactive: isInteractive, className = '', children, ...rest }: Props): ReactElement {
   const cls = [base, isInteractive ? interactive : '', className].filter(Boolean).join(' ');

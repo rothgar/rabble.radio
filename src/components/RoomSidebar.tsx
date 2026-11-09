@@ -83,7 +83,7 @@ export function RoomSidebar({
         {postsError ? (
           <p
             role="alert"
-            className="rounded-md border border-red-700 bg-red-900/30 px-2 py-1 text-xs text-red-200"
+            className="rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-2 py-1 text-xs text-[var(--color-error-text)]"
             data-testid="room-sidebar-posts-error"
           >
             {postsError}

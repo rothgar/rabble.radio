@@ -22,7 +22,7 @@ export function ReactionBar({ onReact }: ReactionBarProps): ReactElement {
           type="button"
           onClick={() => onReact(emoji)}
           aria-label={`React with ${emoji}`}
-          className="flex min-h-touch min-w-touch items-center justify-center rounded-full bg-[var(--color-surface)] text-base transition-colors hover:bg-[var(--color-accent-800)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="flex min-h-touch min-w-touch items-center justify-center rounded-full bg-[var(--color-surface)] text-base transition-colors hover:bg-[var(--color-ink-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           data-testid={`reaction-${emoji}`}
         >
           <span aria-hidden>{emoji}</span>

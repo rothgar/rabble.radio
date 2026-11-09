@@ -19,7 +19,7 @@ struct RabbleApp: App {
         WindowGroup {
             HomeView()
                 .environmentObject(env)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
                 .tint(RabbleColors.accent)
         }
         .onChange(of: scenePhase) { _, phase in

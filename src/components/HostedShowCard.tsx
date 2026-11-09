@@ -54,7 +54,7 @@ function statusLabel(space: PublicSpace): { label: string; className: string } {
   }
   switch (space.status) {
     case 'scheduled':
-      return { label: 'Scheduled', className: 'bg-[var(--color-accent-muted)] text-[var(--color-accent-300)]' };
+      return { label: 'Scheduled', className: 'bg-[var(--color-accent-muted)] text-[var(--color-accent-2-700)]' };
     case 'active':
       return { label: 'Off air', className: 'bg-[var(--color-success-muted)] text-[var(--color-success)]' };
     case 'expired':
@@ -175,7 +175,7 @@ function ShareLine({ url }: { url: string }): ReactElement {
     >
       <a
         href={url}
-        className="min-w-0 flex-1 truncate text-caption text-[var(--color-accent-300)] hover:underline"
+        className="min-w-0 flex-1 truncate text-caption text-[var(--color-accent-2-700)] hover:underline"
         data-testid="hosted-show-share-url"
       >
         {url}

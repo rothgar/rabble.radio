@@ -44,7 +44,7 @@ export function ReplayPlayer({ replay, title }: ReplayPlayerProps): ReactElement
       data-testid="replay-player"
     >
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-[var(--color-accent-900)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+        <span className="inline-flex items-center rounded-full bg-[var(--color-highlight-muted)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-accent)]">
           Replay
         </span>
         <span className="text-caption text-[var(--color-text-secondary)]">This show is off air.</span>

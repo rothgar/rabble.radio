@@ -39,7 +39,7 @@ export function UserMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-sky-700 text-sm font-semibold text-white ring-1 ring-slate-600 transition hover:ring-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] text-sm font-semibold text-white ring-1 ring-[var(--color-border)] transition hover:ring-[var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         data-testid="user-menu-trigger"
       >
         {avatarUrl ? (
@@ -52,19 +52,19 @@ export function UserMenu({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-2 w-48 max-w-[calc(100vw-1rem)] rounded-md border border-slate-700 bg-slate-900 p-1.5 text-sm shadow-lg"
+          className="absolute right-0 top-full z-20 mt-2 w-48 max-w-[calc(100vw-1rem)] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-sm shadow-lg"
           data-testid="user-menu-panel"
         >
           <div className="px-2 py-1.5">
-            <p className="truncate text-xs font-semibold text-slate-100">
+            <p className="truncate text-xs font-semibold text-[var(--color-text)]">
               {label}
             </p>
-            <p className="truncate text-xs text-slate-400">@{handle}</p>
+            <p className="truncate text-xs text-[var(--color-text-secondary)]">@{handle}</p>
           </div>
           <Link
             href="/me"
             role="menuitem"
-            className="block w-full rounded-md px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
             data-testid="user-menu-shows"
           >
             My shows
@@ -73,7 +73,7 @@ export function UserMenu({
             href="/logout"
             prefetch={false}
             role="menuitem"
-            className="block w-full rounded-md px-2 py-1.5 text-left text-red-300 hover:bg-slate-800"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--color-error-text)] hover:bg-[var(--color-ink-muted)]"
             data-testid="user-menu-logout"
           >
             Log out

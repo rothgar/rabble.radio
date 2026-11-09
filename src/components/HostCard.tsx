@@ -37,18 +37,18 @@ export function HostCard({ host, rank }: HostCardProps): ReactElement {
 
   return (
     <article
-      className="flex flex-col gap-4 rounded-lg border border-slate-800 bg-slate-900 p-4"
+      className="flex flex-col gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
       data-testid="host-card"
       data-rank={rank}
     >
       <div className="flex items-center gap-3">
         <span
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-sm font-bold text-slate-500"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-raised)] text-sm font-bold text-[var(--color-text-tertiary)]"
           data-testid="host-rank"
         >
           {rank}
         </span>
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-800 ring-1 ring-slate-700">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-raised)] ring-1 ring-[var(--color-border)]">
           {host.host.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -57,35 +57,35 @@ export function HostCard({ host, rank }: HostCardProps): ReactElement {
               className="h-full w-full object-cover"
             />
           ) : (
-            <span className="flex h-full w-full items-center justify-center text-sm font-medium text-slate-300">
+            <span className="flex h-full w-full items-center justify-center text-sm font-medium text-[var(--color-text-secondary)]">
               {initialsFor(name)}
             </span>
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-100">
+          <p className="truncate text-sm font-semibold text-[var(--color-text)]">
             {name}
           </p>
-          <p className="truncate text-xs text-slate-400">@{host.host.handle}</p>
+          <p className="truncate text-xs text-[var(--color-text-secondary)]">@{host.host.handle}</p>
         </div>
         <a
           href={profileUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0 rounded-md border border-slate-700 px-2.5 py-1.5 text-xs font-medium text-sky-300 hover:bg-slate-800"
+          className="shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-ink-muted)]"
           data-testid="host-profile-link"
         >
           View on Bluesky
         </a>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-slate-400" data-testid="host-popularity">
+      <div className="flex items-center gap-3 text-xs text-[var(--color-text-secondary)]" data-testid="host-popularity">
         <span title="On-air audience">👂 {host.popularity}</span>
       </div>
 
       {host.upcoming.length > 0 ? (
-        <div className="flex flex-col gap-2 border-t border-slate-800 pt-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
             Upcoming · {host.upcoming.length}
           </p>
           {host.upcoming.map((space) => {
@@ -95,18 +95,18 @@ export function HostCard({ host, rank }: HostCardProps): ReactElement {
             return (
               <div
                 key={space.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-950 px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
                 data-testid="upcoming-space"
               >
                 <div className="min-w-0">
                   <Link
                     href={`/show/${space.id}`}
-                    className="block truncate text-sm font-medium text-slate-100 hover:text-sky-300"
+                    className="block truncate text-sm font-medium text-[var(--color-text)] hover:text-[var(--color-accent)]"
                     data-testid="upcoming-space-link"
                   >
                     {space.title}
                   </Link>
-                  <span className="text-xs text-sky-300" data-testid="upcoming-space-time">
+                  <span className="text-xs text-[var(--color-accent)]" data-testid="upcoming-space-time">
                     {formatWhen(scheduledAt)}
                   </span>
                 </div>
@@ -122,7 +122,7 @@ export function HostCard({ host, rank }: HostCardProps): ReactElement {
           })}
         </div>
       ) : (
-        <p className="text-xs text-slate-500" data-testid="host-no-upcoming">
+        <p className="text-xs text-[var(--color-text-tertiary)]" data-testid="host-no-upcoming">
           No upcoming scheduled spaces.
         </p>
       )}

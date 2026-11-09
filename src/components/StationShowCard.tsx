@@ -78,7 +78,7 @@ export function StationShowCard({
         <div className="flex items-center gap-3">
           <HostAvatar show={show} />
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-[var(--color-text)] group-hover:text-[var(--color-accent-300)]">
+            <h3 className="truncate text-base font-semibold text-[var(--color-text)] group-hover:text-[var(--color-accent)]">
               {show.title}
             </h3>
             <p className="truncate text-xs text-[var(--color-text-tertiary)]">

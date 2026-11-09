@@ -66,7 +66,7 @@ function statusBadge(view: {
     case 'scheduled':
       return {
         label: 'Scheduled',
-        className: 'bg-[var(--color-accent-muted)] text-[var(--color-accent-300)]',
+        className: 'bg-[var(--color-accent-muted)] text-[var(--color-accent-2-700)]',
       };
     case 'active':
       return {
@@ -439,7 +439,7 @@ export default function SpacePage(): ReactElement {
               </div>
               {view.status === 'scheduled' && view.scheduledAt ? (
                 <p
-                  className="rounded-md border border-[var(--color-accent-700)] bg-[var(--color-accent-muted)] px-3 py-2 text-sm text-[var(--color-accent-100)]"
+                  className="rounded-md border border-[var(--color-accent)] bg-[var(--color-accent-muted)] px-3 py-2 text-sm text-[var(--color-text-on-ink)]"
                   data-testid="scheduled-info"
                 >
                   Scheduled for{' '}

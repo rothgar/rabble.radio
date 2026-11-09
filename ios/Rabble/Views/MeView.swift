@@ -85,13 +85,13 @@ struct MeView: View {
                 SectionLabel(text: "SHOWS YOU HOST · \(shows.hosted.count)")
                 if shows.hosted.isEmpty {
                     Text("You haven't hosted a show yet. Start one and it gets its own page you can share.")
-                        .font(.caption).foregroundStyle(RabbleColors.textSecondary).card()
+                        .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).card()
                 }
                 ForEach(shows.hosted) { show in hostedCard(show) }
                 SectionLabel(text: "SHOWS YOU JOINED · \(shows.joined.count)")
                 if shows.joined.isEmpty {
                     Text("Shows you listen to or speak on will show up here.")
-                        .font(.caption).foregroundStyle(RabbleColors.textSecondary).card()
+                        .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).card()
                 }
                 ForEach(shows.joined) { joined in joinedCard(joined) }
                 Button("Log out") { logout() }
@@ -111,18 +111,18 @@ struct MeView: View {
             HStack(spacing: 12) {
                 Avatar(name: me.label, avatarUrl: me.avatarUrl, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(me.label).font(.headline).lineLimit(1)
-                    Text("@\(me.handle)").font(.caption).foregroundStyle(RabbleColors.textSecondary).lineLimit(1)
+                    Text(me.label).font(RabbleFont.style(.headline)).lineLimit(1)
+                    Text("@\(me.handle)").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).lineLimit(1)
                 }
             }
             Text("Start a show to open your studio. Sessions land in your default show unless you start one from a different show below.")
-                .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
             Button(startingId == "" ? "Starting…" : "Start a show") { start(nil) }
                 .buttonStyle(.borderedProminent)
                 .disabled(startingId != nil)
                 .wideButton()
             if let startError {
-                Text(startError).font(.caption).foregroundStyle(RabbleColors.live)
+                Text(startError).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
             }
         }
         .card()
@@ -133,9 +133,9 @@ struct MeView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(show.title).font(.headline).lineLimit(2)
+                    Text(show.title).font(RabbleFont.style(.headline)).lineLimit(2)
                     Text("\(show.sessionCount) \(show.sessionCount == 1 ? "session" : "sessions") · \(show.totalListeners) \(show.totalListeners == 1 ? "listener" : "listeners") · \(show.likeCount) \(show.likeCount == 1 ? "like" : "likes")")
-                        .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                        .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
                 }
                 Spacer(minLength: 8)
                 if show.isLive {
@@ -155,7 +155,7 @@ struct MeView: View {
             }
             HStack {
                 Text(show.shareableUrl.isEmpty ? "/show/\(show.id)" : show.shareableUrl)
-                    .font(.caption).foregroundStyle(RabbleColors.accent).lineLimit(1)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.accent).lineLimit(1)
                 Spacer()
                 ShareLink(item: shareURL(show), subject: Text(show.title), message: Text("\(show.title) on Rabble Radio")) {
                     Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44)
@@ -183,9 +183,9 @@ struct MeView: View {
         HStack(spacing: 12) {
             HostAvatar(host: joined.host)
             VStack(alignment: .leading, spacing: 2) {
-                Text(joined.title).font(.headline).lineLimit(1)
+                Text(joined.title).font(RabbleFont.style(.headline)).lineLimit(1)
                 Text("@\(joined.host.handle) · \(joined.role == "audience" ? "listened" : "on stage")")
-                    .font(.caption).foregroundStyle(RabbleColors.textTertiary).lineLimit(1)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary).lineLimit(1)
             }
             Spacer(minLength: 8)
             if joined.isLive { LiveBadge() }

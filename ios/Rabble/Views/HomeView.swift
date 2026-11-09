@@ -29,6 +29,7 @@ struct HomeView: View {
             .navigationTitle("Rabble Radio")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) { Wordmark() }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     FeedbackButton(showId: nil)
                     if let me {
@@ -114,12 +115,12 @@ struct HomeView: View {
         let stations = Station.group(shows)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                Text("Shows").font(.largeTitle.weight(.bold))
+                Text("Shows").font(RabbleFont.style(.largeTitle, .bold))
                 Text("On-air and upcoming shows from Bluesky hosts.").foregroundStyle(RabbleColors.textSecondary)
                 startCard
                 if shows.isEmpty {
                     VStack(spacing: 8) {
-                        Text("No shows yet.").font(.title3.weight(.semibold))
+                        Text("No shows yet.").font(RabbleFont.style(.title3, .semibold))
                         Text(me != nil ? "Start one and invite people to the stage." : "Sign in with Bluesky to start the first one.")
                             .foregroundStyle(RabbleColors.textSecondary)
                     }
@@ -128,7 +129,7 @@ struct HomeView: View {
                 }
                 if !forYou.isEmpty {
                     SectionLabel(text: "FOR YOU").padding(.top, 8)
-                    Text("Hosts you follow on Bluesky, and rooms your follows are in.").font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                    Text("Hosts you follow on Bluesky, and rooms your follows are in.").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
                     ForEach(forYou) { show in showLink(show) }
                 }
                 if !onAir.isEmpty {
@@ -141,7 +142,7 @@ struct HomeView: View {
                 }
                 if !stations.isEmpty {
                     SectionLabel(text: "STATIONS").padding(.top, 16)
-                    Text("Browse shows by topic.").font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                    Text("Browse shows by topic.").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
                     FlowLayout(spacing: 8) {
                         ForEach(stations) { station in
                             NavigationLink(value: Route.station(station.tag)) {
@@ -167,11 +168,11 @@ struct HomeView: View {
 
     private var startCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Go live from your phone").font(.headline)
+            Text("Go live from your phone").font(RabbleFont.style(.headline))
             Text(me != nil
                  ? "Open a studio, invite people to the stage, then press On air when you're ready. You can name the show once you're in."
                  : "Sign in with Bluesky to host a show. Listening never needs an account.")
-                .font(.caption)
+                .font(RabbleFont.style(.caption))
                 .foregroundStyle(RabbleColors.textSecondary)
             if me != nil {
                 Button(starting ? "Starting…" : "Start a show") { startShow() }
@@ -184,7 +185,7 @@ struct HomeView: View {
                     .wideButton()
             }
             if let startError {
-                Text(startError).font(.caption).foregroundStyle(RabbleColors.live)
+                Text(startError).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
             }
         }
         .card()

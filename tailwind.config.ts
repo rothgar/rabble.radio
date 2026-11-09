@@ -25,6 +25,19 @@ const config: Config = {
       xl: '1280px',
     },
     extend: {
+      /* ── Fonts — Fraunces display face + Inter body ──────────────────── */
+      fontFamily: {
+        sans:    'var(--font-sans)',
+        display: 'var(--font-display)',
+      },
+
+      /* ── Border width — the brand's thick outline is the default ─────── */
+      borderWidth: {
+        DEFAULT: 'var(--border-width)',   /* 1.5 px */
+        2: '2px',
+        3: '3px',
+      },
+
       /* ── Border radius — maps to CSS var scale ───────────────────────── */
       borderRadius: {
         xs:   'var(--radius-xs)',   /* 4 px  — chips, badges */

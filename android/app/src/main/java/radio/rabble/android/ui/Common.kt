@@ -91,7 +91,8 @@ fun LiveBadge() {
     Box(
         Modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(RabbleColors.Live.copy(alpha = 0.15f))
+            .background(RabbleColors.AccentMuted)
+            .border(1.dp, RabbleColors.Live, RoundedCornerShape(999.dp))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text("ON AIR", color = RabbleColors.Live, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
@@ -103,7 +104,7 @@ fun Pill(text: String) {
     Box(
         Modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(RabbleColors.SurfaceRaised)
+            .background(RabbleColors.InkMuted)
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(text, color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
@@ -115,8 +116,9 @@ fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Box(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(RabbleColors.Surface)
+            .border(1.5.dp, RabbleColors.Border, RoundedCornerShape(8.dp))
             .padding(16.dp)
     ) { content() }
 }

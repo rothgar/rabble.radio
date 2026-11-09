@@ -75,8 +75,8 @@ export function SpeakerCard({
       className={
         'flex h-16 w-16 items-center justify-center overflow-hidden rounded-full sm:h-20 sm:w-20 ' +
         (isSpeaking
-          ? 'bg-[var(--color-accent-700)]'
-          : 'bg-[var(--color-accent-700)]')
+          ? 'bg-[var(--color-ink)]'
+          : 'bg-[var(--color-ink)]')
       }
       style={{
         boxShadow: isSpeaking
@@ -99,7 +99,7 @@ export function SpeakerCard({
         />
       ) : (
         <span
-          className="text-base font-medium text-[var(--color-accent-100)]"
+          className="text-base font-medium text-[var(--color-text-on-ink)]"
           data-testid={`speaker-avatar-fallback-${identity}`}
         >
           {initialsFor(name)}
@@ -128,7 +128,7 @@ export function SpeakerCard({
         <span
           aria-hidden
           data-testid={`speaker-muted-badge-${identity}`}
-          className="pointer-events-none absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[var(--color-bg)] bg-red-600 text-white"
+          className="pointer-events-none absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[var(--color-bg)] bg-[var(--color-error)] text-white"
         >
           <MicrophoneSlash size={14} weight="fill" />
         </span>
@@ -159,14 +159,14 @@ export function SpeakerCard({
             >
               {name}
               {isLocal ? (
-                <span className="ml-1 text-xs text-[var(--color-neutral-500)]">
+                <span className="ml-1 text-xs text-[var(--color-text-secondary)]">
                   (you)
                 </span>
               ) : null}
             </span>
             {isHost ? (
               <span
-                className="inline-flex shrink-0 items-center rounded-full bg-[var(--color-accent-700)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent-100)]"
+                className="inline-flex shrink-0 items-center rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-on-ink)]"
                 data-testid={`speaker-host-tag-${identity}`}
               >
                 Host
@@ -179,7 +179,7 @@ export function SpeakerCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="truncate text-xs text-[var(--color-accent-300)] hover:underline"
+              className="truncate text-xs text-[var(--color-accent-2-700)] hover:underline"
               data-testid={`speaker-handle-${identity}`}
               title={`@${handle}`}
             >
@@ -200,7 +200,7 @@ export function SpeakerCard({
               href={profileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="block rounded-md px-2 py-1.5 text-[var(--color-text)] hover:bg-[var(--color-accent-800)]"
+              className="block rounded-md px-2 py-1.5 text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
               data-testid={`speaker-profile-${identity}`}
               onClick={() => setMenuOpen(false)}
             >
@@ -214,7 +214,7 @@ export function SpeakerCard({
                 setMenuOpen(false);
                 onMuteToggle();
               }}
-              className="w-full rounded-md px-2 py-1.5 text-left text-[var(--color-text)] hover:bg-[var(--color-accent-800)]"
+              className="w-full rounded-md px-2 py-1.5 text-left text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
               data-testid={`speaker-mute-${identity}`}
             >
               {isMuted ? 'Unmute' : 'Mute'}
@@ -227,7 +227,7 @@ export function SpeakerCard({
                 setMenuOpen(false);
                 onRemoveFromStage();
               }}
-              className="w-full rounded-md px-2 py-1.5 text-left text-amber-200 hover:bg-[var(--color-accent-800)]"
+              className="w-full rounded-md px-2 py-1.5 text-left text-[var(--color-warning-text)] hover:bg-[var(--color-ink-muted)]"
               data-testid={`speaker-remove-${identity}`}
             >
               Remove from stage
@@ -240,7 +240,7 @@ export function SpeakerCard({
                 setMenuOpen(false);
                 onBlock();
               }}
-              className="w-full rounded-md px-2 py-1.5 text-left text-red-300 hover:bg-[var(--color-accent-800)]"
+              className="w-full rounded-md px-2 py-1.5 text-left text-[var(--color-error-text)] hover:bg-[var(--color-ink-muted)]"
               data-testid={`speaker-block-${identity}`}
             >
               Block

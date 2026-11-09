@@ -40,7 +40,7 @@ struct FeedbackSheet: View {
                         Button("Done") { dismiss() }.buttonStyle(.borderedProminent).wideButton()
                     } else {
                         Text("What went wrong? We attach your screen, room state, device, display and network details so we can reproduce it.")
-                            .font(.caption).foregroundStyle(RabbleColors.textSecondary)
+                            .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
                         FlowLayout(spacing: 8) {
                             ForEach(categories, id: \.0) { value, label in
                                 Button(label) { category = value }
@@ -64,7 +64,7 @@ struct FeedbackSheet: View {
                                 }
                             }
                         if let error {
-                            Text(error).font(.caption).foregroundStyle(RabbleColors.live)
+                            Text(error).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
                         }
                         Button(busy ? "Sending…" : "Send report") { send() }
                             .buttonStyle(.borderedProminent)
@@ -83,7 +83,7 @@ struct FeedbackSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 
     private func send() {

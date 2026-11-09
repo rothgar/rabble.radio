@@ -510,7 +510,7 @@ export function SpacePageClient({
         {error ? (
           <p
             role="alert"
-            className="rounded-md border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-200"
+            className="rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-3 py-2 text-sm text-[var(--color-error-text)]"
             data-testid="join-error"
           >
             {error}
@@ -523,14 +523,14 @@ export function SpacePageClient({
               void onJoin();
             }}
             disabled={joining}
-            className="rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-900)] hover:bg-[var(--color-accent-400)] disabled:opacity-50"
+            className="rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
             data-testid="join-button"
           >
             {joining ? 'Joining…' : 'Join the show'}
           </button>
         </div>
         {status ? (
-          <p className="text-xs text-[var(--color-neutral-500)]">
+          <p className="text-xs text-[var(--color-text-secondary)]">
             Status: {status}
             {scheduledAt ? ` · ${new Date(scheduledAt).toLocaleString()}` : ''}
           </p>

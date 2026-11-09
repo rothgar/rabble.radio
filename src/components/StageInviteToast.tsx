@@ -25,7 +25,7 @@ export function StageInviteToast({
     >
       <span
         aria-hidden
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-700)] text-[var(--color-accent-100)]"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-text-on-ink)]"
       >
         <HandWaving size={18} weight="fill" />
       </span>
@@ -33,7 +33,7 @@ export function StageInviteToast({
         <span className="text-sm font-medium text-[var(--color-text)]">
           {hostName ? `${hostName} invited you to stage.` : 'You have been invited to stage.'}
         </span>
-        <span className="text-xs text-[var(--color-neutral-400)]">
+        <span className="text-xs text-[var(--color-text-tertiary)]">
           Accept to join the speakers.
         </span>
       </div>
@@ -42,7 +42,7 @@ export function StageInviteToast({
           type="button"
           onClick={onDecline}
           disabled={busy}
-          className="rounded-full border border-[var(--color-divider)] px-3 py-1 text-xs font-medium text-[var(--color-neutral-200)] hover:bg-[var(--color-accent-800)] disabled:opacity-50"
+          className="rounded-full border border-[var(--color-divider)] px-3 py-1 text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-ink-muted)] disabled:opacity-50"
           data-testid="stage-request-decline"
         >
           Decline
@@ -53,7 +53,7 @@ export function StageInviteToast({
             void onAccept();
           }}
           disabled={busy}
-          className="rounded-full bg-[var(--color-accent)] px-3 py-1 text-xs font-semibold text-[var(--color-accent-900)] transition-colors hover:bg-[var(--color-accent-400)] disabled:opacity-50"
+          className="rounded-full bg-[var(--color-accent)] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           data-testid="stage-request-accept"
         >
           {busy ? 'Joining…' : 'Accept'}

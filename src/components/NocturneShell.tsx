@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Wordmark } from '@/components/ui';
 import type { ReactElement, ReactNode } from 'react';
 
 export interface NocturneShellProps {
@@ -31,19 +32,7 @@ export function NocturneShell({
           href="/stations"
           className="flex items-center gap-2 text-[var(--color-text)]"
         >
-          <span
-            aria-hidden
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-white"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-              <path d="M5 5a10 10 0 0 0 0 14" />
-              <path d="M19 5a10 10 0 0 1 0 14" />
-              <path d="M8 8a6 6 0 0 0 0 8" />
-              <path d="M16 8a6 6 0 0 1 0 8" />
-            </svg>
-          </span>
-          <span className="text-title font-semibold tracking-tight">Rabble Radio</span>
+          <Wordmark compact />
         </Link>
         <div data-testid="nocturne-nav-avatar">{navAvatar}</div>
       </header>

@@ -32,7 +32,7 @@ function Row({
       className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-3"
       data-testid={`audience-row-${member.identity}`}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-800)] ring-1 ring-[var(--color-neutral-800)]">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-ink)] ring-1 ring-[var(--color-border)]">
         {member.avatarUrl && !broken ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -42,7 +42,7 @@ function Row({
             onError={() => setBroken(true)}
           />
         ) : (
-          <span className="text-[11px] font-medium text-[var(--color-accent-100)]">
+          <span className="text-[11px] font-medium text-[var(--color-text-on-ink)]">
             {initialsFor(member.name)}
           </span>
         )}
@@ -52,14 +52,14 @@ function Row({
           {member.name}
         </span>
         {member.handle ? (
-          <span className="truncate text-xs text-[var(--color-accent-300)]">
+          <span className="truncate text-xs text-[var(--color-accent-2-700)]">
             @{member.handle}
           </span>
         ) : null}
       </div>
       {invited ? (
         <span
-          className="inline-flex items-center rounded-full bg-[var(--color-accent-700)] px-3 py-1 text-xs font-medium text-[var(--color-accent-100)]"
+          className="inline-flex items-center rounded-full bg-[var(--color-ink)] px-3 py-1 text-xs font-medium text-[var(--color-text-on-ink)]"
           data-testid={`audience-invited-${member.identity}`}
         >
           Invited
@@ -68,7 +68,7 @@ function Row({
         <button
           type="button"
           onClick={onInvite}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-[var(--color-accent-900)] transition-colors hover:bg-[var(--color-accent-400)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-200)]"
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-200)]"
           data-testid={`audience-invite-${member.identity}`}
         >
           <Plus size={12} weight="bold" />
@@ -87,7 +87,7 @@ export function AudienceRows({
   if (audience.length === 0) {
     return (
       <div
-        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-neutral-500)]"
+        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-text-secondary)]"
         data-testid="audience-rows-empty"
       >
         No listeners yet.

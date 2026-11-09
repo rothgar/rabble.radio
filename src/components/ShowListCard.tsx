@@ -22,7 +22,7 @@ function initials(name: string): string {
 function Avatar({ name, url, size = 40 }: { name: string; url: string | null; size?: number }): ReactElement {
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-900)] text-xs font-semibold text-[var(--color-text)] ring-1 ring-[var(--color-border-strong)]"
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-highlight-muted)] text-xs font-semibold text-[var(--color-text)] ring-1 ring-[var(--color-border-strong)]"
       style={{ width: size, height: size }}
     >
       {url ? (
@@ -80,7 +80,7 @@ export function ShowListCard({ space, rank }: ShowListCardProps): ReactElement {
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-live)]" aria-hidden /> On air
             </span>
           ) : space.replay ? (
-            <span className="rounded-full bg-[var(--color-accent-900)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-accent)]">
+            <span className="rounded-full bg-[var(--color-highlight-muted)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-accent)]">
               Replay
             </span>
           ) : space.status === 'scheduled' ? (

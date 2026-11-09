@@ -134,14 +134,14 @@ export function HandleInput({
         aria-controls={listId}
         aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
         data-testid="handle-input"
-        className="min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        className="min-h-[44px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-tertiary)] focus:border-[var(--color-accent-2)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent-2)]"
       />
       {open ? (
         <ul
           id={listId}
           role="listbox"
           data-testid="handle-suggestions"
-          className="absolute left-0 right-0 z-10 mt-1 max-h-72 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 py-1 shadow-xl"
+          className="absolute left-0 right-0 z-10 mt-1 max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-xl"
         >
           {suggestions.map((s, i) => (
             <li
@@ -157,7 +157,7 @@ export function HandleInput({
               onMouseEnter={() => setActive(i)}
               className={
                 'flex min-h-[44px] cursor-pointer items-center gap-3 px-3 py-2 ' +
-                (i === active ? 'bg-slate-800' : '')
+                (i === active ? 'bg-[var(--color-surface-raised)]' : '')
               }
             >
               {s.avatar ? (
@@ -168,18 +168,18 @@ export function HandleInput({
                   width={32}
                   height={32}
                   loading="lazy"
-                  className="h-8 w-8 shrink-0 rounded-full bg-slate-800 object-cover"
+                  className="h-8 w-8 shrink-0 rounded-full bg-[var(--color-surface-raised)] object-cover"
                 />
               ) : (
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-300">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-raised)] text-xs font-semibold uppercase text-[var(--color-text-secondary)]">
                   {s.handle.slice(0, 2)}
                 </span>
               )}
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-slate-100">
+                <span className="block truncate text-sm text-[var(--color-text)]">
                   {s.displayName ?? s.handle}
                 </span>
-                <span className="block truncate text-xs text-slate-400">@{s.handle}</span>
+                <span className="block truncate text-xs text-[var(--color-text-secondary)]">@{s.handle}</span>
               </span>
             </li>
           ))}

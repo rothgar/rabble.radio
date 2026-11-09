@@ -11,7 +11,7 @@ struct StationView: View {
             if let shows {
                 if shows.isEmpty {
                     VStack(spacing: 8) {
-                        Text("No shows in this station yet.").font(.title3.weight(.semibold))
+                        Text("No shows in this station yet.").font(RabbleFont.style(.title3, .semibold))
                         Text("When a host tags a show with \(tag), it will appear here.")
                             .foregroundStyle(RabbleColors.textSecondary)
                             .multilineTextAlignment(.center)

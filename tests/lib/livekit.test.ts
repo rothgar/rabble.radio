@@ -85,6 +85,7 @@ import {
   createHostToken,
   createRoom,
   generateToken,
+  getRoomParticipantSummary,
   setAudienceSubscriptions,
   getLiveKitClient,
   getLiveKitConfig,
@@ -366,6 +367,19 @@ describe('generateToken canSubscribe override', () => {
   });
 });
 
+describe('getRoomParticipantSummary', () => {
+  it('does not count a listener with no permission info as a speaker', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listParticipants.mockResolvedValueOnce([
+      { identity: 'did:plc:host', permission: { canPublish: true, canSubscribe: true } },
+      { identity: 'did:plc:listener' },
+    ]);
+    const summary = await getRoomParticipantSummary('space-x');
+    expect(summary).toEqual({ speakers: 1, listeners: 1 });
+  });
+});
+
 describe('setAudienceSubscriptions', () => {
   it('updates only listeners whose subscribe flag differs', async () => {
     getLiveKitClient();
@@ -390,6 +404,15 @@ describe('setAudienceSubscriptions', () => {
       expect.anything(),
       expect.anything()
     );
+  });
+
+  it('leaves a participant with no permission info untouched', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listParticipants.mockResolvedValueOnce([{ identity: 'did:plc:unsynced' }]);
+    const updated = await setAudienceSubscriptions('space-x', true);
+    expect(updated).toBe(0);
+    expect(client.updateParticipant).not.toHaveBeenCalled();
   });
 
   it('returns -1 when LiveKit cannot be reached', async () => {

@@ -52,6 +52,22 @@ code, and mistakes already made there.
   "do this once per connection" effect in this file needs to key off the
   room, not the component's mount lifecycle.
 
+## src/lib/livekit.ts (participant permission defaults)
+
+- A LiveKit `ParticipantInfo.permission` can be missing or omit
+  `canPublish` right after a participant joins (not yet synced), and the
+  two helpers that read it must not share one default for that case.
+  `getRoomParticipantSummary` only reports a count, so it defaults unclear
+  permission to listener (`canPublish === true` ⇒ speaker, else listener) —
+  a brief undercount self-corrects on the next sweep. `setAudienceSubscriptions`
+  *mutates* the participant (it force-sets `canPublish: false` on anyone it
+  doesn't skip), so it keeps the opposite, more conservative default
+  (`canPublish !== false` ⇒ skip/leave alone): defaulting unclear permission
+  to listener there risks audibly muting a host or co-host still mid-connect,
+  which is worse than the display bug it would have avoided (issue #3).
+  Check any new reader of `permission.canPublish` against which failure mode
+  it can cause before picking a default.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

@@ -15,7 +15,7 @@ out/
 .env.*.local
 secrets/
 private-key.pem
-jwks.json
+/jwks.json
 
 # Runtime
 *.log

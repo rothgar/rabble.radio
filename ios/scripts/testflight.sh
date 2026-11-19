@@ -10,6 +10,8 @@
 # BUILD_NUMBER overrides the CFBundleVersion (defaults to a UTC timestamp so
 # every upload is newer than the last); MARKETING_VERSION overrides the
 # user-facing version. SKIP_UPLOAD=1 archives and exports without uploading.
+# RABBLE_CI=1 (GitHub Actions) signs in a temporary keychain instead of the
+# login keychain; ASC_KEY_PATH then points at the key the workflow wrote.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -20,14 +22,29 @@ ENV_FILE="${ASC_ENV_FILE:-$HOME/.config/rabble/testflight.env}"
 ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8}"
 [[ -f "$ASC_KEY_PATH" ]] || { echo "missing API key file $ASC_KEY_PATH" >&2; exit 1; }
 
-# Each ssh login has its own security session, so the login keychain must be
-# unlocked in this very session for Xcode to store and use signing keys. Run
-# the script with `ssh -t` so the password prompt can reach you.
-KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
-if ! security show-keychain-info "$KEYCHAIN" >/dev/null 2>&1; then
-  echo "==> unlocking the login keychain (enter the Mac login password)"
-  security unlock-keychain "$KEYCHAIN"
-  security set-keychain-settings "$KEYCHAIN"
+if [[ "${RABBLE_CI:-0}" == 1 ]]; then
+  # CI (.github/workflows/deploy.yml): a throwaway keychain for this run, so
+  # nothing a runner leaves behind can sign later. Cloud-managed signing
+  # through the API key needs no certificate in it; Xcode only needs one
+  # that is unlocked and default.
+  KEYCHAIN="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/rabble-ci.keychain-db"
+  KEYCHAIN_PW="$(openssl rand -hex 24)"
+  security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+  security set-keychain-settings -lut 7200 "$KEYCHAIN"
+  security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+  security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+  security default-keychain -s "$KEYCHAIN"
+  trap 'security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true' EXIT
+else
+  # Each ssh login has its own security session, so the login keychain must be
+  # unlocked in this very session for Xcode to store and use signing keys. Run
+  # the script with `ssh -t` so the password prompt can reach you.
+  KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
+  if ! security show-keychain-info "$KEYCHAIN" >/dev/null 2>&1; then
+    echo "==> unlocking the login keychain (enter the Mac login password)"
+    security unlock-keychain "$KEYCHAIN"
+    security set-keychain-settings "$KEYCHAIN"
+  fi
 fi
 
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"

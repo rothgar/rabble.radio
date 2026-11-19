@@ -1,0 +1,189 @@
+# Deploy rabble.rodeo on every push to main: the web app and API on
+# Cloudflare Workers, the Android APK to R2 (served at /downloads/), and the
+# iOS build to TestFlight. Each part runs only when its files changed; a
+# manual run (workflow_dispatch) picks parts explicitly. See docs/DEPLOY.md
+# for the secrets and variables this needs.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      web:
+        description: Deploy the web app and API
+        type: boolean
+        default: true
+      android:
+        description: Build and publish the Android APK
+        type: boolean
+        default: true
+      ios:
+        description: Archive and upload the iOS app to TestFlight
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.pick.outputs.web }}
+      android: ${{ steps.pick.outputs.android }}
+      ios: ${{ steps.pick.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          IN_WEB: ${{ inputs.web }}
+          IN_ANDROID: ${{ inputs.android }}
+          IN_IOS: ${{ inputs.ios }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ]; then
+            web=$IN_WEB; android=$IN_ANDROID; ios=$IN_IOS
+          elif [ -n "$BEFORE" ] && [[ "$BEFORE" != 0000000000* ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            web=false; android=false; ios=false
+            while IFS= read -r f; do
+              case "$f" in
+                android/*) android=true ;;
+                ios/*) ios=true ;;
+                .github/workflows/deploy.yml) web=true; android=true; ios=true ;;
+                docs/*|k8s/*|kanban/*|redesign/*|.discobox/*|.claude/*|.kimchi/*|*.md|TODO.md) ;;
+                *) web=true ;;
+              esac
+            done < <(git diff --name-only "$BEFORE" "$GITHUB_SHA")
+          else
+            # First push or a force-push with no common history: do everything.
+            web=true; android=true; ios=true
+          fi
+          echo "web=$web android=$android ios=$ios"
+          printf 'web=%s\nandroid=%s\nios=%s\n' "$web" "$android" "$ios" >> "$GITHUB_OUTPUT"
+
+  web:
+    name: Web and API (Cloudflare Workers)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - name: Typecheck, lint, test
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+      - name: Apply D1 migrations
+        run: pnpm d1:migrate:remote
+      - name: Build and deploy the Worker
+        run: pnpm cf:deploy
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 20 https://rabble.rodeo/api/health; then exit 0; fi
+            sleep 10
+          done
+          echo "rabble.rodeo did not answer /api/health after the deploy" >&2
+          exit 1
+
+  android:
+    name: Android APK
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install the SDK parts the app compiles against
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0" >/dev/null
+      - name: Use the shared debug keystore
+        # Without it every runner signs with a fresh key and phones refuse to
+        # upgrade an installed build. Optional; see docs/DEPLOY.md.
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          mkdir -p ~/.android
+          printf '%s' "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+      - name: Build
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rabble-android-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Publish to rabble.rodeo/downloads/rabble-android.apk
+        run: |
+          pnpm exec wrangler r2 object put rabble-dev-recordings/builds/rabble-android.apk \
+            --remote --file android/app/build/outputs/apk/debug/app-debug.apk \
+            --content-type application/vnd.android.package-archive
+
+  ios:
+    name: iOS (TestFlight)
+    needs: changes
+    # Off until the IOS_TESTFLIGHT repository variable is "true" and the
+    # App Store Connect secrets exist; see docs/DEPLOY.md.
+    if: needs.changes.outputs.ios == 'true' && vars.IOS_TESTFLIGHT == 'true'
+    runs-on: ${{ vars.IOS_RUNNER || 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pick the newest Xcode on a GitHub-hosted runner
+        if: vars.IOS_RUNNER == ''
+        run: |
+          latest=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+      - name: Install the App Store Connect key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+      - name: Archive and upload
+        working-directory: ios
+        env:
+          RABBLE_CI: "1"
+          ASC_ENV_FILE: /dev/null
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: scripts/testflight.sh
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

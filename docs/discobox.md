@@ -70,10 +70,10 @@ The discobox server already runs on this machine (`discobox version`,
 3. **Keep it**: once it works, fork `discobox-ai/factory-demo` (or make an
    empty private repository) and tell the manager its name; it pushes itself
    there and edits its own skills when you change the process.
-4. **Approve, merge, deploy.** The manager proposes every action until you say
-   "do triage on your own". You merge PRs; a box never does. After a merge,
-   deploy from this machine as usual (`pnpm cf:deploy`, remote D1
-   migrations, APK upload, TestFlight).
+4. **Approve and merge.** The manager proposes every action until you say
+   "do triage on your own". You merge PRs; a box never does. The merge
+   deploys rabble.rodeo on its own through `.github/workflows/deploy.yml`
+   (web, Android APK, TestFlight when enabled; see `docs/DEPLOY.md`).
 
 To try one job without the manager, run a worker by hand on an issue:
 

@@ -58,6 +58,13 @@ commands yourself regardless.
   be driven (Bluesky login, Android, iOS, deploys).
 - Work leaves the box as a PR from `discobox/issue-<N>`; never a push to
   `main`, never a deploy, never a remote migration. The owner merges and deploys.
+- PR descriptions are short, 20 lines at most. Summary: two to four
+  sentences on the cause and the fix, naming the one file a reviewer should
+  open. `## Evidence` keeps exactly its four lines (Review with the sha,
+  Verify, Tests, Done when), each one sentence under 30 words, then
+  `Closes #N`. No logs, captured requests, test-design rationale, review
+  history or mobile-parity essays in the body; if something there matters
+  to the reviewer, it goes in one PR comment.
 - A web change to a flow the Android or iOS app also implements (reactions,
   raised hands, stage, theme) names that in the PR and files a follow-up issue.
 - Extra reviewers for `discobox-review` live in `.discobox/review/`.

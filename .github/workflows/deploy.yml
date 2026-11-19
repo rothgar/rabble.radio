@@ -123,10 +123,14 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - name: Install the SDK parts the app compiles against
+      - name: Refresh the SDK command-line tools
+        # The runner's bundled sdkmanager predates API 37, so AGP's own SDK
+        # download (licenses are pre-accepted on GitHub runners) fetches the
+        # platform and build-tools; a current cmdline-tools keeps that path
+        # working.
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0" >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --update >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmdline-tools;latest" >/dev/null 2>&1 || true
       - name: Use the shared debug keystore
         # Without it every runner signs with a fresh key and phones refuse to
         # upgrade an installed build. Optional; see docs/DEPLOY.md.

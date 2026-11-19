@@ -6,6 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { BottomControlBar } from '@/components/BottomControlBar';
+import { NocturneShell } from '@/components/NocturneShell';
 
 function baseProps() {
   return {
@@ -129,5 +130,20 @@ describe('leave confirmation', () => {
     fireEvent.click(screen.getByTestId('leave-dialog-confirm'));
     expect(props.onLeave).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('leave-dialog')).not.toBeInTheDocument();
+  });
+
+  it('does not nest the fixed leave dialog inside the backdrop-blur footer', () => {
+    render(
+      <NocturneShell
+        header={<div>header</div>}
+        main={<div>main</div>}
+        sidebar={<div>sidebar</div>}
+        bottomBar={<BottomControlBar role="audience" {...baseProps()} />}
+      />
+    );
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    const dialog = screen.getByTestId('leave-dialog');
+    const footer = screen.getByTestId('nocturne-footer');
+    expect(footer).not.toContainElement(dialog);
   });
 });

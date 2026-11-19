@@ -13,7 +13,7 @@ import {
 import { StationCard } from '@/components/StationCard';
 import { StationSuggestionCard } from '@/components/StationSuggestionCard';
 import { SiteHeader } from '@/components/SiteHeader';
-import { StartShowButton } from '@/components/StartShowButton';
+import { StartShowMenu } from '@/components/StartShowMenu';
 import { Button, PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +55,7 @@ export default async function StationsPage(): Promise<ReactElement> {
           </div>
           {user ? (
             <div data-testid="stations-start-show">
-              <StartShowButton size="lg" />
+              <StartShowMenu size="lg" />
             </div>
           ) : null}
         </header>
@@ -71,7 +71,7 @@ export default async function StationsPage(): Promise<ReactElement> {
               up to 3 tags to get listed here.
             </p>
             {user ? (
-              <StartShowButton size="lg" />
+              <StartShowMenu size="lg" />
             ) : (
               <Button href="/login?next=%2Fstations" size="lg" data-testid="create-show-link">
                 Sign in to start a show

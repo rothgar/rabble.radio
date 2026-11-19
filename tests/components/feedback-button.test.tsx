@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FeedbackButton } from '@/components/FeedbackButton';
+import { SiteHeader } from '@/components/SiteHeader';
 import { recordError, resetDiagnosticsForTests, setRoomSnapshot } from '@/lib/diagnostics';
 
 const fetchMock = vi.fn();
@@ -76,5 +77,13 @@ describe('FeedbackButton', () => {
     await waitFor(() =>
       expect(screen.getByTestId('feedback-error').textContent).toBe('Could not save your report.')
     );
+  });
+
+  it('does not nest the fixed dialog inside the backdrop-blur site header', () => {
+    render(<SiteHeader />);
+    fireEvent.click(screen.getByTestId('feedback-button'));
+    const dialog = screen.getByTestId('feedback-dialog-backdrop');
+    const header = screen.getByTestId('site-header');
+    expect(header).not.toContainElement(dialog);
   });
 });

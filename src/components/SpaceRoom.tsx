@@ -2,10 +2,12 @@
 
 // src/components/SpaceRoom.tsx
 //
-// LiveKit room wrapper for the redesigned Nocturne live-room. Renders the
-// full viewport shell (nav bar, two-column content, sticky bottom bar) via
-// NocturneShell, with RoomHeader / speaker grid / audience section /
-// RoomSidebar / BottomControlBar nested inside.
+// Full-viewport room UI for the redesigned Nocturne live-room: nav bar,
+// two-column content, sticky bottom bar, via NocturneShell, with
+// RoomHeader / speaker grid / audience section / RoomSidebar /
+// BottomControlBar nested inside. The LiveKit connection itself is owned by
+// ActiveRoomProvider (so it survives navigating away from this page); this
+// component only consumes the ambient room via useRoomContext().
 //
 // Stage membership is determined by `participant.permissions.canPublish`.
 // The local participant mirrors onto the stage grid when role is host or
@@ -25,16 +27,15 @@ import {
 } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
-  LiveKitRoom,
-  RoomAudioRenderer,
   useLocalParticipant,
   useParticipants,
   useTracks,
 } from '@livekit/components-react';
 import type { Participant } from 'livekit-client';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { RoomEvent, Track } from 'livekit-client';
 import { PreShowMusic } from '@/components/PreShowMusic';
 import { useRoomContext } from '@livekit/components-react';
+import { useActiveRoom, type SpaceRole } from '@/components/ActiveRoomProvider';
 import { NocturneShell } from '@/components/NocturneShell';
 import { RoomHeader } from '@/components/RoomHeader';
 import { SpeakerCard } from '@/components/SpeakerCard';
@@ -52,12 +53,10 @@ import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
 import { isAnonymousIdentity } from '@/lib/anonymous';
 
-export type SpaceRole = 'host' | 'audience';
+export type { SpaceRole };
 export type BottomRole = 'host' | 'speaker' | 'audience';
 
 export interface SpaceRoomProps {
-  token: string;
-  wsUrl: string;
   role: SpaceRole;
   identity: string;
   displayName?: string;
@@ -70,12 +69,6 @@ export interface SpaceRoomProps {
    * as participants and cannot raise a hand.
    */
   anonymous?: boolean;
-  /**
-   * STUN/TURN servers minted for this join. When present they replace the
-   * SFU's own ICE server list so listeners outside the homelab LAN can relay
-   * media through Cloudflare TURN.
-   */
-  iceServers?: RTCIceServer[];
   hostActions?: {
     onInvite?: (identity: string) => Promise<void> | void;
     onMuteToggle?: (
@@ -90,7 +83,7 @@ export interface SpaceRoomProps {
   /**
    * Reserved slot for any extra children that need access to LiveKit
    * context. Currently unused by the redesigned layout but kept for
-   * future host controls that want to live inside LiveKitRoom.
+   * future host controls that want to live inside the room.
    */
   stageSlot?: ReactNode;
   /** Title shown in the room header. */
@@ -220,8 +213,18 @@ function canPublishFor(p: Participant | undefined | null): boolean {
 }
 
 /**
+ * Rooms the host's microphone has already been auto-unmuted for, keyed on
+ * the Room instance rather than a per-mount ref: the room now survives
+ * SpaceRoom unmounting (it lives in ActiveRoomProvider, see issue #7), so a
+ * host who steps away from the studio page and comes back via
+ * PersistentShowBar must not have their deliberate mute reversed just
+ * because the component remounted.
+ */
+const autoUnmutedRooms = new WeakSet<object>();
+
+/**
  * HostAutoUnmute: when the role is 'host', enable the local microphone
- * exactly once after the room connects so the host appears as a live
+ * exactly once per connection (not per mount) so the host appears as a live
  * speaker.
  */
 function HostAutoUnmute({
@@ -231,19 +234,19 @@ function HostAutoUnmute({
   role: SpaceRole;
   onError?: (err: Error) => void;
 }): null {
+  const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
-  const enabledRef = useRef(false);
 
   useEffect(() => {
     if (role !== 'host') return;
-    if (enabledRef.current) return;
+    if (autoUnmutedRooms.has(room)) return;
     if (!localParticipant) return;
-    enabledRef.current = true;
+    autoUnmutedRooms.add(room);
     void localParticipant.setMicrophoneEnabled(true).catch((err: unknown) => {
-      enabledRef.current = false;
+      autoUnmutedRooms.delete(room);
       onError?.(err instanceof Error ? err : new Error('Microphone access denied.'));
     });
-  }, [localParticipant, onError, role]);
+  }, [localParticipant, onError, role, room]);
 
   return null;
 }
@@ -335,8 +338,8 @@ function RoomSync({
 }
 
 /**
- * Inner content rendered inside `LiveKitRoom`. Has access to room
- * context hooks and renders the redesigned grid + bottom bar.
+ * Inner content rendered inside the ambient LiveKit room context. Has
+ * access to room context hooks and renders the redesigned grid + bottom bar.
  */
 interface InnerProps {
   identity: string;
@@ -888,8 +891,6 @@ function Inner({
 }
 
 export function SpaceRoom({
-  token,
-  wsUrl,
   role,
   identity,
   displayName,
@@ -899,7 +900,6 @@ export function SpaceRoom({
   stageSlot,
   isHost = false,
   anonymous = false,
-  iceServers,
   hostActions,
   title,
   host,
@@ -917,21 +917,15 @@ export function SpaceRoom({
   musicMood,
   onMusicMoodChange,
 }: SpaceRoomProps): ReactElement {
-  const roomOptions = useMemo(
-    () => ({
-      adaptiveStream: true,
-      dynacast: true,
-      ...(iceServers && iceServers.length > 0
-        ? { rtcConfig: { iceServers } }
-        : {}),
-    }),
-    [iceServers]
-  );
-
-  const room = useMemo(() => new Room(roomOptions), [roomOptions]);
+  // The connection itself is owned by ActiveRoomProvider (mounted in the
+  // root layout) so it survives navigating away from this page; this
+  // component only consumes the ambient room it already connected.
+  const room = useRoomContext();
+  const { connectionError: joinError, leave: leaveActiveRoom } =
+    useActiveRoom();
   const reactionId = useId();
 
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
   const [handRaised, setHandRaised] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState<
     FloatingReactionState[]
@@ -957,28 +951,16 @@ export function SpaceRoom({
   );
   const toggleHand = useCallback(() => setHand(!handRaised), [handRaised, setHand]);
 
-  const handleConnected = useCallback(() => {
-    setConnectionError(null);
-  }, []);
-
-  const handleDisconnected = useCallback(() => {
-    // Intentionally a no-op: parent owns the leave decision.
-  }, []);
-
   const handleError = useCallback((err: Error) => {
-    setConnectionError(err?.message ?? 'Connection error.');
+    setMicError(err?.message ?? 'Microphone error.');
     // eslint-disable-next-line no-console
     console.error('[SpaceRoom] LiveKit error:', err);
   }, []);
 
   const handleLeave = useCallback(() => {
-    try {
-      room.disconnect();
-    } catch {
-      /* swallow */
-    }
+    leaveActiveRoom();
     onLeave?.();
-  }, [onLeave, room]);
+  }, [onLeave, leaveActiveRoom]);
 
   useEffect(() => {
     const logState = (state: string): void => {
@@ -1173,73 +1155,59 @@ export function SpaceRoom({
       data-anonymous={anonymous ? 'true' : 'false'}
       data-on-air={isLive ? 'true' : 'false'}
     >
-      {connectionError ? (
+      {joinError || micError ? (
         <div
           role="alert"
           className="mx-4 my-3 max-w-md rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-3 py-2 text-xs text-[var(--color-error-text)] sm:mx-auto"
           data-testid="space-room-error"
         >
-          {connectionError}
+          {joinError ?? micError}
         </div>
       ) : null}
 
-      <LiveKitRoom
-        room={room}
-        token={token}
-        serverUrl={wsUrl}
-        connect={true}
-        audio={role === 'host'}
-        video={false}
-        onConnected={handleConnected}
-        onDisconnected={handleDisconnected}
-        onError={handleError}
-        data-lk-theme="default"
-      >
-        <RoomAudioRenderer />
-        <Inner
-          musicMood={musicMood ?? null}
-          onMusicMoodChange={onMusicMoodChange}
-          identity={identity}
-          displayName={displayName}
-          isHost={isHost}
-          anonymous={anonymous}
-          hostActions={hostActions}
-          mergedProfiles={mergedProfiles}
-          handleLeave={handleLeave}
-          role={role}
-          title={title}
-          host={host}
-          shareableUrl={shareableUrl}
-          posts={posts}
-          postsError={postsError}
-          onPostAdded={onPostAdded}
-          isLive={isLive}
-          onLiveChange={onLiveChange}
-          description={description}
-          tags={tags}
-          onSpaceUpdated={onSpaceUpdated}
-          onAirBusy={onAirBusy}
-          onAirError={onAirError}
-          onToggleOnAir={() => {
-            void handleToggleOnAir();
-          }}
-          spaceId={spaceId}
-          recording={recording ?? null}
-          handRaised={handRaised}
-          toggleHand={toggleHand}
-          onReact={handleReact}
-          onRemoteReaction={handleRemoteReaction}
-          floatingReactions={floatingReactions}
-          removeFloatingReaction={removeFloatingReaction}
-          pendingInvite={pendingInvite}
-          inviteBusy={inviteBusy}
-          onAcceptInvite={handleAcceptInvite}
-          onDeclineInvite={handleDeclineInvite}
-          stageSlot={stageSlot}
-          stageControlsProps={stageControlsProps}
-          onMicError={handleError}
-        />
-      </LiveKitRoom>
+      <Inner
+        musicMood={musicMood ?? null}
+        onMusicMoodChange={onMusicMoodChange}
+        identity={identity}
+        displayName={displayName}
+        isHost={isHost}
+        anonymous={anonymous}
+        hostActions={hostActions}
+        mergedProfiles={mergedProfiles}
+        handleLeave={handleLeave}
+        role={role}
+        title={title}
+        host={host}
+        shareableUrl={shareableUrl}
+        posts={posts}
+        postsError={postsError}
+        onPostAdded={onPostAdded}
+        isLive={isLive}
+        onLiveChange={onLiveChange}
+        description={description}
+        tags={tags}
+        onSpaceUpdated={onSpaceUpdated}
+        onAirBusy={onAirBusy}
+        onAirError={onAirError}
+        onToggleOnAir={() => {
+          void handleToggleOnAir();
+        }}
+        spaceId={spaceId}
+        recording={recording ?? null}
+        handRaised={handRaised}
+        toggleHand={toggleHand}
+        onReact={handleReact}
+        onRemoteReaction={handleRemoteReaction}
+        floatingReactions={floatingReactions}
+        removeFloatingReaction={removeFloatingReaction}
+        pendingInvite={pendingInvite}
+        inviteBusy={inviteBusy}
+        onAcceptInvite={handleAcceptInvite}
+        onDeclineInvite={handleDeclineInvite}
+        stageSlot={stageSlot}
+        stageControlsProps={stageControlsProps}
+        onMicError={handleError}
+      />
     </div>
   );
 }

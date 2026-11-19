@@ -1,5 +1,11 @@
 // tests/components/reminder-toasts.test.tsx
 
+let barVisible = false;
+
+vi.mock('@/components/ActiveRoomProvider', () => ({
+  useActiveRoom: () => ({ barVisible }),
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReminderToasts } from '@/components/ReminderToasts';
@@ -8,6 +14,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  barVisible = false;
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => {
@@ -46,5 +53,20 @@ describe('ReminderToasts', () => {
       await Promise.resolve();
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('lands above PersistentShowBar instead of inside its height when a show is active', async () => {
+    barVisible = true;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        due: [{ spaceId: 'sp1', title: 'Morning Show', host: { handle: 'h.test', displayName: 'Host' } }],
+      }),
+    });
+    render(<ReminderToasts pollMs={100000} />);
+    await waitFor(() => expect(screen.getByTestId('reminder-toasts')).toBeTruthy());
+    expect(screen.getByTestId('reminder-toasts').className).toContain('bottom-24');
+    expect(screen.getByTestId('reminder-toasts').className).not.toContain('bottom-4');
   });
 });

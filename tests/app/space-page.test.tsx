@@ -27,15 +27,30 @@ import {
 import type { PublicSpace, PublicUser } from '@/types';
 
 // Stub next/navigation so we can drive the id via a mocked useParams.
+// ActiveRoomProvider also calls usePathname(); stub it to a path that never
+// matches a show route so none of these tests pick up an active session.
 vi.mock('next/navigation', () => ({
   useParams: vi.fn(),
   useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/',
 }));
 
 import { useParams } from 'next/navigation';
 import SpacePage from '@/app/show/[id]/page';
+import { ActiveRoomProvider } from '@/components/ActiveRoomProvider';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
+
+/** SpacePageClient reads the join session from ActiveRoomProvider (it
+ * survives navigating away from this page, see issue #7), so every render
+ * needs a real provider in the tree. */
+function renderPage(): ReturnType<typeof render> {
+  return render(
+    <ActiveRoomProvider>
+      <SpacePage />
+    </ActiveRoomProvider>
+  );
+}
 
 function makeSpace(overrides: Partial<PublicSpace> = {}): PublicSpace {
   return {
@@ -103,7 +118,7 @@ describe('<SpacePage />', () => {
     const fetchMock = vi.fn().mockReturnValue(new Promise(() => {}));
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
     expect(screen.getByTestId('space-loading')).toBeInTheDocument();
     expect(screen.getByText(/loading the show/i)).toBeInTheDocument();
   });
@@ -112,7 +127,7 @@ describe('<SpacePage />', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}, 404));
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-not-found')).toBeInTheDocument();
@@ -126,7 +141,7 @@ describe('<SpacePage />', () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('boom'));
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-error')).toBeInTheDocument();
@@ -155,7 +170,7 @@ describe('<SpacePage />', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-detail')).toBeInTheDocument();
@@ -190,7 +205,7 @@ describe('<SpacePage />', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-detail')).toBeInTheDocument();
@@ -225,7 +240,7 @@ describe('<SpacePage />', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-detail')).toBeInTheDocument();
@@ -265,7 +280,7 @@ describe('<SpacePage />', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-error')).toBeInTheDocument();
@@ -297,7 +312,7 @@ describe('<SpacePage />', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SpacePage />);
+    renderPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('space-detail')).toBeInTheDocument();

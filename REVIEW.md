@@ -31,3 +31,24 @@ code, and mistakes already made there.
   `NocturneShell`'s `backdrop-blur` footer (issue #6); `FeedbackButton`'s
   dialog had the same bug nested inside `SiteHeader`'s `backdrop-blur`
   header, fixed the same way (issue #8).
+
+## src/components/SpaceRoom.tsx
+
+- `HostAutoUnmute` guards its once-only `setMicrophoneEnabled(true)` call
+  against the `Room` instance (`autoUnmutedRooms`, a `WeakSet<object>`), not
+  a component-local ref. The LiveKit `Room` lives in `ActiveRoomProvider` and
+  survives SpaceRoom unmounting when the host leaves the studio page and
+  comes back through `PersistentShowBar`; a per-mount ref would re-fire on
+  every such remount and silently override a host's own mute. Any future
+  "do this once per connection" effect in this file needs to key off the
+  room, not the component's mount lifecycle.
+
+## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
+
+- `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,
+  not on the session's own `/show/[id]` page) that both `PersistentShowBar`
+  and `ReminderToasts` read, and that also drives the bottom padding
+  reserved around `children` in `ActiveRoomProvider`. Any new fixed-bottom
+  UI must read `barVisible` too — either to reposition itself above the bar
+  (as `ReminderToasts` does) or to stay out from under it — rather than
+  assuming it has the bottom of the viewport to itself.

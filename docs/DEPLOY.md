@@ -23,7 +23,7 @@ Repository secrets (Settings, Secrets and variables, Actions):
 
 | Secret | Used by | How to get it |
 |--------|---------|---------------|
-| `CLOUDFLARE_API_TOKEN` | web, android | Cloudflare dashboard, My Profile, API Tokens, Create Token from the **Edit Cloudflare Workers** template, then add **Account, D1, Edit** and **Account, Workers R2 Storage, Edit**; keep the zone scope on `rabble.rodeo` so the custom domain can be attached. |
+| `CLOUDFLARE_API_TOKEN` | web, android | Cloudflare dashboard, Manage Account, Account API Tokens, Create Token, Create Custom Token with: Account, Workers Scripts, Edit; Account, D1, Edit; Account, Workers R2 Storage, Edit; Account, Account Settings, Read; Zone, Workers Routes, Edit; Zone, Zone, Read. Account resources: this account; zone resources: the `rabble.rodeo` zone. |
 | `CLOUDFLARE_ACCOUNT_ID` | web, android | The account id shown on the Workers overview page (`0f8fe574f3489eda5a599104efd24d26`). |
 | `ANDROID_DEBUG_KEYSTORE_B64` | android, optional | `base64 -w0 ~/.android/debug.keystore` from the machine whose builds are already installed on phones. Without it each run signs with a fresh key and a phone must uninstall the app before it accepts the new APK. |
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` | ios | The App Store Connect API key already used by `scripts/ios-testflight.sh`: the two ids from `~/.config/rabble/testflight.env` on the Mac mini and the contents of `AuthKey_<id>.p8`. The key must have the **Admin** role; App Manager keys fail cloud signing. |

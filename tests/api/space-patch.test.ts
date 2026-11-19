@@ -135,6 +135,17 @@ describe('PATCH /api/spaces/[id]', () => {
     expect((await bad.json()).message).toMatch(/mood/i);
   });
 
+  it('turns the show podcast feed on or off, and rejects a non-boolean', async () => {
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const ok = await PATCH(patch({ podcastFeedEnabled: true }), ctx);
+    expect(ok.status).toBe(200);
+    expect(m.updateSpace).toHaveBeenCalledWith('sp1', { podcastFeedEnabled: true });
+
+    const bad = await PATCH(patch({ podcastFeedEnabled: 'yes' }), ctx);
+    expect(bad.status).toBe(400);
+    expect(m.updateSpace).toHaveBeenCalledTimes(1);
+  });
+
   it('republishes the Bluesky live status when renaming an on-air show', async () => {
     m.updateSpace.mockResolvedValueOnce(space({ title: 'Renamed', isLive: true }));
     const { PATCH } = await import('@/app/api/spaces/[id]/route');

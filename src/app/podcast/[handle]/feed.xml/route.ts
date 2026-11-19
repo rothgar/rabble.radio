@@ -10,25 +10,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getPublishedEpisodesForHost, type PublishedEpisode } from '@/lib/recording';
 import { defaultPublicOrigin } from '@/lib/spaces';
+import { feedAuthorName, renderFeed, type FeedHost } from '@/lib/podcast-feed';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-export interface FeedHost {
-  did: string;
-  handle: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-}
+export type { FeedHost };
 
 /** Render the feed document. Exported so tests can check it without Prisma. */
 export function renderPodcastFeed(
@@ -36,54 +23,19 @@ export function renderPodcastFeed(
   episodes: PublishedEpisode[],
   origin: string
 ): string {
-  const name = host.displayName?.trim() || `@${host.handle}`;
-  const feedUrl = `${origin}/podcast/${encodeURIComponent(host.handle)}/feed.xml`;
-  const items = episodes
-    .map(({ recording, space }) => {
-      const started = recording.startedAt;
-      const title = `${space.title} (${started.toISOString().slice(0, 10)})`;
-      const audioUrl = `${origin}/api/recordings/${encodeURIComponent(recording.id)}/audio`;
-      const showUrl = `${origin}/show/${encodeURIComponent(space.id)}`;
-      const description = space.description?.trim() || `A live show hosted by ${name} on Rabble Radio.`;
-      const categories = space.tags.map((t) => `      <category>${escapeXml(t)}</category>`).join('\n');
-      return [
-        '    <item>',
-        `      <title>${escapeXml(title)}</title>`,
-        `      <link>${escapeXml(showUrl)}</link>`,
-        `      <guid isPermaLink="false">${escapeXml(recording.id)}</guid>`,
-        `      <pubDate>${(recording.publishedAt ?? started).toUTCString()}</pubDate>`,
-        `      <description>${escapeXml(description)}</description>`,
-        `      <enclosure url="${escapeXml(audioUrl)}" length="${recording.sizeBytes ?? 0}" type="${escapeXml(recording.contentType)}" />`,
-        categories,
-        '    </item>',
-      ]
-        .filter((line) => line.length > 0)
-        .join('\n');
-    })
-    .join('\n');
-
-  const image = host.avatarUrl
-    ? `    <itunes:image href="${escapeXml(host.avatarUrl)}" />\n`
-    : '';
-
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom">',
-    '  <channel>',
-    `    <title>${escapeXml(`${name} on Rabble Radio`)}</title>`,
-    `    <link>${escapeXml(`${origin}/hosts`)}</link>`,
-    `    <atom:link href="${escapeXml(feedUrl)}" rel="self" type="application/rss+xml" />`,
-    `    <description>${escapeXml(`Live shows hosted by ${name} on Rabble Radio.`)}</description>`,
-    '    <language>en</language>',
-    `    <itunes:author>${escapeXml(name)}</itunes:author>`,
-    image.trimEnd(),
-    items,
-    '  </channel>',
-    '</rss>',
-    '',
-  ]
-    .filter((line) => line.length > 0)
-    .join('\n');
+  const name = feedAuthorName(host);
+  return renderFeed(
+    {
+      title: `${name} on Rabble Radio`,
+      link: `${origin}/hosts`,
+      feedUrl: `${origin}/podcast/${encodeURIComponent(host.handle)}/feed.xml`,
+      description: `Live shows hosted by ${name} on Rabble Radio.`,
+      authorName: name,
+      image: host.avatarUrl,
+    },
+    episodes,
+    origin
+  );
 }
 
 export async function GET(

@@ -34,6 +34,8 @@ function space(overrides: Partial<PublicSpace> = {}): PublicSpace {
     shareableUrl: 'https://rabble.rodeo/show/sp1',
     replay: null,
     reminded: false,
+    podcastFeedEnabled: false,
+    podcastFeedUrl: null,
     ...overrides,
   };
 }
@@ -118,5 +120,67 @@ describe('<HostedShowCard />', () => {
     );
     expect(screen.getByTestId('recording-publish-toggle')).toBeDisabled();
     expect(screen.queryByTestId('recording-download')).toBeNull();
+  });
+
+  it('turns the per-show podcast feed on through the API and shows its URL', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        space: {
+          podcastFeedEnabled: true,
+          podcastFeedUrl: 'https://rabble.rodeo/podcast/me.bsky.social/show/sp1/feed.xml',
+        },
+      }),
+    }) as unknown as typeof fetch;
+
+    render(<HostedShowCard space={space()} recordings={[]} />);
+    expect(screen.queryByTestId('hosted-show-podcast-feed-url')).toBeNull();
+    const toggle = screen.getByTestId('hosted-show-podcast-feed-toggle');
+    expect(toggle).toHaveTextContent('Turn on');
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('hosted-show-podcast-feed')).toHaveAttribute('data-enabled', 'true')
+    );
+    expect(screen.getByTestId('hosted-show-podcast-feed-toggle')).toHaveTextContent('Turn off');
+    expect(screen.getByTestId('hosted-show-podcast-feed-url')).toHaveTextContent(
+      'https://rabble.rodeo/podcast/me.bsky.social/show/sp1/feed.xml'
+    );
+    const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('/api/spaces/sp1');
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ podcastFeedEnabled: true });
+  });
+
+  it('shows the feed URL immediately when the show already has the feed enabled', () => {
+    render(
+      <HostedShowCard
+        space={space({
+          podcastFeedEnabled: true,
+          podcastFeedUrl: 'https://rabble.rodeo/podcast/me.bsky.social/show/sp1/feed.xml',
+        })}
+        recordings={[]}
+      />
+    );
+    expect(screen.getByTestId('hosted-show-podcast-feed-toggle')).toHaveTextContent('Turn off');
+    expect(screen.getByTestId('hosted-show-podcast-feed-url')).toHaveTextContent(
+      'https://rabble.rodeo/podcast/me.bsky.social/show/sp1/feed.xml'
+    );
+  });
+
+  it('surfaces an error and leaves the feed off when the toggle request fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'update_failed', message: 'Failed to update show.' }),
+    }) as unknown as typeof fetch;
+
+    render(<HostedShowCard space={space()} recordings={[]} />);
+    fireEvent.click(screen.getByTestId('hosted-show-podcast-feed-toggle'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('hosted-show-podcast-feed-error')).toHaveTextContent('Failed to update show.')
+    );
+    expect(screen.getByTestId('hosted-show-podcast-feed')).toHaveAttribute('data-enabled', 'false');
   });
 });

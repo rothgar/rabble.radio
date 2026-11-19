@@ -107,6 +107,48 @@ jobs:
           echo "rabble.rodeo did not answer /api/health after the deploy" >&2
           exit 1
 
+  qa:
+    name: Live-site checks
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check rabble.rodeo
+        id: qa
+        run: |
+          if node scripts/qa-live.mjs --json > qa.json; then
+            echo failed=0 >> "$GITHUB_OUTPUT"
+          else
+            echo failed=1 >> "$GITHUB_OUTPUT"
+          fi
+          node scripts/qa-live.mjs || true
+      - name: Open or update the QA issue
+        if: steps.qa.outputs.failed == '1'
+        run: |
+          title="QA: live-site checks failing after deploy"
+          {
+            echo "**Where:** https://rabble.rodeo, checked by \`scripts/qa-live.mjs\` after deploying ${GITHUB_SHA::7}"
+            echo "**Observed:**"
+            node -e 'for (const c of require("./qa.json").checks) if (!c.ok) console.log(`- ${c.name}: ${c.detail}`)'
+            echo "**Expected:** every check passes (run the script locally to reproduce)"
+            echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > body.md
+          num=$(gh issue list --label qa --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file body.md
+          else
+            gh issue create --title "$title" --label bug --label qa --body-file body.md
+          fi
+          exit 1
+
   android:
     name: Android APK
     needs: changes

@@ -68,7 +68,10 @@ commands yourself regardless.
 - A web change to a flow the Android or iOS app also implements (reactions,
   raised hands, stage, theme) names that in the PR and files a follow-up issue.
 - Extra reviewers for `discobox-review` live in `.discobox/review/`.
-- Harness configs `aperture-triage` and `aperture-deliver` (the default)
-  run Claude Code through the metered tailnet gateway;
+- Harness configs `aperture-triage`, `aperture-deliver` (the default) and
+  `aperture-qa` run Claude Code through the metered tailnet gateway;
   `scripts/discobox-gateway-harness.sh SLUG MODEL` creates one or changes
   its model (`docs/discobox.md`).
+- QA of the live site: `scripts/qa-live.mjs` (deterministic, run after
+  every deploy) and the `qa-live` skill (daily box that also screenshots
+  and files `qa` issues). Issues labelled `qa` come from it.

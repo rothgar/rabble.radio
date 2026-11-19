@@ -137,6 +137,32 @@ to apply and commit it. The manager box runs on the same harness: `-H
 aperture-deliver` on the `discobox run` that starts it, or nothing, since it
 is the default.
 
+## QA agent
+
+Two layers watch the deployed site and turn what they find into issues the
+manager then triages like any other:
+
+1. **After every web deploy**, the `qa` job of `.github/workflows/deploy.yml`
+   runs `scripts/qa-live.mjs` against rabble.rodeo: health, home, the
+   shows API and a show page, anonymous join when a show is live, the
+   listing pages, the APK download, JWKS and the push key. A failure opens
+   (or comments on) one issue titled "QA: live-site checks failing after
+   deploy", labelled `bug` and `qa`, and marks the run red.
+2. **Once a day**, the `rabble-qa.timer` user unit on this machine runs
+   `scripts/qa-live-box.sh`: a box on the `aperture-qa` harness config
+   checks out `main` and runs `/qa-live` (`.discobox/skills/qa-live/`): the
+   same script, then an exploratory pass with headless Chromium screenshots
+   at phone and desktop width in both themes, then one issue per distinct
+   problem through the GitHub REST API, de-duplicated against open `qa`
+   issues. Transcripts land in `~/.local/state/rabble-qa/`. Run it now with
+   `scripts/qa-live-box.sh`; `systemctl --user list-timers rabble-qa.timer`
+   shows the next run.
+
+`aperture-qa` is a gateway config like the others; its `github` binding is
+narrowed to listing, creating and commenting on this repository's issues,
+so a QA box cannot push, open PRs or touch labels. `node scripts/qa-live.mjs`
+runs the deterministic checks from anywhere.
+
 ## Branch protection
 
 Workers push to a fork and open PRs, so `main` needs no rule for them. A

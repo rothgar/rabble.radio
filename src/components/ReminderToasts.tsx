@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import Link from 'next/link';
 import { X } from '@phosphor-icons/react';
 import { ensurePushSubscription } from '@/lib/push-client';
+import { useActiveRoom } from '@/components/ActiveRoomProvider';
 
 export interface DueReminderView {
   spaceId: string;
@@ -77,10 +78,16 @@ export function ReminderToasts({ pollMs = REMINDER_POLL_MS }: { pollMs?: number 
     };
   }, [poll, pollMs]);
 
+  // PersistentShowBar is also fixed to the bottom of the viewport; land
+  // above it rather than inside its own height.
+  const { barVisible } = useActiveRoom();
+
   if (due.length === 0) return null;
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4"
+      className={`pointer-events-none fixed inset-x-0 z-50 flex flex-col items-center gap-2 px-4 ${
+        barVisible ? 'bottom-24' : 'bottom-4'
+      }`}
       data-testid="reminder-toasts"
       aria-live="polite"
     >

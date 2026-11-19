@@ -4,6 +4,8 @@ import { Fraunces, Inter } from 'next/font/google';
 import './globals.css';
 import { DiagnosticsInstaller } from '@/components/DiagnosticsInstaller';
 import { ReminderToasts } from '@/components/ReminderToasts';
+import { ActiveRoomProvider } from '@/components/ActiveRoomProvider';
+import { PersistentShowBar } from '@/components/PersistentShowBar';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -50,8 +52,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] antialiased">
         <DiagnosticsInstaller />
-        {children}
-        <ReminderToasts />
+        <ActiveRoomProvider>
+          {children}
+          <PersistentShowBar />
+          <ReminderToasts />
+        </ActiveRoomProvider>
       </body>
     </html>
   );

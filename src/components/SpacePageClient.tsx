@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { SpaceRoom, type SpaceRole } from '@/components/SpaceRoom';
+import { useActiveRoom } from '@/components/ActiveRoomProvider';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
 import type { PublicRecording } from '@/components/RoomSidebar';
@@ -91,15 +92,32 @@ export function SpacePageClient({
 }: SpacePageClientProps): ReactElement {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [joined, setJoined] = useState<JoinResponse | null>(null);
-  const [live, setLive] = useState<boolean>(isLive);
+  // The join session and the LiveKit connection itself live in
+  // ActiveRoomProvider (root layout) so they survive navigating away from
+  // this page; `joinedHere` is true once that session is for this space.
+  const activeRoom = useActiveRoom();
+  const joinedHere = activeRoom.session?.spaceId === spaceId;
+  const [live, setLiveState] = useState<boolean>(isLive);
+  const setLive = useCallback(
+    (next: boolean) => {
+      setLiveState(next);
+      if (activeRoom.session?.spaceId === spaceId) activeRoom.setLive(next);
+    },
+    [activeRoom, spaceId]
+  );
   // Show details can change while in the room (the host renames the show
   // or picks topics), so they live in state seeded from the page props.
   const [details, setDetails] = useState<ShowDetails>({ title, description, tags, musicMood: musicMood ?? null });
   // Messages that predate the music field leave the current mood alone.
-  const mergeDetails = useCallback((next: ShowDetails) => {
-    setDetails((prev) => ({ ...prev, ...next, musicMood: next.musicMood === undefined ? prev.musicMood : next.musicMood }));
-  }, []);
+  const mergeDetails = useCallback(
+    (next: ShowDetails) => {
+      setDetails((prev) => ({ ...prev, ...next, musicMood: next.musicMood === undefined ? prev.musicMood : next.musicMood }));
+      // Keep PersistentShowBar's title current even after the host
+      // navigates away from this page.
+      if (activeRoom.session?.spaceId === spaceId) activeRoom.setTitle(next.title);
+    },
+    [activeRoom, spaceId]
+  );
   const changeMusicMood = useCallback(
     async (mood: string | null) => {
       const res = await fetch(`/api/spaces/${encodeURIComponent(spaceId)}`, {
@@ -121,8 +139,8 @@ export function SpacePageClient({
   // Notify the surrounding page whenever the user enters or leaves the
   // room so it can hide the page chrome while the full-screen shell is up.
   useEffect(() => {
-    onJoinedChange?.(joined !== null);
-  }, [joined, onJoinedChange]);
+    onJoinedChange?.(joinedHere);
+  }, [joinedHere, onJoinedChange]);
 
   const refreshPosts = useCallback(async () => {
     try {
@@ -179,7 +197,24 @@ export function SpacePageClient({
         typeof (parsed as JoinResponse).handle === 'string' &&
         (parsed as JoinResponse).handle.length > 0
       ) {
-        setJoined(parsed as JoinResponse);
+        const session = parsed as JoinResponse;
+        activeRoom.join({
+          spaceId,
+          token: session.token,
+          wsUrl: session.wsUrl,
+          role: session.role,
+          identity: session.identity,
+          isHost,
+          handle: session.handle,
+          displayName: session.displayName,
+          avatarUrl: session.avatarUrl,
+          anonymous: session.anonymous,
+          iceServers: session.iceServers,
+          title: details.title,
+          host,
+          shareableUrl,
+          isLive: live,
+        });
       }
     } catch {
       // Malformed JSON: fall through to the manual join button.
@@ -196,10 +231,6 @@ export function SpacePageClient({
     const params = new URLSearchParams(window.location.search);
     if (params.get('listen') === '1' && !isHost && isLive) setAutoListen(true);
   }, [isHost, isLive]);
-
-  const handleLeave = useCallback(() => {
-    setJoined(null);
-  }, []);
 
   const hostActions = useMemo(() => {
     if (!isHost) return undefined;
@@ -306,17 +337,24 @@ export function SpacePageClient({
         );
         return;
       }
-      setJoined({
+      const role: SpaceRole = (body.role as SpaceRole) ?? (isHost ? 'host' : 'audience');
+      const onAir = typeof body.onAir === 'boolean' ? body.onAir : live;
+      activeRoom.join({
+        spaceId,
         token: body.token,
         wsUrl: body.wsUrl,
-        role: (body.role as SpaceRole) ?? (isHost ? 'host' : 'audience'),
-        roomName: body.roomName ?? '',
+        role,
         identity: body.identity ?? '',
+        isHost,
         handle: body.handle ?? '',
         displayName: body.displayName ?? null,
         avatarUrl: body.avatarUrl ?? null,
         anonymous: body.anonymous === true,
         iceServers: body.iceServers,
+        title: details.title,
+        host,
+        shareableUrl,
+        isLive: onAir,
       });
       if (typeof body.onAir === 'boolean') setLive(body.onAir);
     } catch (err) {
@@ -326,30 +364,27 @@ export function SpacePageClient({
     } finally {
       setJoining(false);
     }
-  }, [isHost, joining, spaceId]);
+  }, [activeRoom, details.title, host, isHost, joining, live, setLive, shareableUrl, spaceId]);
 
   useEffect(() => {
-    if (!autoListen || joined || joining) return;
+    if (!autoListen || joinedHere || joining) return;
     setAutoListen(false);
     void onJoin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoListen]);
 
-  if (joined) {
+  if (joinedHere && activeRoom.session) {
+    const session = activeRoom.session;
     return (
       <SpaceRoom
-        token={joined.token}
-        wsUrl={joined.wsUrl}
-        role={joined.role}
-        identity={joined.identity}
-        displayName={joined.displayName ?? joined.handle}
-        handle={joined.handle}
-        avatarUrl={joined.avatarUrl ?? null}
+        role={session.role}
+        identity={session.identity}
+        displayName={session.displayName ?? session.handle}
+        handle={session.handle}
+        avatarUrl={session.avatarUrl}
         isHost={isHost}
-        anonymous={joined.anonymous === true}
-        iceServers={joined.iceServers}
+        anonymous={session.anonymous}
         hostActions={hostActions}
-        onLeave={handleLeave}
         title={details.title}
         description={details.description}
         tags={details.tags}

@@ -3,16 +3,46 @@
 // Exercises the auto-join handoff: when CreateSpaceForm stores a join
 // payload in sessionStorage under `rabble_join_<spaceId>`, mounting
 // SpacePageClient should consume it and render SpaceRoom directly.
+//
+// The join session and LiveKit connection live in ActiveRoomProvider (see
+// issue #7: the room must survive navigating away from this page), so every
+// render here is wrapped in a real provider.
 
 vi.mock('@/components/SpaceRoom', () => ({
   SpaceRoom: () => <div data-testid="space-room">SpaceRoom</div>,
 }));
 
+vi.mock('livekit-client', () => ({
+  Room: class FakeRoom {
+    connect = vi.fn(async () => undefined);
+    disconnect = vi.fn();
+  },
+}));
+
+vi.mock('@livekit/components-react', async () => {
+  const React = await import('react');
+  return {
+    RoomContext: {
+      Provider: ({ children }: { children: React.ReactNode }) =>
+        React.createElement(React.Fragment, null, children),
+    },
+    RoomAudioRenderer: () => null,
+  };
+});
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SpacePageClient } from '@/components/SpacePageClient';
+import { ActiveRoomProvider } from '@/components/ActiveRoomProvider';
 
 const SPACE_ID = 'sp-auto-join';
+
+/** Every render needs ActiveRoomProvider: it owns the join session that
+ * survives navigation (issue #7), and SpacePageClient reads it. */
+function renderPage(element: ReactElement): ReturnType<typeof render> {
+  return render(<ActiveRoomProvider>{element}</ActiveRoomProvider>);
+}
 
 function baseProps() {
   return {
@@ -53,7 +83,7 @@ describe('<SpacePageClient /> auto-join handoff', () => {
     };
     sessionStorage.setItem(`rabble_join_${SPACE_ID}`, JSON.stringify(payload));
 
-    render(<SpacePageClient {...baseProps()} />);
+    renderPage(<SpacePageClient {...baseProps()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('space-room')).toBeInTheDocument();
@@ -72,7 +102,7 @@ describe('<SpacePageClient /> auto-join handoff', () => {
     };
     sessionStorage.setItem(`rabble_join_${SPACE_ID}`, JSON.stringify(payload));
 
-    render(<SpacePageClient {...baseProps()} />);
+    renderPage(<SpacePageClient {...baseProps()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('space-room')).toBeInTheDocument();
@@ -94,7 +124,7 @@ describe('<SpacePageClient /> auto-join handoff', () => {
       JSON.stringify(invalid)
     );
 
-    render(<SpacePageClient {...baseProps()} />);
+    renderPage(<SpacePageClient {...baseProps()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('join-button')).toBeInTheDocument();
@@ -106,7 +136,7 @@ describe('<SpacePageClient /> auto-join handoff', () => {
   it('removes malformed JSON from sessionStorage and falls back to the join button', async () => {
     sessionStorage.setItem(`rabble_join_${SPACE_ID}`, '{not json');
 
-    render(<SpacePageClient {...baseProps()} />);
+    renderPage(<SpacePageClient {...baseProps()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('join-button')).toBeInTheDocument();
@@ -117,7 +147,7 @@ describe('<SpacePageClient /> auto-join handoff', () => {
   it('renders the join button when no token is stored', async () => {
     expect(sessionStorage.getItem(`rabble_join_${SPACE_ID}`)).toBeNull();
 
-    render(<SpacePageClient {...baseProps()} />);
+    renderPage(<SpacePageClient {...baseProps()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('join-button')).toBeInTheDocument();
@@ -155,7 +185,7 @@ describe('<SpacePageClient /> onJoinedChange', () => {
       }
     ) as unknown as typeof fetch;
 
-    render(
+    renderPage(
       <SpacePageClient {...baseProps()} onJoinedChange={onJoinedChange} />
     );
 
@@ -206,7 +236,7 @@ describe('<SpacePageClient /> anonymous listening', () => {
       }
     ) as unknown as typeof fetch;
 
-    render(<SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} />);
+    renderPage(<SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} />);
 
     const card = await screen.findByTestId('space-unauthenticated');
     expect(card).toBeInTheDocument();
@@ -226,7 +256,7 @@ describe('<SpacePageClient /> anonymous listening', () => {
 
 describe('SpacePageClient scheduled and replay branches', () => {
   it('offers Notify me instead of Join on a scheduled show', () => {
-    render(
+    renderPage(
       <SpacePageClient
         {...baseProps()}
         isHost={false}
@@ -242,7 +272,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
   });
 
   it('offers Notify me and a quiet studio link instead of Join on an off-air show', () => {
-    const { unmount } = render(
+    const { unmount } = renderPage(
       <SpacePageClient {...baseProps()} isHost={false} isLive={false} status="active" reminded={false} />
     );
     expect(screen.getByTestId('space-off-air')).toBeTruthy();
@@ -250,7 +280,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.queryByTestId('join-button')).toBeNull();
     expect(screen.getByTestId('enter-studio').textContent).toMatch(/enter the studio/i);
     unmount();
-    render(
+    renderPage(
       <SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} isLive={false} status="ended" reminded={false} />
     );
     expect(screen.getByTestId('space-off-air')).toBeTruthy();
@@ -259,7 +289,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
   });
 
   it('plays the recording instead of joining when the show is off air with a replay', () => {
-    render(
+    renderPage(
       <SpacePageClient
         {...baseProps()}
         isHost={false}
@@ -281,7 +311,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
   });
 
   it('still lets the host open the studio under the replay', () => {
-    render(
+    renderPage(
       <SpacePageClient
         {...baseProps()}
         isHost
@@ -316,7 +346,7 @@ describe('SpacePageClient one-click listen', () => {
       }
       return { ok: true, status: 200, json: async () => ({ posts: [] }) };
     });
-    render(<SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} isLive />);
+    renderPage(<SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} isLive />);
     await waitFor(() => expect(screen.getByTestId('space-room')).toBeTruthy());
     window.history.replaceState({}, '', '/');
   });

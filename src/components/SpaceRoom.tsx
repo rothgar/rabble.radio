@@ -431,13 +431,13 @@ function Inner({
 }: InnerProps): ReactElement {
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
-  // Music plays while nobody else is sending audio: the show is off air, or
-  // it is on air but no remote microphone is published (the demo shows).
+  // Music plays while nobody is sending audio: the show is off air, or it is
+  // on air but no microphone (host's own included, so a solo host's device
+  // mutes itself the moment it starts broadcasting) is published (the demo
+  // shows).
   const micTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
-  const remoteAudioCount = micTracks.filter(
-    (t) => t.publication && !(t.participant as { isLocal?: boolean }).isLocal
-  ).length;
-  const musicActive = Boolean(musicMood) && (!isLive || remoteAudioCount === 0);
+  const liveAudioCount = micTracks.filter((t) => Boolean(t.publication)).length;
+  const musicActive = Boolean(musicMood) && (!isLive || liveAudioCount === 0);
   const localAvatarRef = useRef<HTMLDivElement | null>(null);
   const [micOn, setMicOn] = useState<boolean>(
     Boolean(localParticipant?.isMicrophoneEnabled)

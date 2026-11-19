@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# .discobox/scripts/pre-harness
+#
+# Runs inside a discobox before the agent harness starts, as the box user, in
+# the checkout. It makes a fresh box ready to build, test and run the web app
+# without any secrets: dependencies, the Prisma client, the local D1 database
+# with demo data, and a `.env.local` that `next dev` reads.
+#
+# It runs again on every primary terminal (re)creation, so every step is
+# idempotent and cheap when nothing changed. A failure here keeps the harness
+# from launching and leaves a shell to repair it; only the steps the agent
+# cannot work without fail hard.
+
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+
+log() { printf '\033[1;36m[rabble]\033[0m %s\n' "$*"; }
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  if command -v corepack >/dev/null 2>&1; then
+    corepack enable >/dev/null 2>&1 || true
+    corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
+  else
+    npm install -g pnpm@9 >/dev/null
+  fi
+fi
+
+log "node $(node -v), pnpm $(pnpm -v)"
+
+if [ ! -d node_modules ] || [ pnpm-lock.yaml -nt node_modules/.modules.yaml ]; then
+  log "installing dependencies"
+  pnpm install --frozen-lockfile
+fi
+
+if [ ! -d node_modules/.prisma/client ] || [ prisma/schema.prisma -nt node_modules/.prisma/client/index.js ]; then
+  log "generating the Prisma client"
+  pnpm prisma:generate >/dev/null
+fi
+
+# `next dev` reads `.env.local` into process.env. These are development-only
+# values: a throwaway session secret and the LiveKit dev-mode credentials the
+# `20-livekit` service runs with. Nothing here reaches a deployed environment.
+if [ ! -f .env.local ]; then
+  log "writing .env.local (dev-only values)"
+  cat > .env.local <<ENV
+SESSION_SECRET=$(openssl rand -hex 32)
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+LIVEKIT_URL=ws://127.0.0.1:7880
+LIVEKIT_PUBLIC_URL=ws://localhost:7880
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret
+LOG_LEVEL=info
+ENV
+fi
+
+# Local D1 (SQLite under .wrangler/state). Migrations are idempotent; the demo
+# seed is skipped when the demo hosts are already there.
+if pnpm d1:migrate:local >/dev/null 2>&1; then
+  if ! pnpm exec wrangler d1 execute rabble-dev --local --json \
+      --command "select count(*) as n from User where did like 'did:plc:demo%'" 2>/dev/null \
+      | grep -q '"n": *[1-9]'; then
+    log "seeding demo hosts and shows into the local D1"
+    node scripts/seed-demo.mjs --local >/dev/null 2>&1 || log "demo seed failed (not fatal); run: node scripts/seed-demo.mjs --local"
+  fi
+else
+  log "local D1 migration failed (not fatal); run: pnpm d1:migrate:local"
+fi
+
+log "ready: pnpm typecheck | pnpm lint | pnpm test | app at http://localhost:3000 (service 'web')"

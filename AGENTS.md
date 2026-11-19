@@ -1,3 +1,10 @@
+# rabble.radio
+
+Read `CLAUDE.md` first: commands, layout, conventions, and the section on
+working in a discobox. Runtime verification recipes are in
+`.discobox/skills/verify-recipes/SKILL.md`; the design-system rules are in
+`.claude/skills/rabble-design-system/SKILL.md`.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

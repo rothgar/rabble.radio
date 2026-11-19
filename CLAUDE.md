@@ -39,3 +39,22 @@ Agent teams are enabled in `.claude/settings.json`. Claude is the lead and the `
 - The reviewer never edits. It reports findings to the task owner by name and to the lead.
 - To run a persona by hand: `scripts/kimchi-agent.sh dev "Add a GET /api/health/db route that pings Prisma"`.
 - Skills: project skills live in `.claude/skills/<name>/SKILL.md` (Claude Code loads them; `rabble-design-system` covers tokens, layout rules and Tailwind gotchas). A persona lists `skills: [...]` in its frontmatter and `scripts/kimchi-agent.sh` appends those bodies to its system prompt, resolving `.claude/skills/` first and then `.kimchi/skills/` (Kimchi-only, e.g. the vendored `frontend-design`). `KIMCHI_AGENT_PRINT_PROMPT=1 scripts/kimchi-agent.sh frontend-dev x` prints the assembled prompt.
+
+## Working in a discobox (issue-driven workers)
+
+Issues and features can be worked by agents in discobox sandboxes
+(`docs/discobox.md`). The box is prepared by `.discobox/scripts/pre-harness`
+(dependencies, Prisma client, local D1 with demo data, `.env.local`), runs the
+app and a LiveKit dev server as boot services, and has hooks that run
+typecheck and lint on save and vitest at review time.
+
+- The repository's rules above apply unchanged; "Working as a team" does not:
+  in a box you are the only agent, and Kimchi wrappers are not available.
+- Verify at runtime with the `verify-recipes` skill (`.discobox/skills/`,
+  also linked as `.claude/skills/verify-recipes`). Say in the PR what could not
+  be driven (Bluesky login, Android, iOS, deploys).
+- Work leaves the box as a PR from `discobox/issue-<N>`; never a push to
+  `main`, never a deploy, never a remote migration. The owner merges and deploys.
+- A web change to a flow the Android or iOS app also implements (reactions,
+  raised hands, stage, theme) names that in the PR and files a follow-up issue.
+- Extra reviewers for `discobox-review` live in `.discobox/review/`.

@@ -313,6 +313,21 @@ export function SpacePageClient({
           setError(err instanceof Error ? err.message : 'Block failed.');
         }
       },
+      onReport: async (targetIdentity: string, reason: string, targetHandle?: string) => {
+        try {
+          const res = await fetch('/api/reports', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ spaceId, targetIdentity, reason, targetHandle }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            setError(body?.message ?? body?.error ?? `Report failed (HTTP ${res.status}).`);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Report failed.');
+        }
+      },
     };
   }, [isHost, spaceId]);
 

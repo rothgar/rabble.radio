@@ -89,6 +89,29 @@ which the manager otherwise does from its role files.
 
 ## Running workers on Kimchi models
 
+### Through the aperture gateway (Claude models, metered)
+
+`aperture-triage` and `aperture-deliver` are the same kind of config pointed
+at `https://ai.gerbil-dragon.ts.net`, the tailnet proxy that meters usage per
+person and forwards the box's own Anthropic credential. The models are the
+gateway's ids (`curl https://ai.gerbil-dragon.ts.net/v1/models`:
+`claude-sonnet-5`, `claude-opus-5`, `claude-haiku-4-5`, ...). The credential
+is a `claude setup-token` subscription token in the project secret
+`anthropic`, bound as `CLAUDE_CODE_OAUTH_TOKEN`:
+
+```sh
+discobox secret create --name anthropic --type token \
+  --route ai.gerbil-dragon.ts.net --route api.anthropic.com \
+  --ttl forever --max-binding-ttl forever --token "$TOKEN"
+KIMCHI_GATEWAY=https://ai.gerbil-dragon.ts.net KIMCHI_SECRET=anthropic \
+KIMCHI_SECRET_AS=CLAUDE_CODE_OAUTH_TOKEN \
+scripts/discobox-kimchi-harness.sh aperture-deliver claude-opus-5 claude-haiku-4-5
+```
+
+`aperture-deliver` is the project default harness and the manager's
+`workers.harness`. Boxes reach the gateway through the pool on this machine,
+so the gateway sees them as this machine's tailnet user.
+
 `kimchi claude` on a laptop does one thing (measured with Kimchi 1.36.0): it
 starts the normal Claude Code CLI with `ANTHROPIC_BASE_URL` pointed at
 `https://llm.kimchi.dev/anthropic` and the Kimchi API key as the auth token.

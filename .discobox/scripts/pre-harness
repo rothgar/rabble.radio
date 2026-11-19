@@ -34,7 +34,7 @@ if [ ! -d node_modules ] || [ pnpm-lock.yaml -nt node_modules/.modules.yaml ]; t
 fi
 
 # pnpm puts the generated client beside the real @prisma/client package.
-GEN="$(readlink -f node_modules/@prisma/client)/../.prisma/client/index.js"
+GEN="$(readlink -f node_modules/@prisma/client)/../../.prisma/client/index.js"
 if [ ! -f "$GEN" ] || [ prisma/schema.prisma -nt "$GEN" ]; then
   log "generating the Prisma client"
   pnpm prisma:generate >/dev/null

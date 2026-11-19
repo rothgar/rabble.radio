@@ -78,7 +78,7 @@ The discobox server already runs on this machine (`discobox version`,
 To try one job without the manager, run a worker by hand on an issue:
 
 ```sh
-discobox run -H kimchi-deliver rothgar/rabble.radio \
+discobox run rothgar/rabble.radio \
   --skills https://github.com/discobox-ai/skills \
   -p 'Run /deliver-issue for #12'
 ```
@@ -87,61 +87,38 @@ It needs a GitHub credential bound to the box (`discobox secret bind github
 <box> --as GH_TOKEN --route 'api.github.com/repos/rothgar/rabble.radio/**'`),
 which the manager otherwise does from its role files.
 
-## Running workers on Kimchi models
+## Running workers through the aperture gateway
 
-### Through the aperture gateway (Claude models, metered)
-
-`aperture-triage` and `aperture-deliver` are the same kind of config pointed
-at `https://ai.gerbil-dragon.ts.net`, the tailnet proxy that meters usage per
-person and forwards the box's own Anthropic credential. The models are the
-gateway's ids (`curl https://ai.gerbil-dragon.ts.net/v1/models`:
+`aperture-triage` and `aperture-deliver` are the built-in `claude-code`
+harness plus a settings file that points Claude Code at
+`https://ai.gerbil-dragon.ts.net`, the tailnet proxy that meters usage per
+person and forwards the box's own Anthropic credential, and maps every model
+alias Claude Code might send (opus, sonnet, haiku, the small/fast model) to
+one of the gateway's ids (`curl https://ai.gerbil-dragon.ts.net/v1/models`:
 `claude-sonnet-5`, `claude-opus-5`, `claude-haiku-4-5`, ...). The credential
 is a `claude setup-token` subscription token in the project secret
-`anthropic`, bound as `CLAUDE_CODE_OAUTH_TOKEN`:
+`anthropic`, bound as `CLAUDE_CODE_OAUTH_TOKEN`. `aperture-deliver` is the
+project default harness and the manager's `workers.harness`.
 
 ```sh
+# once: the token, sent only to the gateway (and Anthropic directly)
 discobox secret create --name anthropic --type token \
   --route ai.gerbil-dragon.ts.net --route api.anthropic.com \
   --ttl forever --max-binding-ttl forever --token "$TOKEN"
-KIMCHI_GATEWAY=https://ai.gerbil-dragon.ts.net KIMCHI_SECRET=anthropic \
-KIMCHI_SECRET_AS=CLAUDE_CODE_OAUTH_TOKEN \
-scripts/discobox-kimchi-harness.sh aperture-deliver claude-opus-5 claude-haiku-4-5
-```
 
-`aperture-deliver` is the project default harness and the manager's
-`workers.harness`. Boxes reach the gateway through the pool on this machine,
-so the gateway sees them as this machine's tailnet user.
-
-`kimchi claude` on a laptop does one thing (measured with Kimchi 1.36.0): it
-starts the normal Claude Code CLI with `ANTHROPIC_BASE_URL` pointed at
-`https://llm.kimchi.dev/anthropic` and the Kimchi API key as the auth token.
-That gateway speaks the Anthropic API but accepts only Kimchi model ids
-(`kimchi --list-models`); a Claude model name gets `400 no registered
-providers found`. So the "Kimchi harness" for discobox is the built-in
-`claude-code` harness plus a settings file that points it at the gateway and
-maps every alias Claude Code might send (opus, sonnet, haiku, the small/fast
-model) to a Kimchi id. `scripts/discobox-kimchi-harness.sh` builds such a
-harness config, one per job so each can run a different model:
-
-```sh
-# once: the key, read from Kimchi's own config, sent only to the gateway
-discobox secret create --name kimchi --route llm.kimchi.dev \
-  --refresh-command 'jq -r .apiKey ~/.config/kimchi/config.json' \
-  --ttl forever --max-binding-ttl forever
-
-scripts/discobox-kimchi-harness.sh kimchi-triage  glm-5.3-flash
-scripts/discobox-kimchi-harness.sh kimchi-deliver glm-5.3 glm-5.3-flash
+scripts/discobox-gateway-harness.sh aperture-triage  claude-sonnet-5 claude-haiku-4-5
+scripts/discobox-gateway-harness.sh aperture-deliver claude-opus-5   claude-haiku-4-5
 ```
 
 Each run writes the config's `.claude/settings.json` (`model`,
 `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`,
-`ANTHROPIC_SMALL_FAST_MODEL`, the gateway URL), allows egress to
-`llm.kimchi.dev`, and on first creation binds the `kimchi` secret as
-`ANTHROPIC_API_KEY`. A box only ever holds a sentinel; its pool swaps in the
-key on requests to `llm.kimchi.dev` and nowhere else. To change a model, run
-the script again with the new id; boxes already running keep theirs. The
-model names in the two commands above match the `.kimchi/agents` personas
-(`glm-5.3` for dev work, the flash model where cost matters).
+`ANTHROPIC_SMALL_FAST_MODEL`, the gateway URL), allows egress to the gateway
+host, and on first creation binds the secret. A box only ever holds a
+sentinel; its pool swaps in the token on requests to the gateway and nowhere
+else, and the gateway sees the box as this machine's tailnet user. To change
+a model, run the script again with the new id; boxes already running keep
+theirs. `GATEWAY_URL`, `GATEWAY_SECRET` and `GATEWAY_SECRET_AS` in the
+environment point the script at another gateway or credential.
 
 **Which job uses which model.** The factory manager launches every worker
 with `workers.harness`. `docs/discobox-factory-harness-by-job.patch` (two
@@ -149,22 +126,16 @@ files, tested against the template's `scripts/launch --dry-run`) adds
 `workers.harnessByJob`, so `manager.json` can say:
 
 ```json
-"workers": { "harness": "kimchi-deliver",
-             "harnessByJob": { "triage": "kimchi-triage" } }
+"workers": { "harness": "aperture-deliver",
+             "harnessByJob": { "triage": "aperture-triage" } }
 ```
 
 Jobs not listed fall back to `workers.harness`, and `scripts/launch
 --harness SLUG` overrides both for one launch. Apply the patch in your fork
 of the manager, or paste it to the manager in `discobox console` and ask it
-to apply and commit it. The manager box itself can run on Kimchi too: add
-`-H kimchi-deliver` to the `discobox run` that starts it.
-
-Caveats: the factory's worker skills and the manager's screen reading were
-written against Claude Code on Anthropic models, so watch the first boxes on
-a new model before trusting the rest. Kimchi's `--thinking` level has no
-equivalent in this setup. Running the `kimchi` CLI itself as the agent would
-need a third-party harness bundle (an image built `FROM` the claude-code
-bundle with a launcher for `kimchi --auto`); that is not built.
+to apply and commit it. The manager box runs on the same harness: `-H
+aperture-deliver` on the `discobox run` that starts it, or nothing, since it
+is the default.
 
 ## Branch protection
 

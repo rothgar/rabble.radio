@@ -68,8 +68,7 @@ commands yourself regardless.
 - A web change to a flow the Android or iOS app also implements (reactions,
   raised hands, stage, theme) names that in the PR and files a follow-up issue.
 - Extra reviewers for `discobox-review` live in `.discobox/review/`.
-- Harness configs `aperture-triage` / `aperture-deliver` (Claude models
-  through the metered tailnet gateway, the default) and `kimchi-triage` /
-  `kimchi-deliver` (Kimchi models) run Claude Code through a gateway;
-  `scripts/discobox-kimchi-harness.sh SLUG MODEL` creates one or changes its
-  model (`docs/discobox.md`).
+- Harness configs `aperture-triage` and `aperture-deliver` (the default)
+  run Claude Code through the metered tailnet gateway;
+  `scripts/discobox-gateway-harness.sh SLUG MODEL` creates one or changes
+  its model (`docs/discobox.md`).

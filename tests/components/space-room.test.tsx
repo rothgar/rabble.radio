@@ -91,6 +91,9 @@ type FakeRoom = InstanceType<typeof boundary.FakeRoom>;
 /** Set by each test before rendering, read by the mocked hooks below. */
 let activeFakeRoom: FakeRoom | null = null;
 
+/** Mic tracks the room currently has published; set per test. */
+let activeMicTracks: unknown[] = [];
+
 vi.mock('@livekit/components-react', () => ({
   useRoomContext: (): FakeRoom => {
     if (!activeFakeRoom) throw new Error('No room provided in this test.');
@@ -100,7 +103,7 @@ vi.mock('@livekit/components-react', () => ({
     localParticipant: activeFakeRoom?.localParticipant ?? null,
   }),
   useParticipants: (): unknown[] => [],
-  useTracks: (): unknown[] => [],
+  useTracks: (): unknown[] => activeMicTracks,
 }));
 
 vi.mock('@/components/ActiveRoomProvider', async () => {
@@ -143,6 +146,7 @@ function baseProps(overrides: Partial<SpaceRoomProps> = {}): SpaceRoomProps {
 beforeEach(() => {
   boundary.reset();
   activeFakeRoom = new boundary.FakeRoom();
+  activeMicTracks = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({
@@ -200,5 +204,42 @@ describe('<SpaceRoom /> microphone on join', () => {
     });
 
     expect(boundary.micCalls).not.toContain(true);
+  });
+});
+
+describe('<SpaceRoom /> pre-show music follows on-air state', () => {
+  it("mutes a solo host's own pre-show music the moment their mic goes live (issue #5)", async () => {
+    // Only the local participant (the host) is publishing a mic track; the
+    // music must stop on this device too, not just for remote listeners.
+    activeMicTracks = [{ publication: {}, participant: { isLocal: true } }];
+
+    const { findByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: true, musicMood: 'lounge' })} />
+    );
+
+    const music = await findByTestId('pre-show-music');
+    expect(music.getAttribute('data-playing')).toBe('false');
+  });
+
+  it('keeps the demo-show mood playing while live if nobody is actually publishing audio', async () => {
+    activeMicTracks = [];
+
+    const { findByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'audience', isHost: false, isLive: true, musicMood: 'lounge' })} />
+    );
+
+    const music = await findByTestId('pre-show-music');
+    expect(music.getAttribute('data-playing')).toBe('true');
+  });
+
+  it('resumes the selected mood automatically once the show goes back off air', async () => {
+    activeMicTracks = [{ publication: {}, participant: { isLocal: true } }];
+
+    const { findByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: false, musicMood: 'lounge' })} />
+    );
+
+    const music = await findByTestId('pre-show-music');
+    expect(music.getAttribute('data-playing')).toBe('true');
   });
 });

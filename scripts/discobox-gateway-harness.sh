@@ -62,12 +62,25 @@ jq -n --arg m "$model" --arg s "$small" --arg g "$gateway" '{
   }
 }' > "$tmp"
 
+# How the credential reaches Claude Code. The harness declares its secrets as
+# file-delivered: the pool substitutes {"$secret": "VAR"} in a configured file
+# with the sentinel. For ANTHROPIC_API_KEY the server generates that file
+# (.claude.json primaryApiKey) itself; for CLAUDE_CODE_OAUTH_TOKEN it does not
+# (v0.19.5), so the config ships a credentials file with the placeholder.
+# Variables in .claude/settings.json `env` are not substituted.
+files=(--file ".claude/settings.json=@$tmp")
+if [ "$secret_as" = CLAUDE_CODE_OAUTH_TOKEN ]; then
+  creds=$(mktemp); trap 'rm -f "$tmp" "$creds"' EXIT
+  jq -n '{claudeAiOauth: {accessToken: {"$secret": "CLAUDE_CODE_OAUTH_TOKEN"}, refreshToken: "",
+          expiresAt: 4102444800000, scopes: ["user:inference", "user:profile"], subscriptionType: "max"}}' > "$creds"
+  files+=(--file ".claude/.credentials.json=@$creds" --create-only-file .claude/.credentials.json)
+fi
+
 if "$discobox" admin harness get "$slug" >/dev/null 2>&1; then
-  "$discobox" admin harness update "$slug" --name "$slug ($model)" \
-    --file ".claude/settings.json=@$tmp" --egress-allow "$host"
+  "$discobox" admin harness update "$slug" --name "$slug ($model)" "${files[@]}" --egress-allow "$host"
 else
   "$discobox" admin harness create --slug "$slug" --name "$slug ($model)" \
-    --extends claude-code --file ".claude/settings.json=@$tmp"
+    --extends claude-code "${files[@]}"
   "$discobox" admin harness update "$slug" --egress-allow "$host"
 fi
 

@@ -1,0 +1,7 @@
+[Unit]
+Description=QA pass on rabble.rodeo in a discobox (scripts/qa-live-box.sh)
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/run/current-system/sw/bin:/usr/bin:/bin
+ExecStart=%h/src/rabble.radio/scripts/qa-live-box.sh

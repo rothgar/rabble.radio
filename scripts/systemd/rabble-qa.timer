@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily QA pass on rabble.rodeo
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

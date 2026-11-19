@@ -154,9 +154,11 @@ manager then triages like any other:
    same script, then an exploratory pass with headless Chromium screenshots
    at phone and desktop width in both themes, then one issue per distinct
    problem through the GitHub REST API, de-duplicated against open `qa`
-   issues. Transcripts land in `~/.local/state/rabble-qa/`. Run it now with
-   `scripts/qa-live-box.sh`; `systemctl --user list-timers rabble-qa.timer`
-   shows the next run.
+   issues. Transcripts land in `~/.local/state/rabble-qa/`. The units are in
+   `scripts/systemd/`; install them once with
+   `cp scripts/systemd/rabble-qa.* ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now rabble-qa.timer`.
+   Run a pass now with `scripts/qa-live-box.sh`;
+   `systemctl --user list-timers rabble-qa.timer` shows the next run.
 
 `aperture-qa` is a gateway config like the others; its `github` binding is
 narrowed to listing, creating and commenting on this repository's issues,

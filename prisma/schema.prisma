@@ -346,6 +346,24 @@ model Feedback {
   @@index([did])
 }
 
+/// A report filed by a show's host against one of their speakers, naming
+/// what happened for an admin to review and decide whether the reported
+/// user should be removed from the platform. Reports outlive the space
+/// they were filed from, so no relation/cascade to Space.
+model Report {
+  id             String   @id @default(cuid())
+  spaceId        String
+  reporterDid    String
+  reporterHandle String?
+  reportedDid    String
+  reportedHandle String?
+  reason         String
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([reportedDid])
+}
+
 /// "Notify me" on a scheduled show. `notifiedAt` is set once the viewer has
 /// been told the show went on air (the clients poll for due reminders).
 model ShowReminder {

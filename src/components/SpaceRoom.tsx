@@ -78,6 +78,11 @@ export interface SpaceRoomProps {
     onRemoveFromStage?: (identity: string) => Promise<void> | void;
     onRemoveFromSpace?: (identity: string) => Promise<void> | void;
     onBlock?: (identity: string) => Promise<void> | void;
+    onReport?: (
+      identity: string,
+      reason: string,
+      handle?: string
+    ) => Promise<void> | void;
   };
   onLeave?: () => void;
   /**
@@ -667,6 +672,11 @@ function Inner({
                 onBlock={
                   hostActions?.onBlock
                     ? () => hostActions.onBlock!(id)
+                    : undefined
+                }
+                onReport={
+                  hostActions?.onReport
+                    ? (reason) => hostActions.onReport!(id, reason, handleFor(p))
                     : undefined
                 }
               />

@@ -31,6 +31,15 @@ code, and mistakes already made there.
   `NocturneShell`'s `backdrop-blur` footer (issue #6); `FeedbackButton`'s
   dialog had the same bug nested inside `SiteHeader`'s `backdrop-blur`
   header, fixed the same way (issue #8).
+- A confirmation dialog's action buttons should compose
+  `src/components/ui/Button.tsx` (it already has `secondary` and `danger`
+  variants, 44px touch targets, and the design system's 8px-corner
+  `rounded-sm`), not hand-roll Tailwind classes. `BottomControlBar`'s leave
+  dialog hand-rolled its own `ACTION_BTN`/`ACTION_BTN_SECONDARY` constants
+  (including `rounded-full`, which the design system does not use for
+  dialogs) before `Button` covered this case; a second hand-rolled dialog
+  (`SpeakerCard`'s report dialog) repeated the same drift until issue #11's
+  review caught it. Check a new dialog's buttons against `Button` first.
 
 ## src/components/SpaceRoom.tsx
 

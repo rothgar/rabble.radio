@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { MicrophoneSlash } from '@phosphor-icons/react';
+import { Button } from '@/components/ui';
 
 export interface SpeakerCardProps {
   identity: string;
@@ -17,6 +19,7 @@ export interface SpeakerCardProps {
   onMuteToggle?: () => void;
   onRemoveFromStage?: () => void;
   onBlock?: () => void;
+  onReport?: (reason: string) => void;
   avatarRef?: RefObject<HTMLDivElement | null>;
 }
 
@@ -39,10 +42,13 @@ export function SpeakerCard({
   onMuteToggle,
   onRemoveFromStage,
   onBlock,
+  onReport,
   avatarRef,
 }: SpeakerCardProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -246,8 +252,83 @@ export function SpeakerCard({
               Block
             </button>
           ) : null}
+          {onReport ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setReportReason('');
+                setReportOpen(true);
+              }}
+              className="w-full rounded-md px-2 py-1.5 text-left text-[var(--color-warning-text)] hover:bg-[var(--color-ink-muted)]"
+              data-testid={`speaker-report-${identity}`}
+            >
+              Report
+            </button>
+          ) : null}
         </div>
       ) : null}
+      {reportOpen && onReport
+        ? createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`report-dialog-title-${identity}`}
+              className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-scrim)] p-4 sm:items-center"
+              data-testid={`report-dialog-${identity}`}
+              onClick={() => setReportOpen(false)}
+            >
+              <div
+                className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2
+                  id={`report-dialog-title-${identity}`}
+                  className="text-title font-semibold text-[var(--color-text)]"
+                >
+                  Report {name}?
+                </h2>
+                <p className="text-body text-[var(--color-text-secondary)]">
+                  Tell us what happened. This goes to the people who run this platform.
+                </p>
+                <textarea
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  rows={4}
+                  placeholder="What happened?"
+                  className="w-full rounded-md border border-[var(--color-divider)] bg-[var(--color-surface)] p-2 text-sm text-[var(--color-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                  data-testid={`report-dialog-reason-${identity}`}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setReportOpen(false)}
+                    data-testid={`report-dialog-cancel-${identity}`}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    disabled={!reportReason.trim()}
+                    onClick={() => {
+                      const reason = reportReason.trim();
+                      setReportOpen(false);
+                      onReport(reason);
+                    }}
+                    data-testid={`report-dialog-submit-${identity}`}
+                  >
+                    Submit report
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

@@ -29,5 +29,5 @@ code, and mistakes already made there.
   `document.body` when a `backdrop-blur` (or `filter`/`transform`) ancestor
   is in the way. `BottomControlBar`'s leave dialog hit this nested inside
   `NocturneShell`'s `backdrop-blur` footer (issue #6); `FeedbackButton`'s
-  dialog has the same bug nested inside `SiteHeader`'s `backdrop-blur`
-  header (issue #8, not fixed here — out of scope for #6).
+  dialog had the same bug nested inside `SiteHeader`'s `backdrop-blur`
+  header, fixed the same way (issue #8).

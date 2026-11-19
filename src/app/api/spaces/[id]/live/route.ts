@@ -22,14 +22,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { resolveSpaceForUser, setSpaceLive, toPublicSpace } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { publishLiveStatus } from '@/lib/atproto';
 import {
-  deleteLiveStatus,
-  publishLiveStatus,
-} from '@/lib/atproto';
-import {
-  completeRecording,
   createRecording,
-  failRecording,
   findActiveRecordingForSpace,
   buildRecordingKey,
 } from '@/lib/recording';
@@ -38,11 +33,11 @@ import {
   roomNameForSpace,
   setAudienceSubscriptions,
   startRecording,
-  stopRecording,
 } from '@/lib/livekit';
 import { logger } from '@/lib/logger';
 import { endShowSession, startShowSession } from '@/lib/metrics';
 import { pushRemindersOnAir } from '@/lib/push';
+import { endLiveShow } from '@/lib/live';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -240,38 +235,14 @@ export async function POST(
     }
 
     // action === 'end'
-    const updated = await setSpaceLive(space.id, false);
-    await endShowSession({ spaceId: space.id });
-    const result = await deleteLiveStatus({ session });
-
-    // Back to the green room: only the stage hears itself.
-    await setAudienceSubscriptions(roomName, false);
-    await broadcastRoomData(roomName, {
-      type: 'on_air_changed',
-      spaceId: space.id,
-      onAir: false,
-    });
-
-    // Stop any active recording for this space. Best-effort.
-    try {
-      const active = await findActiveRecordingForSpace(space.id);
-      if (active) {
-        await stopRecording(active.egressId);
-        const completed = await completeRecording(active.egressId);
-        if (!completed) {
-          await failRecording(active.egressId).catch(() => undefined);
-        }
-      }
-    } catch (err) {
-      logger.error('recording.stop.failed', { err, spaceId: space.id });
-    }
+    const { space: updated, atproto } = await endLiveShow(space.id, session);
 
     return NextResponse.json(
       {
         ok: true,
         space: toPublicSpace(updated, origin),
-        atproto: result.ok,
-        atprotoError: result.ok ? undefined : result.error,
+        atproto: atproto.ok,
+        atprotoError: atproto.ok ? undefined : atproto.error,
       },
       { status: 200 }
     );

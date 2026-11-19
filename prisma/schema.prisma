@@ -24,12 +24,17 @@ model User {
   handle      String
   displayName String?
   avatarUrl   String?
+  /// Set by a platform admin (src/lib/admin.ts). A banned user is treated as
+  /// signed out: they cannot log in, join a space while identified, or host.
+  bannedAt    DateTime?
+  banReason   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   hostedSpaces Space[]
 
   @@index([handle])
+  @@index([bannedAt])
 }
 
 /// A station: the durable thing a host creates and can go live on many times.

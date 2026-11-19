@@ -69,8 +69,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   if (handle) {
+    let user;
     try {
-      await prisma.user.upsert({
+      user = await prisma.user.upsert({
         where: { did },
         create: {
           did,
@@ -91,6 +92,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { error: 'user_upsert_failed', message, correlationId },
         { status: 500 }
+      );
+    }
+
+    if (user.bannedAt) {
+      log.info('oauth.callback.banned', { did });
+      const supportEmail = process.env.SUPPORT_EMAIL;
+      return NextResponse.json(
+        {
+          error: 'account_banned',
+          message: supportEmail
+            ? `This account has been banned from rabble.radio. Contact ${supportEmail} to request being unbanned.`
+            : 'This account has been banned from rabble.radio.',
+          correlationId,
+        },
+        { status: 403 }
       );
     }
   }

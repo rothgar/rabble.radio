@@ -18,3 +18,16 @@ code, and mistakes already made there.
   records one *disable* call (which never captures the microphone). "No mic
   request on join" is "no call *enables* the microphone"
   (`not.toContain(true)`), not "no call at all".
+
+## src/components (fixed-position dialogs)
+
+- A `fixed inset-0` dialog resolves against the nearest ancestor with
+  `backdrop-filter`/`filter`/`transform` (CSS gives that ancestor a
+  containing block for fixed descendants), not the viewport. Check every
+  `fixed inset-0` dialog against its actual ancestors, not just where it
+  looks like it sits in the JSX; render it through `createPortal` to
+  `document.body` when a `backdrop-blur` (or `filter`/`transform`) ancestor
+  is in the way. `BottomControlBar`'s leave dialog hit this nested inside
+  `NocturneShell`'s `backdrop-blur` footer (issue #6); `FeedbackButton`'s
+  dialog has the same bug nested inside `SiteHeader`'s `backdrop-blur`
+  header (issue #8, not fixed here — out of scope for #6).

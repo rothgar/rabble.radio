@@ -6,6 +6,7 @@
 
 import { cookies } from 'next/headers';
 import { getIronSession, type SessionOptions } from 'iron-session';
+import { prisma } from '@/lib/db';
 
 export interface BlueskySession {
   did?: string;
@@ -111,8 +112,10 @@ export async function destroySession(): Promise<void> {
 }
 
 /**
- * Returns the public subset of the authenticated user (if any). Pulled from the
- * Prisma User row so callers always get fresh displayName/avatarUrl.
+ * Returns the public subset of the authenticated user (if any). A platform
+ * admin ban (src/lib/admin.ts) takes effect immediately: a banned DID reads
+ * back as signed out here so every caller treats them as an anonymous
+ * visitor rather than re-checking ban status itself.
  */
 export async function getCurrentUser(): Promise<{
   did: string;
@@ -120,6 +123,13 @@ export async function getCurrentUser(): Promise<{
 } | null> {
   const session = await getSession();
   if (!session.bluesky?.did || !session.bluesky?.handle) {
+    return null;
+  }
+  const row = await prisma.user.findUnique({
+    where: { did: session.bluesky.did },
+    select: { bannedAt: true },
+  });
+  if (row?.bannedAt) {
     return null;
   }
   return {

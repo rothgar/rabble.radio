@@ -68,6 +68,19 @@ code, and mistakes already made there.
   Check any new reader of `permission.canPublish` against which failure mode
   it can cause before picking a default.
 
+## src/lib/session.ts (getCurrentUser)
+
+- `getCurrentUser` is the single enforcement point for a platform ban
+  (`src/lib/admin.ts`): it reads the session cookie's DID, then checks the
+  `User` row's `bannedAt` itself, so every caller gets `null` for a banned
+  account without re-checking. That guarantee only holds for code that
+  actually calls `getCurrentUser` — `src/app/api/me/route.ts` read
+  `getSession()` directly and skipped it, so a banned user's still-valid
+  cookie kept `/api/me` answering 200 until issue #10's review caught it.
+  When adding a check inside `getCurrentUser`, grep every `getSession()`
+  caller, not just the ones that already call `getCurrentUser` — a route
+  can hold a valid session and still bypass it.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

@@ -260,6 +260,33 @@ describe('GET /api/auth/bluesky/callback', () => {
     expect(cookieJar.get('bs_spaces_session')).toBeTruthy();
   });
 
+  it('refuses to start a session for a banned account', async () => {
+    mockCallback.mockResolvedValueOnce({
+      session: { sub: 'did:plc:banned', did: () => 'did:plc:banned' },
+      state: null,
+    });
+    mockGetProfile.mockResolvedValueOnce({
+      data: { did: 'did:plc:banned', handle: 'bad.bsky.social' },
+    });
+    mockUpsert.mockResolvedValueOnce({
+      id: 'u2',
+      did: 'did:plc:banned',
+      handle: 'bad.bsky.social',
+      bannedAt: new Date('2026-11-18T00:00:00Z'),
+    });
+
+    const { GET } = await import('@/app/api/auth/bluesky/callback/route');
+    const req = new NextRequest(
+      'http://localhost/api/auth/bluesky/callback?code=abc&state=s1'
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('account_banned');
+    expect(cookieJar.has('bs_spaces_session')).toBe(false);
+  });
+
   it('returns 400 when state does not match', async () => {
     // Pre-populate the session with a different state
     cookieJar.set(
@@ -321,6 +348,28 @@ describe('GET /api/me', () => {
       handle: 'alice.bsky.social',
       displayName: 'Alice',
     });
+  });
+
+  it('returns 401 for a banned account even with a valid session cookie', async () => {
+    cookieJar.set(
+      'bs_spaces_session',
+      Buffer.from(
+        JSON.stringify({ bluesky: { did: 'did:plc:abc', handle: 'alice.bsky.social' } }),
+        'utf8'
+      ).toString('base64')
+    );
+
+    const findUnique = (await import('@/lib/db')).prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      did: 'did:plc:abc',
+      handle: 'alice.bsky.social',
+      bannedAt: new Date('2026-11-18T00:00:00Z'),
+    });
+
+    const { GET } = await import('@/app/api/me/route');
+    const res = await GET();
+    expect(res.status).toBe(401);
   });
 
   it('returns 401 when no session', async () => {

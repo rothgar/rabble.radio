@@ -291,8 +291,9 @@ export interface RoomParticipantSummary {
 /**
  * Return a breakdown of a room's participants by role, or `null` if the
  * LiveKit server could not be reached. A speaker is a participant with
- * publish rights (`canPublish`); everyone else is a listener. Used by the
- * metrics sweep to snapshot live occupancy.
+ * publish rights (`canPublish`); everyone else is a listener, including one
+ * whose `permission` is missing or not yet synced (see REVIEW.md). Used by
+ * the metrics sweep to snapshot live occupancy.
  */
 export async function getRoomParticipantSummary(
   roomName: string
@@ -304,8 +305,8 @@ export async function getRoomParticipantSummary(
     let listeners = 0;
     for (const p of participants) {
       const perms = (p.permission ?? {}) as { canPublish?: boolean };
-      if (perms.canPublish === false) listeners++;
-      else speakers++;
+      if (perms.canPublish === true) speakers++;
+      else listeners++;
     }
     return { speakers, listeners };
   } catch {
@@ -448,8 +449,12 @@ export async function muteParticipant(
  * Flip the subscribe permission for every audience participant (no publish
  * rights) currently in a room. Called when the host goes on or off air so
  * listeners who joined during the pre-show start (or stop) hearing the
- * stage. Hosts and co-hosts are left untouched. Best-effort: returns the
- * number of participants updated, or -1 when LiveKit could not be reached.
+ * stage. Hosts and co-hosts are left untouched, including one whose
+ * `permission` is missing or not yet synced: unlike the occupancy count
+ * above, this mutates the participant (forcing `canPublish: false`), so an
+ * unclear case is left alone rather than risk muting a host (see
+ * REVIEW.md). Best-effort: returns the number of participants updated, or
+ * -1 when LiveKit could not be reached.
  */
 export async function setAudienceSubscriptions(
   roomName: string,

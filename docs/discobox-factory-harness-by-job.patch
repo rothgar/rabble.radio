@@ -1,0 +1,47 @@
+diff --git a/docs/config.md b/docs/config.md
+index c0dd67d..7a1de03 100644
+--- a/docs/config.md
++++ b/docs/config.md
+@@ -28,6 +28,7 @@ file.
+ | `backlog.before` | The date (`YYYY-MM-DD`) `/setup` ran. |
+ | `focus.milestone` | Optional. Issues in a milestone of this name rank right after blockers. |
+ | `workers.harness` | The harness every new worker runs (`discobox run -H`). |
++| `workers.harnessByJob` | Optional. `{"triage": "slug", "deliver": "slug", …}`: the harness a job's workers run instead of `workers.harness`, so triage and delivery can use different harness configs (and so different models). `scripts/launch --harness` overrides both for one launch. |
+ | `workers.max`, `workers.triageMax` | Workers running at once, and of those, triage workers. |
+ | `workers.pauseAfter` | A worker waiting on the owner whose screen has been still this long is stopped. |
+ | `workers.paused`, `workers.pausedExcept` | Intake pause: start no new triage or delivery boxes, except `OWNER/REPO#N` listed. |
+diff --git a/scripts/launch b/scripts/launch
+index ffec123..40a6a89 100755
+--- a/scripts/launch
++++ b/scripts/launch
+@@ -31,8 +31,8 @@ cd "$(dirname "$0")/.."
+ 
+ die() { echo "launch: $*" >&2; exit 1; }
+ 
+-SKILL="" REPO="" ISSUE="" JOB="" PROMPT="" ROLE="" NOSRC="" NOLABEL="" DRY="" BASEARG="" CONFIRMED="" INCLUDES=()
+-[ $# -gt 0 ] || die "usage: scripts/launch SKILL --repo OWNER/NAME [--issue N] [--job JOB] [-p PROMPT] [--role ROLE] [--base BRANCH] [--no-source] [--no-label] [--dry-run]"
++SKILL="" REPO="" ISSUE="" JOB="" PROMPT="" ROLE="" NOSRC="" NOLABEL="" DRY="" BASEARG="" CONFIRMED="" HARNESSARG="" INCLUDES=()
++[ $# -gt 0 ] || die "usage: scripts/launch SKILL --repo OWNER/NAME [--issue N] [--job JOB] [-p PROMPT] [--role ROLE] [--base BRANCH] [--harness HARNESS] [--no-source] [--no-label] [--dry-run]"
+ SKILL=$1; shift
+ while [ $# -gt 0 ]; do
+   case $1 in
+@@ -42,6 +42,7 @@ while [ $# -gt 0 ]; do
+     -p|--prompt) PROMPT=$2; shift 2 ;;
+     --role) ROLE=$2; shift 2 ;;
+     --base) BASEARG=$2; shift 2 ;;
++    --harness) HARNESSARG=$2; shift 2 ;;
+     -i|--include) INCLUDES+=("$2"); shift 2 ;;
+     --no-source) NOSRC=1; shift ;;
+     --no-label) NOLABEL=1; shift ;;
+@@ -75,6 +76,11 @@ JOBKEY=$(scripts/config job "$SKILL")
+ [ -n "$JOBKEY" ] || die "worker-skills/$SKILL names no discobox.job"
+ scripts/config on "$JOBKEY" || die "the $JOBKEY job is off in manager.json: the owner turns it on"
+ [ -n "$JOB" ] || JOB=$JOBKEY
++# The harness: workers.harnessByJob.<job> when the owner set one for this job
++# (e.g. a cheaper model for triage), else workers.harness; --harness overrides.
++JOBHARNESS=$(scripts/config get "workers.harnessByJob.$JOB" 2>/dev/null || true)
++[ -z "$JOBHARNESS" ] || HARNESS=$JOBHARNESS
++[ -z "$HARNESSARG" ] || HARNESS=$HARNESSARG
+ # Ask first: a job not in `auto` launches only with the owner's yes.
+ [ -n "$CONFIRMED" ] || [ -n "$DRY" ] || scripts/config auto "$JOBKEY" ||
+   die "the $JOBKEY job asks first (it isn't in manager.json auto): propose this launch to the owner, and pass --confirmed once they say yes"

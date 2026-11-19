@@ -78,7 +78,7 @@ The discobox server already runs on this machine (`discobox version`,
 To try one job without the manager, run a worker by hand on an issue:
 
 ```sh
-discobox run -H claude-code rothgar/rabble.radio \
+discobox run -H kimchi-deliver rothgar/rabble.radio \
   --skills https://github.com/discobox-ai/skills \
   -p 'Run /deliver-issue for #12'
 ```
@@ -86,6 +86,62 @@ discobox run -H claude-code rothgar/rabble.radio \
 It needs a GitHub credential bound to the box (`discobox secret bind github
 <box> --as GH_TOKEN --route 'api.github.com/repos/rothgar/rabble.radio/**'`),
 which the manager otherwise does from its role files.
+
+## Running workers on Kimchi models
+
+`kimchi claude` on a laptop does one thing (measured with Kimchi 1.36.0): it
+starts the normal Claude Code CLI with `ANTHROPIC_BASE_URL` pointed at
+`https://llm.kimchi.dev/anthropic` and the Kimchi API key as the auth token.
+That gateway speaks the Anthropic API but accepts only Kimchi model ids
+(`kimchi --list-models`); a Claude model name gets `400 no registered
+providers found`. So the "Kimchi harness" for discobox is the built-in
+`claude-code` harness plus a settings file that points it at the gateway and
+maps every alias Claude Code might send (opus, sonnet, haiku, the small/fast
+model) to a Kimchi id. `scripts/discobox-kimchi-harness.sh` builds such a
+harness config, one per job so each can run a different model:
+
+```sh
+# once: the key, read from Kimchi's own config, sent only to the gateway
+discobox secret create --name kimchi --route llm.kimchi.dev \
+  --refresh-command 'jq -r .apiKey ~/.config/kimchi/config.json' \
+  --ttl forever --max-binding-ttl forever
+
+scripts/discobox-kimchi-harness.sh kimchi-triage  glm-5.3-flash
+scripts/discobox-kimchi-harness.sh kimchi-deliver glm-5.3 glm-5.3-flash
+```
+
+Each run writes the config's `.claude/settings.json` (`model`,
+`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`,
+`ANTHROPIC_SMALL_FAST_MODEL`, the gateway URL), allows egress to
+`llm.kimchi.dev`, and on first creation binds the `kimchi` secret as
+`ANTHROPIC_API_KEY`. A box only ever holds a sentinel; its pool swaps in the
+key on requests to `llm.kimchi.dev` and nowhere else. To change a model, run
+the script again with the new id; boxes already running keep theirs. The
+model names in the two commands above match the `.kimchi/agents` personas
+(`glm-5.3` for dev work, the flash model where cost matters).
+
+**Which job uses which model.** The factory manager launches every worker
+with `workers.harness`. `docs/discobox-factory-harness-by-job.patch` (two
+files, tested against the template's `scripts/launch --dry-run`) adds
+`workers.harnessByJob`, so `manager.json` can say:
+
+```json
+"workers": { "harness": "kimchi-deliver",
+             "harnessByJob": { "triage": "kimchi-triage" } }
+```
+
+Jobs not listed fall back to `workers.harness`, and `scripts/launch
+--harness SLUG` overrides both for one launch. Apply the patch in your fork
+of the manager, or paste it to the manager in `discobox console` and ask it
+to apply and commit it. The manager box itself can run on Kimchi too: add
+`-H kimchi-deliver` to the `discobox run` that starts it.
+
+Caveats: the factory's worker skills and the manager's screen reading were
+written against Claude Code on Anthropic models, so watch the first boxes on
+a new model before trusting the rest. Kimchi's `--thinking` level has no
+equivalent in this setup. Running the `kimchi` CLI itself as the agent would
+need a third-party harness bundle (an image built `FROM` the claude-code
+bundle with a launcher for `kimchi --auto`); that is not built.
 
 ## Branch protection
 

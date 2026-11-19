@@ -8,8 +8,12 @@
 //   Response: { id } or an error envelope.
 //
 // GET /api/feedback -> newest reports, for the admins listed in
-//   FEEDBACK_ADMIN_DIDS only. Response: { feedback: [...] }
+//   FEEDBACK_ADMIN_DIDS, or for a client sending the FEEDBACK_READ_TOKEN
+//   secret as `Authorization: Bearer ...` (the feedback-intake bot).
+//   Query: limit (default 100, max 500), since (ISO date; only newer reports).
+//   Response: { feedback: [...] }
 
+import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import {
@@ -83,17 +87,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+/** True when the request carries the FEEDBACK_READ_TOKEN secret as a bearer token. */
+function hasReadToken(request: NextRequest): boolean {
+  const expected = process.env.FEEDBACK_READ_TOKEN;
+  if (!expected) return false;
+  const match = /^Bearer\s+(\S+)$/i.exec(request.headers.get('authorization') ?? '');
+  if (!match) return false;
+  const given = Buffer.from(match[1]);
+  const want = Buffer.from(expected);
+  return given.length === want.length && timingSafeEqual(given, want);
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
-  if (!isFeedbackAdmin(user)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  if (!hasReadToken(request)) {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+    if (!isFeedbackAdmin(user)) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
   }
   const limitRaw = Number(request.nextUrl.searchParams.get('limit') ?? '100');
   const limit = Number.isFinite(limitRaw) ? limitRaw : 100;
-  const feedback = await listFeedback(limit);
+  const sinceRaw = request.nextUrl.searchParams.get('since');
+  const since = sinceRaw ? new Date(sinceRaw) : null;
+  if (since && Number.isNaN(since.getTime())) {
+    return NextResponse.json(
+      { error: 'validation_error', message: 'since must be an ISO date.' },
+      { status: 400 }
+    );
+  }
+  const feedback = (await listFeedback(limit)).filter((f) => !since || f.createdAt > since);
   return NextResponse.json(
     {
       feedback: feedback.map((f) => ({ ...f, createdAt: f.createdAt.toISOString() })),

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run one QA pass on the live site in a discobox and keep its transcript.
+# Run one QA pass on the live site, then the feedback intake, in a discobox
+# and keep the transcript.
 # Scheduled by the rabble-qa.timer user unit (docs/discobox.md, "QA agent");
 # run it by hand to QA now. Needs the aperture-qa harness config.
 #
@@ -14,7 +15,7 @@ set -euo pipefail
 mkdir -p "$QA_LOGDIR"
 log="$QA_LOGDIR/$(date -u +%Y%m%dT%H%M%SZ).log"
 
-id=$("$DISCOBOX" run -d -H "$QA_HARNESS" "$QA_SOURCE" -p '/qa-live' | awk '/^sbx_/ {print $1; exit}')
+id=$("$DISCOBOX" run -d -H "$QA_HARNESS" "$QA_SOURCE" -p 'Run /qa-live, then run /feedback-intake.' | awk '/^sbx_/ {print $1; exit}')
 [ -n "$id" ] || { echo "qa-live: no box started" >&2; exit 1; }
 "$DISCOBOX" tag "$id" job=qa --description "QA pass on rabble.rodeo" >/dev/null 2>&1 || true
 echo "qa-live: box $id, transcript $log"

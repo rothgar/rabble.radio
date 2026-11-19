@@ -15,7 +15,7 @@ runs any combination by hand (iOS is off by default there too). Runs on
 `main` queue behind each other and never cancel one in progress.
 
 Worker secrets (`SESSION_SECRET`, `JWKS_PRIVATE_KEY`, `LIVEKIT_*`, `S3_*`,
-`VAPID_PRIVATE_KEY`) are not touched by a deploy; set them once with
+`VAPID_PRIVATE_KEY`, `FEEDBACK_READ_TOKEN`) are not touched by a deploy; set them once with
 `wrangler secret put NAME --name rabble-dev`.
 
 ## One-time setup

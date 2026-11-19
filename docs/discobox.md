@@ -160,10 +160,32 @@ manager then triages like any other:
    Run a pass now with `scripts/qa-live-box.sh`;
    `systemctl --user list-timers rabble-qa.timer` shows the next run.
 
+The same daily box then runs `/feedback-intake`
+(`.discobox/skills/feedback-intake/`): it reads new reports from the site's
+feedback button through `GET /api/feedback` with the `FEEDBACK_READ_TOKEN`
+Worker secret (delivered to the box as the `feedback-read` project secret),
+groups them by symptom, and files one issue per actionable report labelled
+`feedback` and `status/needs-decision`. That status means the owner must say
+yes before the manager starts any work, whatever `auto` says. Duplicates
+become a comment on the open issue; everything handled is listed in the
+"Feedback intake log" issue, which is how the next run knows what it has
+seen. Noise is logged and nothing else.
+
 `aperture-qa` is a gateway config like the others; its `github` binding is
 narrowed to listing, creating and commenting on this repository's issues,
 so a QA box cannot push, open PRs or touch labels. `node scripts/qa-live.mjs`
 runs the deterministic checks from anywhere.
+
+Setup for the intake, once: a random token as the Worker secret and as the
+project secret the box reads it from:
+
+```sh
+TOKEN=$(openssl rand -hex 32)
+printf '%s' "$TOKEN" | pnpm exec wrangler secret put FEEDBACK_READ_TOKEN --name rabble-dev
+discobox secret create --name feedback-read --type token --route 'GET rabble.rodeo/api/feedback' \
+  --ttl forever --max-binding-ttl forever --token "$TOKEN"
+discobox secret bind feedback-read --harness aperture-qa --as FEEDBACK_READ_TOKEN --for forever
+```
 
 ## Branch protection
 

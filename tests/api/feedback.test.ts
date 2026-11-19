@@ -113,4 +113,27 @@ describe('GET /api/feedback', () => {
     const body = await res.json();
     expect(body.feedback[0]).toMatchObject({ id: 'fb1', createdAt: '2026-11-06T20:00:00.000Z' });
   });
+
+  it('accepts the FEEDBACK_READ_TOKEN bearer token without a session', async () => {
+    vi.stubEnv('FEEDBACK_READ_TOKEN', 'read-me-please');
+    mockGetCurrentUser.mockResolvedValue(null);
+    mockListFeedback.mockResolvedValue([
+      { id: 'old', message: 'x', context: {}, createdAt: new Date('2026-11-01T00:00:00Z') },
+      { id: 'new', message: 'y', context: {}, createdAt: new Date('2026-11-10T00:00:00Z') },
+    ]);
+    const withToken = (url: string, token: string) =>
+      GET(new NextRequest(url, { headers: { authorization: `Bearer ${token}` } }));
+
+    const res = await withToken('http://localhost/api/feedback?since=2026-11-05T00:00:00Z', 'read-me-please');
+    expect(res.status).toBe(200);
+    expect((await res.json()).feedback.map((f: { id: string }) => f.id)).toEqual(['new']);
+    expect(mockGetCurrentUser).not.toHaveBeenCalled();
+
+    expect((await withToken('http://localhost/api/feedback', 'wrong')).status).toBe(401);
+    expect((await withToken('http://localhost/api/feedback?since=nope', 'read-me-please')).status).toBe(400);
+
+    vi.stubEnv('FEEDBACK_READ_TOKEN', '');
+    expect((await withToken('http://localhost/api/feedback', 'read-me-please')).status).toBe(401);
+    vi.unstubAllEnvs();
+  });
 });

@@ -8,9 +8,9 @@
 // sessionStorage exactly like CreateSpaceForm's "Start now" so the page
 // auto-joins without a second click.
 
-import { useCallback, useState, type ReactElement } from 'react';
-import { useRouter } from 'next/navigation';
+import type { ReactElement } from 'react';
 import { Button } from '@/components/ui';
+import { useStartShow } from '@/components/useStartShow';
 
 export interface StartShowButtonProps {
   size?: 'sm' | 'md' | 'lg';
@@ -22,21 +22,6 @@ export interface StartShowButtonProps {
   spaceId?: string;
 }
 
-interface StartResponse {
-  space?: { id: string };
-  startNow?: boolean;
-  token?: string;
-  wsUrl?: string;
-  role?: string;
-  roomName?: string;
-  identity?: string;
-  handle?: string;
-  displayName?: string | null;
-  avatarUrl?: string | null;
-  error?: string;
-  message?: string;
-}
-
 export function StartShowButton({
   size = 'md',
   variant = 'primary',
@@ -45,50 +30,7 @@ export function StartShowButton({
   label = 'Start a show',
   spaceId,
 }: StartShowButtonProps): ReactElement {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const start = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/spaces', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(spaceId ? { startNow: true, spaceId } : { startNow: true }),
-      });
-      const body = (await res.json().catch(() => ({}))) as StartResponse;
-      if (res.status === 401) {
-        router.push('/login?next=%2Fme');
-        return;
-      }
-      if (!res.ok || !body.space?.id) {
-        setError(body.message || body.error || `Could not start a show (HTTP ${res.status}).`);
-        return;
-      }
-      if (body.token && body.wsUrl && body.roomName && body.identity && body.handle) {
-        window.sessionStorage.setItem(
-          `rabble_join_${body.space.id}`,
-          JSON.stringify({
-            token: body.token,
-            wsUrl: body.wsUrl,
-            role: body.role ?? 'host',
-            roomName: body.roomName,
-            identity: body.identity,
-            handle: body.handle,
-            displayName: body.displayName ?? null,
-            avatarUrl: body.avatarUrl ?? null,
-          })
-        );
-      }
-      router.push(`/show/${encodeURIComponent(body.space.id)}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start a show.');
-      setBusy(false);
-    }
-  }, [busy, router, spaceId]);
+  const { busy, error, start } = useStartShow();
 
   return (
     <div className={fullWidth ? 'flex w-full flex-col gap-2' : 'inline-flex flex-col gap-2'}>
@@ -100,7 +42,7 @@ export function StartShowButton({
         className={className}
         disabled={busy}
         onClick={() => {
-          void start();
+          void start(spaceId);
         }}
         data-testid="start-show-button"
       >

@@ -81,6 +81,20 @@ code, and mistakes already made there.
   caller, not just the ones that already call `getCurrentUser` — a route
   can hold a valid session and still bypass it.
 
+## src/components (split buttons)
+
+- `Button`'s bordered variants (`primary`, `secondary`, `accent`, `danger`)
+  each render a complete 1.5px outline on all four sides; two of them placed
+  edge to edge (a main action plus a chevron, as in `StartShowMenu`) stack
+  their touching borders into a ~3px seam instead of the brand's single
+  1.5px/2px outline, and an explicit `border-l` on the second button doubles
+  down on it rather than fixing it. Collapse the seam with `-ml-px` on the
+  second button (standard adjoining-button trick: it overlaps the shared
+  edge by one pixel, leaving one line) instead of adding a border class, and
+  check it against every variant a caller can pass — `ghost` has no border
+  at all, so an explicit added border there is also the odd one out, visible
+  on one button and not its neighbour.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

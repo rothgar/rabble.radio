@@ -20,8 +20,8 @@ vi.mock('@/lib/spaces', () => ({
 vi.mock('@/lib/space-extras', () => ({ decoratePublicSpaces: m.decoratePublicSpaces }));
 vi.mock('@/lib/hosts', () => ({ getTopHosts: m.getTopHosts }));
 vi.mock('@/components/SiteHeader', () => ({ SiteHeader: () => <header data-testid="site-header" /> }));
-vi.mock('@/components/StartShowButton', () => ({
-  StartShowButton: () => <button data-testid="start-show-button">Start a show</button>,
+vi.mock('@/components/StartShowMenu', () => ({
+  StartShowMenu: () => <button data-testid="start-show-button">Start a show</button>,
 }));
 
 import HomePage, { HomeBody, HomeSkeleton } from '@/app/page';

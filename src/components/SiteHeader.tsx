@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
-import { StartShowButton } from '@/components/StartShowButton';
+import { StartShowMenu } from '@/components/StartShowMenu';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppInstallBanner } from '@/components/AppInstallBanner';
@@ -60,7 +60,7 @@ export function SiteHeader(): ReactElement {
         <FeedbackButton className="hidden sm:inline-flex" />
         {me ? (
           <>
-            <StartShowButton size="sm" />
+            <StartShowMenu size="sm" />
             <UserMenu
               handle={me.handle}
               displayName={me.displayName ?? null}

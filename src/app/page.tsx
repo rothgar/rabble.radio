@@ -17,7 +17,7 @@ import { buildHomeSections } from '@/lib/home';
 import { getTopHosts, type TopHost } from '@/lib/hosts';
 import { primaryTagOf, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { SiteHeader } from '@/components/SiteHeader';
-import { StartShowButton } from '@/components/StartShowButton';
+import { StartShowMenu } from '@/components/StartShowMenu';
 import { ShowListCard } from '@/components/ShowListCard';
 import { Button, PageLayout } from '@/components/ui';
 
@@ -141,7 +141,7 @@ export async function HomeBody(): Promise<ReactElement> {
                 Live audio from people on Bluesky. Tap Listen to join a room.
               </p>
             </div>
-            <StartShowButton size="lg" />
+            <StartShowMenu size="lg" />
           </header>
         ) : (
           <header

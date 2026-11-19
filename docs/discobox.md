@@ -18,7 +18,7 @@ rabble.radio on its own.
 | `.discobox/scripts/pre-harness` | Runs before the agent starts: `pnpm install`, Prisma client, local D1 migrated and seeded with demo shows, `.env.local` with a dev session secret and LiveKit dev credentials. Idempotent. |
 | `.discobox/services/10-web.sh` | `next dev` on `:3000` at boot, forwarded to whoever opens the box. |
 | `.discobox/services/20-livekit.sh` | LiveKit server in `--dev` mode on `:7880` (Docker), so the live room works. |
-| `.discobox/hooks/` | Typecheck and lint on every save under `src/`/`tests/`; Prisma regenerate plus a migration check when the schema changes; the vitest suite at review time. |
+| `.discobox/hooks/` | Hook declarations (typecheck and lint on save, Prisma regenerate plus migration check, vitest at review) in the `discobox-ai/hooks` format. Boxes on v0.19.5 ship no hook runner yet, so they are inert until one does; workers run the checks themselves. |
 | `.discobox/skills/verify-recipes/` | How to drive the running app, take screenshots, join a room anonymously, and what cannot run in a box. The generic `verify` skill reads it. Linked into `.claude/skills/`. |
 | `.discobox/skills/rabble-design-system` | Link to the design-system skill so non-Claude harnesses get it too. |
 | `.discobox/review/*.md` | Two extra reviewers for `discobox-review`: `design-system` and `security`. |

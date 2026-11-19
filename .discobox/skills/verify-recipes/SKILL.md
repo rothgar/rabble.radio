@@ -113,9 +113,9 @@ Do not add a login bypass or a dev-only auth route to get past this.
 
 ## Checks (CI's job, not verification)
 
-`pnpm typecheck && pnpm lint && pnpm test` must be green before a PR opens.
-The box's hooks (`.discobox/hooks/`) run typecheck and lint on save and the
-vitest suite at review time. There is no GitHub Actions CI on this repository
+`pnpm typecheck && pnpm lint && pnpm test` must be green before a PR opens;
+run them yourself (the hook declarations in `.discobox/hooks/` need a hook
+runner this box may not have). There is no GitHub Actions CI on this repository
 today: a PR with no checks is green once those three pass in the box, and the
 PR's Evidence says so.
 

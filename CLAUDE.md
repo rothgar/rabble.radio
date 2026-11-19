@@ -45,8 +45,9 @@ Agent teams are enabled in `.claude/settings.json`. Claude is the lead and the `
 Issues and features can be worked by agents in discobox sandboxes
 (`docs/discobox.md`). The box is prepared by `.discobox/scripts/pre-harness`
 (dependencies, Prisma client, local D1 with demo data, `.env.local`), runs the
-app and a LiveKit dev server as boot services, and has hooks that run
-typecheck and lint on save and vitest at review time.
+app and a LiveKit dev server as boot services. `.discobox/hooks/` declares
+typecheck, lint and test hooks for boxes with a hook runner; run the three
+commands yourself regardless.
 
 - The repository's rules above apply unchanged; "Working as a team" does not:
   in a box you are the only agent, and Kimchi wrappers are not available.

@@ -1188,7 +1188,7 @@ export function SpaceRoom({
         token={token}
         serverUrl={wsUrl}
         connect={true}
-        audio={true}
+        audio={role === 'host'}
         video={false}
         onConnected={handleConnected}
         onDisconnected={handleDisconnected}

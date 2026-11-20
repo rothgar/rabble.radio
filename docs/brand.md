@@ -44,18 +44,26 @@ iOS the home toolbar button and the Appearance picker on the account screen
 
 ## Mark
 
-A heavy slab-serif **R** whose right side becomes two radio waves (concentric
-arcs centred on the bowl). Teal letter, red waves on cream; cream letter,
-mustard waves on teal.
+A heavy slab-serif **R** whose bowl becomes a dot and whose right side opens
+into two radio-wave arcs. Teal letter, red dot and waves on cream; cream
+letter, mustard dot and waves on teal.
 
 - `assets/brand/monogram.svg` — transparent, light backgrounds
 - `assets/brand/monogram-dark.svg` — transparent, dark backgrounds
 - `assets/brand/app-icon.svg` / `app-icon-1024.png` — on cream, for app icons
-- `assets/brand/monogram-1024.png` — transparent PNG
-- Web: `src/app/icon.svg` (favicon), `src/app/apple-icon.png`, `public/logo.png`
-  (push notifications); React: `Monogram` / `Wordmark` in `src/components/ui/Logo.tsx`
-- Android: adaptive icon `res/mipmap-anydpi-v26/ic_launcher.xml`
-- iOS: `Rabble/Assets.xcassets/AppIcon.appiconset`
+- `assets/brand/app-icon-dark.svg` / `app-icon-dark-1024.png` — on teal, for
+  dark-appearance app icons
+- `assets/brand/monogram-1024.png` / `monogram-dark-1024.png` — transparent PNGs
+- Web: `src/app/icon.svg` (favicon, adapts via an embedded
+  `prefers-color-scheme` rule), `src/app/apple-icon.png`, `public/logo.png`
+  (push notifications, light only); React: `Monogram` / `Wordmark` in
+  `src/components/ui/Logo.tsx`
+- Android: adaptive icon `res/mipmap-anydpi-v26/ic_launcher.xml`, foreground
+  `res/drawable/ic_launcher_foreground.xml` with a dark counterpart in
+  `res/drawable-night/`; the background colour follows
+  `res/values(-night)/colors.xml`'s `ic_launcher_background`
+- iOS: `Rabble/Assets.xcassets/AppIcon.appiconset`, with `AppIcon-Dark.png`
+  registered for the dark appearance in its `Contents.json`
 
 ## Layout rules
 

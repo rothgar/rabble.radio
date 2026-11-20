@@ -90,6 +90,8 @@ final class ShowModel: ObservableObject {
     @Published var floating: [FloatingEmoji] = []
     @Published var reminded = false
     @Published var remindBusy = false
+    @Published var hostFollowing = false
+    @Published var hostFollowBusy = false
     @Published var moodBusy = false
     @Published var editing = false
     @Published var confirmLeave = false
@@ -124,6 +126,7 @@ final class ShowModel: ObservableObject {
             let loaded = try await env.api.show(id: showId)
             show = loaded
             reminded = loaded.reminded
+            hostFollowing = loaded.hostSubscribed
             loadError = nil
         } catch {
             if show == nil { loadError = error.localizedDescription }
@@ -333,6 +336,26 @@ final class ShowModel: ObservableObject {
                 Diagnostics.event("remind_failed", error.localizedDescription)
             }
             remindBusy = false
+        }
+    }
+
+    /// "Follow this host" for every show they go live on, not just this one.
+    func toggleHostFollow() {
+        if hostFollowBusy { return }
+        guard let hostDid = show?.host.did else { return }
+        hostFollowBusy = true
+        let next = !hostFollowing
+        Task {
+            do {
+                hostFollowing = try await env.api.followHost(hostDid: hostDid, on: next)
+                if hostFollowing {
+                    if !(await Reminders.canPost()) { _ = await Reminders.requestPermission() }
+                    Reminders.schedule()
+                }
+            } catch {
+                Diagnostics.event("host_follow_failed", error.localizedDescription)
+            }
+            hostFollowBusy = false
         }
     }
 

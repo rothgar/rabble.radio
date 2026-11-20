@@ -202,6 +202,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     var autoJoined by remember { mutableStateOf(false) }
     var reminded by remember { mutableStateOf(false) }
     var remindBusy by remember { mutableStateOf(false) }
+    var hostFollowing by remember { mutableStateOf(false) }
+    var hostFollowBusy by remember { mutableStateOf(false) }
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     fun toggleRemind() {
@@ -217,6 +219,24 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 Diagnostics.event("remind_failed", e.message ?: "")
             } finally {
                 remindBusy = false
+            }
+        }
+    }
+
+    /** "Follow this host" for every show they go live on, not just this one. */
+    fun toggleHostFollow(hostDid: String) {
+        if (hostFollowBusy) return
+        hostFollowBusy = true
+        val next = !hostFollowing
+        scope.launch {
+            try {
+                hostFollowing = app.api.followHost(hostDid, next)
+                if (hostFollowing && !Reminders.canPost(context)) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                if (hostFollowing) Reminders.schedule(context.applicationContext)
+            } catch (e: Exception) {
+                Diagnostics.event("host_follow_failed", e.message ?: "")
+            } finally {
+                hostFollowBusy = false
             }
         }
     }
@@ -270,6 +290,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         state = try {
             val show = app.api.show(showId)
             reminded = show.reminded
+            hostFollowing = show.hostSubscribed
             ShowState.Ready(show)
         } catch (e: Exception) {
             ShowState.Failed(e.message ?: "Could not load this show.")
@@ -699,6 +720,9 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             reminded = reminded,
                             remindBusy = remindBusy,
                             onToggleRemind = ::toggleRemind,
+                            hostFollowing = hostFollowing,
+                            hostFollowBusy = hostFollowBusy,
+                            onToggleHostFollow = { toggleHostFollow(s.show.host.did) },
                             onJoin = ::joinShow,
                             onToggleMic = ::toggleMic,
                             onStepDown = { stage("leave") },
@@ -862,6 +886,9 @@ private fun RoomPanel(
     reminded: Boolean,
     remindBusy: Boolean,
     onToggleRemind: () -> Unit,
+    hostFollowing: Boolean,
+    hostFollowBusy: Boolean,
+    onToggleHostFollow: () -> Unit,
     onJoin: () -> Unit,
     onToggleMic: () -> Unit,
     onStepDown: () -> Unit,
@@ -897,6 +924,20 @@ private fun RoomPanel(
                             )
                         } else {
                             OutlinedButton(onClick = onLogin, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Sign in to get notified") }
+                        }
+                        if (signedIn) {
+                            val hostName = show.host.displayName ?: "@${show.host.handle}"
+                            OutlinedButton(onClick = onToggleHostFollow, enabled = !hostFollowBusy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                                Icon(if (hostFollowing) Icons.Filled.NotificationsActive else Icons.Outlined.Notifications, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (hostFollowBusy) "Saving…" else if (hostFollowing) "Following $hostName" else "Follow $hostName")
+                            }
+                            Text(
+                                if (hostFollowing) "We'll tell you whenever $hostName goes on air, on any show. Tap again to stop."
+                                else "Get notified whenever $hostName goes on air, on any show, not just this one.",
+                                color = RabbleColors.TextTertiary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                         if (signedIn && !scheduled) {
                             // Guests the host wants on stage before air can still get in.

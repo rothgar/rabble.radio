@@ -64,28 +64,6 @@ index 4b85154..7999d79 100644
  | `blocker` | Labels that rank an issue as a blocker, ahead of everything. |
  
  Every other label is the repository's own. A triage worker reads the
-diff --git a/manager.json b/manager.json
-index 6ad4a44..edf17ce 100644
---- a/manager.json
-+++ b/manager.json
-@@ -19,7 +19,8 @@
-     "fix-ci": false,
-     "rebase": false,
-     "adhoc": false,
--    "prototype": false
-+    "prototype": false,
-+    "research": false
-   },
-   "auto": [],
-   "onboarding": true,
-@@ -34,6 +35,7 @@
-   },
-   "labels": {
-     "new": null,
-+    "idea": null,
-     "status": {
-       "triaged": null,
-       "needsDecision": null,
 diff --git a/sample/manager.json b/sample/manager.json
 index a752bad..4784923 100644
 --- a/sample/manager.json

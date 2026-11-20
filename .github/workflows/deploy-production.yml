@@ -1,8 +1,9 @@
 # Deploy rabble.radio (production): the web app and API to the rabble-prod
-# Worker, and the Android APK built against rabble.radio to the production
-# bucket. Runs when a `v*` tag is pushed, or by hand (Actions, Run workflow).
-# Pushes to main never reach production; they deploy rabble.rodeo through
-# deploy.yml. Setup and secrets: docs/DEPLOY.md, "Production".
+# Worker, the Android APK built against rabble.radio to the production
+# bucket, and a signed Play Store .aab as a build artifact. Runs when a `v*`
+# tag is pushed, or by hand (Actions, Run workflow). Pushes to main never
+# reach production; they deploy rabble.rodeo through deploy.yml. Setup and
+# secrets: docs/DEPLOY.md, "Production".
 name: Deploy production
 
 on:
@@ -16,6 +17,10 @@ on:
         default: true
       android:
         description: Build the Android APK against rabble.radio and publish it
+        type: boolean
+        default: true
+      android_release:
+        description: Build a signed Play Store .aab against rabble.radio
         type: boolean
         default: true
 
@@ -104,6 +109,48 @@ jobs:
           pnpm exec wrangler r2 object put rabble-prod-recordings/builds/rabble-android.apk \
             --remote --file android/app/build/outputs/apk/debug/app-debug.apk \
             --content-type application/vnd.android.package-archive
+
+  android-release:
+    name: Android Play Store bundle (.aab)
+    if: github.event_name == 'push' || inputs.android_release
+    runs-on: ubuntu-latest
+    env:
+      # Gates every step below: skipped (not failed) until the owner adds
+      # this and the alias/password secrets. See docs/DEPLOY.md.
+      KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Refresh the SDK command-line tools
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --update >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmdline-tools;latest" >/dev/null 2>&1 || true
+      - name: Install the release keystore
+        if: env.KEYSTORE_B64 != ''
+        run: printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+      - name: Build the signed .aab
+        if: env.KEYSTORE_B64 != ''
+        working-directory: android
+        env:
+          ANDROID_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon bundleRelease -PrabbleBaseUrl=https://rabble.radio
+      - uses: actions/upload-artifact@v4
+        if: env.KEYSTORE_B64 != ''
+        with:
+          name: rabble-android-release-${{ github.sha }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+      - name: Remove the keystore
+        if: always() && env.KEYSTORE_B64 != ''
+        run: rm -f "$RUNNER_TEMP/release.keystore"
 
   qa:
     name: Live-site checks (rabble.radio)

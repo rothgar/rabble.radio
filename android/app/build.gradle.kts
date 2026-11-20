@@ -21,9 +21,23 @@ android {
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
     }
 
+    // Release signing reads from CI env vars (ANDROID_RELEASE_KEYSTORE_PATH/
+    // _PASSWORD, ANDROID_RELEASE_KEY_ALIAS, ANDROID_RELEASE_KEY_PASSWORD; see
+    // docs/DEPLOY.md) so no keystore material is ever committed. bundleRelease
+    // fails without them — only the CI job that has the secrets runs it.
+    signingConfigs {
+        create("release") {
+            storeFile = System.getenv("ANDROID_RELEASE_KEYSTORE_PATH")?.let { file(it) }
+            storePassword = System.getenv("ANDROID_RELEASE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_RELEASE_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_RELEASE_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

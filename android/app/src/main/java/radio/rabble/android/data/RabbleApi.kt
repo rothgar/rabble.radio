@@ -1,5 +1,6 @@
 package radio.rabble.android.data
 
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -130,6 +131,26 @@ class RabbleApi(
         if (showId != null) body.put("spaceId", showId)
         request(post("/api/feedback", body))
     }
+
+    /**
+     * Report a crash persisted on a prior run. The response is 204 with no
+     * body, so this bypasses [request]'s JSON parsing; the caller swallows
+     * failures (there is no retry — the caller deletes the file either way).
+     */
+    suspend fun reportCrash(exceptionClass: String, message: String, stack: String, screen: String): Unit =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("platform", "android")
+                .put("message", message)
+                .put("exceptionClass", exceptionClass)
+                .put("stack", stack)
+                .put("appVersion", radio.rabble.android.BuildConfig.VERSION_NAME)
+                .put("osVersion", Build.VERSION.RELEASE)
+                .put("device", Build.MODEL)
+                .put("screen", screen)
+                .put("fatal", true)
+            client.newCall(post("/api/crashes", body)).execute().use { }
+        }
 
     /** "Notify me" on a scheduled show. Returns the resulting state. */
     suspend fun remind(showId: String, on: Boolean): Boolean =

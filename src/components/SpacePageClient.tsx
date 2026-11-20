@@ -412,6 +412,7 @@ export function SpacePageClient({
         musicMood={details.musicMood ?? null}
         onMusicMoodChange={isHost ? changeMusicMood : undefined}
         host={host}
+        hostSubscribed={hostSubscribed}
         shareableUrl={shareableUrl}
         posts={posts}
         postsError={postsError}

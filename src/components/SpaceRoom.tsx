@@ -48,6 +48,7 @@ import { FloatingReaction } from '@/components/FloatingReaction';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { setRoomSnapshot } from '@/lib/diagnostics';
 import { StageInviteToast } from '@/components/StageInviteToast';
+import { ShowEndedFollowPopup } from '@/components/ShowEndedFollowPopup';
 import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
@@ -100,10 +101,13 @@ export interface SpaceRoomProps {
   onSpaceUpdated?: (details: ShowDetails) => void;
   /** Host metadata shown in the header. */
   host: {
+    did?: string;
     handle: string;
     displayName?: string | null;
     avatarUrl?: string | null;
   };
+  /** Whether the viewer already follows this host (any of their shows). */
+  hostSubscribed?: boolean;
   /** Public shareable URL for the room. */
   shareableUrl: string;
   posts: PublicSpacePost[];
@@ -357,6 +361,7 @@ interface InnerProps {
   role: SpaceRole;
   title: string;
   host: SpaceRoomProps['host'];
+  hostSubscribed: boolean;
   shareableUrl: string;
   posts: PublicSpacePost[];
   postsError: string | null;
@@ -399,6 +404,7 @@ function Inner({
   role,
   title,
   host,
+  hostSubscribed,
   shareableUrl,
   posts,
   postsError,
@@ -514,6 +520,18 @@ function Inner({
     if (localOnStage) return 'speaker';
     return 'audience';
   }, [isHost, localOnStage]);
+
+  // Offer to follow the host the moment the show goes off air, to a
+  // listener who was in the room when it happened (not someone who shows
+  // up afterwards to a room that was already quiet).
+  const wasLiveRef = useRef(isLive);
+  const [showFollowPopup, setShowFollowPopup] = useState(false);
+  useEffect(() => {
+    if (wasLiveRef.current && !isLive && bottomRole === 'audience' && host.did) {
+      setShowFollowPopup(true);
+    }
+    wasLiveRef.current = isLive;
+  }, [isLive, bottomRole, host.did]);
 
   // A hand comes down once its owner is on stage.
   useEffect(() => {
@@ -897,6 +915,16 @@ function Inner({
           onDone={removeFloatingReaction}
         />
       ))}
+      {showFollowPopup && host.did ? (
+        <ShowEndedFollowPopup
+          hostDid={host.did}
+          hostName={host.displayName?.trim() || `@${host.handle}`}
+          isAuthenticated={!anonymous}
+          following={hostSubscribed}
+          loginNext={`/show/${spaceId}`}
+          onClose={() => setShowFollowPopup(false)}
+        />
+      ) : null}
     </>
   );
 }
@@ -914,6 +942,7 @@ export function SpaceRoom({
   hostActions,
   title,
   host,
+  hostSubscribed = false,
   shareableUrl,
   posts,
   postsError,
@@ -1189,6 +1218,7 @@ export function SpaceRoom({
         role={role}
         title={title}
         host={host}
+        hostSubscribed={hostSubscribed}
         shareableUrl={shareableUrl}
         posts={posts}
         postsError={postsError}

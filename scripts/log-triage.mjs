@@ -13,7 +13,8 @@
 // issue per new group labelled `logs`, written as Today / Wanted / Done when
 // so the factory's triage can take it from there. A group that already has
 // an open `logs` issue gets a comment with the new count, at most once a day.
-// A group whose issue was closed `wontfix` is ignored for good.
+// A group whose issue was closed `wontfix` is ignored for good, and
+// IGNORED_MESSAGES below lists runtime noise that is never filed.
 //
 // --dry-run prints the groups and files nothing (--bodies adds the issue
 // bodies it would file). --input reads events from a file (the API's
@@ -98,9 +99,23 @@ async function loadEvents(from, to) {
 }
 
 // ------------------------------------------------------------------ grouping
-// Our logger writes one JSON line per event (src/lib/logger.ts); Workers Logs
-// parses it into `source`. An uncaught exception has no source of ours and
-// shows up in $metadata.error / errorTemplate instead.
+// Workers Logs holds two kinds of event. A log event ($metadata.type
+// "cf-worker") is one console line or one uncaught exception: our logger's
+// JSON line parsed into `source` (src/lib/logger.ts), or the runtime's
+// `{message, exception: {name}}` with the text also in $metadata.error. An
+// invocation event ("cf-worker-event") is the request itself, one per
+// request, whose message is only the request line and whose $workers.event
+// holds the request (headers included: never post it). A failed request
+// usually has both, so invocation events count only when no log event of
+// the same request explains the failure.
+const IGNORED_MESSAGES = [
+  /^Network connection lost\.?$/, // the client went away mid-response; nothing the Worker did
+];
+const isInvocation = (e) => e.$metadata?.type === 'cf-worker-event';
+const requestPath = (e) => {
+  const p = e.$workers?.event?.request?.path ?? (() => { try { return new URL(e.$workers?.event?.request?.url ?? e.$metadata?.url ?? '').pathname; } catch { return ''; } })();
+  return p ? p.replace(/[a-z0-9]{16,}|\d+/gi, ':id') : '';
+};
 const normalize = (s) =>
   String(s)
     .replace(/req_[0-9a-f]{8,}/gi, 'req_*')
@@ -118,27 +133,37 @@ const redact = (s) =>
     .replace(/(cookie|authorization|token|secret|password)(["']?\s*[:=]\s*["']?)[^\s"',;}]+/gi, '$1$2[redacted]')
     .replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[redacted]');
 
+const stripRefer = (m) => String(m).replace(/\s*Refer to:\s*<?https?:\/\/\S+>?\s*$/i, '').trim();
+
 function describe(e) {
   const src = e.source && typeof e.source === 'object' ? e.source : null;
   const meta = e.$metadata ?? {};
   const level = String(src?.level ?? meta.level ?? 'error').toLowerCase();
+  if (isInvocation(e)) {
+    // Only reached for an invocation with no log event of its own (see group()).
+    const outcome = e.$workers?.outcome && e.$workers.outcome !== 'ok' ? e.$workers.outcome : null;
+    const status = e.$workers?.event?.response?.status;
+    const what = `${outcome ? `request ${outcome}` : status ? `HTTP ${status}` : 'request error'} with no error logged`;
+    return { level, kind: 'outcome', what, errMsg: null, key: `${envOf(e._service)}:outcome:${outcome ?? status ?? 'error'}:${requestPath(e)}` };
+  }
   const event = typeof src?.event === 'string' ? src.event : null;
   const errMsg = src?.err && typeof src.err === 'object' ? src.err.message : typeof src?.err === 'string' ? src.err : null;
-  const exception = meta.errorTemplate || meta.error || null;
-  const outcome = e.$workers?.outcome && e.$workers.outcome !== 'ok' ? e.$workers.outcome : null;
-  const message = meta.messageTemplate || meta.message || (typeof e.source === 'string' ? e.source : '');
-  const requestLine = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) https?:\/\//.test(message);
-  const kind = event ? 'event' : exception ? 'exception' : outcome ? 'outcome' : 'log';
-  const what = event ?? exception ?? (outcome ? `request ${outcome}` : null) ?? (requestLine ? `failed request (no error text)` : message) ?? '(no message)';
+  const exception = src?.exception || meta.error ? stripRefer(src?.message || meta.errorTemplate || meta.error) : null;
+  const message = stripRefer(meta.messageTemplate || meta.message || (typeof e.source === 'string' ? e.source : src?.message) || '');
+  const kind = event ? 'event' : exception ? 'exception' : 'log';
+  const what = event ?? exception ?? message ?? '(no message)';
   const key = `${envOf(e._service)}:${kind}:${normalize(what).slice(0, 160)}${event && errMsg ? ':' + normalize(errMsg).slice(0, 80) : ''}`;
   return { level, kind, what: String(what), errMsg, key };
 }
 
 function group(events) {
   const groups = new Map();
+  const explained = new Set(events.filter((e) => !isInvocation(e) && e.$metadata?.requestId).map((e) => e.$metadata.requestId));
   for (const e of events) {
+    if (isInvocation(e) && explained.has(e.$metadata?.requestId)) continue; // its log event carries the error
     const d = describe(e);
     if (d.level !== 'error') continue; // warn lines reach Workers Logs through console.error; keep only errors
+    if (d.kind !== 'event' && IGNORED_MESSAGES.some((re) => re.test(d.what))) continue;
     const meta = e.$metadata ?? {};
     const g = groups.get(d.key) ?? {
       key: d.key,
@@ -158,16 +183,13 @@ function group(events) {
     g.count++;
     const rid = meta.requestId ?? e.$workers?.requestId;
     if (rid) g.requests.add(rid);
-    const url = meta.url ?? e.$workers?.event?.request?.url;
-    if (url) {
-      const path = (() => { try { return new URL(url).pathname.replace(/[0-9a-f]{8,}|[0-9]+/gi, ':id'); } catch { return url; } })();
-      g.urls.set(path, (g.urls.get(path) ?? 0) + 1);
-    }
+    const path = requestPath(e);
+    if (path) g.urls.set(path, (g.urls.get(path) ?? 0) + 1);
     const ts = Number(e.timestamp ?? meta.startTime ?? 0);
     if (ts) { g.first = Math.min(g.first, ts); g.last = Math.max(g.last, ts); }
     if (!g.sample) {
       const src = e.source && typeof e.source === 'object' ? e.source : null;
-      g.sample = src ? JSON.stringify({ ...src, stack: undefined, err: src.err && typeof src.err === 'object' ? { ...src.err, stack: undefined } : src.err }) : (meta.error ?? meta.message ?? '');
+      g.sample = src && !isInvocation(e) ? JSON.stringify({ ...src, stack: undefined, err: src.err && typeof src.err === 'object' ? { ...src.err, stack: undefined } : src.err }) : (meta.error ?? meta.message ?? '');
       g.stack = src?.err?.stack ?? meta.stackId ?? null;
     }
     const cid = e.source?.correlationId ?? rid;
@@ -211,9 +233,18 @@ async function listLabelled(state) {
 const fpOf = (issue) => issue.body?.match(/<!-- log-triage:fp=([0-9a-f]{8}) -->/)?.[1] ?? null;
 const fmt = (ms) => (Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z') : 'unknown');
 
+const SHORT_TITLES = [
+  [/canceled this request because it detected that your Worker's code had hung/i, 'Worker hung, runtime canceled the request'],
+  [/exceeded the CPU time limit/i, 'Worker exceeded the CPU time limit'],
+  [/exceeded the memory limit/i, 'Worker exceeded the memory limit'],
+  [/Too many subrequests/i, 'Too many subrequests'],
+];
 function title(g) {
-  const what = g.kind === 'event' ? g.what : normalize(g.what.split('\n')[0]);
-  return `Logs (${g.env}): ${what}`.slice(0, 110);
+  let what = g.kind === 'event' || g.kind === 'outcome' ? g.what : normalize(g.what.split('\n')[0]);
+  for (const [re, short] of SHORT_TITLES) if (re.test(what)) { what = short; break; }
+  if (what.length > 80) what = what.slice(0, 80).replace(/\s+\S*$/, '') + '…';
+  if (g.kind === 'outcome') what += ` on ${[...g.urls.keys()][0] ?? 'a request'}`;
+  return `Logs (${g.env}): ${what}`;
 }
 
 function body(g, from, to) {

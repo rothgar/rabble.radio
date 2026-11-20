@@ -229,7 +229,8 @@ seen. Noise is logged and nothing else.
    `Logs (dev|prod): <event>`, with counts, routes, request ids and a
    redacted sample line, written as Today / Wanted / Done when. A group
    with an open `logs` issue gets a "still happening" comment at most once
-   a day; one closed as `wontfix` is never filed again. Workers Logs keep
+   a day; one closed as `wontfix` is never filed again, and client
+   disconnects ("Network connection lost") are never filed. Workers Logs keep
    three days on the free plan (seven on paid), so the scan is the only
    durable record. Run it by hand with `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…
    node scripts/log-triage.mjs --dry-run --bodies`; the token needs the

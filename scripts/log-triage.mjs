@@ -4,7 +4,7 @@
 //   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… GH_TOKEN=… \
 //   node scripts/log-triage.mjs [--services=rabble-dev,rabble-prod] [--hours=6]
 //                               [--repo=rothgar/rabble.radio] [--dry-run] [--json]
-//                               [--input=events.json]
+//                               [--input=events.json] [--dump=events.json]
 //
 // Queries Workers Logs (the Workers Observability query API) for every
 // error-level event and uncaught exception of each Worker in the last
@@ -17,7 +17,8 @@
 //
 // --dry-run prints the groups and files nothing (--bodies adds the issue
 // bodies it would file). --input reads events from a file (the API's
-// result.events.events array) instead of querying, for tests.
+// result.events.events array) instead of querying, for tests; --dump writes
+// what the API returned to a file (local use only: log lines hold user data).
 // The token needs the account permission "Workers Observability" (the API
 // names it Workers Observability Write). Run by .github/workflows/log-triage.yml.
 
@@ -29,6 +30,7 @@ const services = arg('services', 'rabble-dev,rabble-prod').split(',').map((s) =>
 const hours = Number(arg('hours', '6'));
 const repo = arg('repo', 'rothgar/rabble.radio');
 const input = arg('input', '');
+const dump = arg('dump', '');
 const dryRun = has('dry-run');
 const asJson = has('json');
 const LABEL = 'logs';
@@ -88,6 +90,10 @@ async function loadEvents(from, to) {
   }
   const all = [];
   for (const s of services) all.push(...(await cfQuery(s, from, to)));
+  if (dump) {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(dump, JSON.stringify(all, null, 1));
+  }
   return all;
 }
 
@@ -119,9 +125,11 @@ function describe(e) {
   const event = typeof src?.event === 'string' ? src.event : null;
   const errMsg = src?.err && typeof src.err === 'object' ? src.err.message : typeof src?.err === 'string' ? src.err : null;
   const exception = meta.errorTemplate || meta.error || null;
+  const outcome = e.$workers?.outcome && e.$workers.outcome !== 'ok' ? e.$workers.outcome : null;
   const message = meta.messageTemplate || meta.message || (typeof e.source === 'string' ? e.source : '');
-  const kind = event ? 'event' : exception ? 'exception' : 'log';
-  const what = event ?? exception ?? message ?? '(no message)';
+  const requestLine = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) https?:\/\//.test(message);
+  const kind = event ? 'event' : exception ? 'exception' : outcome ? 'outcome' : 'log';
+  const what = event ?? exception ?? (outcome ? `request ${outcome}` : null) ?? (requestLine ? `failed request (no error text)` : message) ?? '(no message)';
   const key = `${envOf(e._service)}:${kind}:${normalize(what).slice(0, 160)}${event && errMsg ? ':' + normalize(errMsg).slice(0, 80) : ''}`;
   return { level, kind, what: String(what), errMsg, key };
 }
@@ -204,7 +212,7 @@ const fpOf = (issue) => issue.body?.match(/<!-- log-triage:fp=([0-9a-f]{8}) -->/
 const fmt = (ms) => (Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z') : 'unknown');
 
 function title(g) {
-  const what = g.kind === 'event' ? g.what : g.what.split('\n')[0];
+  const what = g.kind === 'event' ? g.what : normalize(g.what.split('\n')[0]);
   return `Logs (${g.env}): ${what}`.slice(0, 110);
 }
 

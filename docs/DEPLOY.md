@@ -44,6 +44,7 @@ Repository secrets (Settings, Secrets and variables, Actions):
 | `CLOUDFLARE_API_TOKEN` | web, android, log triage | Cloudflare dashboard, Manage Account, Account API Tokens, Create Token, Create Custom Token with: Account, Workers Scripts, Edit; Account, D1, Edit; Account, Workers R2 Storage, Edit; Account, Account Settings, Read; Account, Workers Observability, Edit (for `log-triage.yml`, which reads the Workers' error logs); Zone, Workers Routes, Edit; Zone, Zone, Read. Account resources: this account; zone resources: the `rabble.rodeo` and `rabble.radio` zones (add the second zone to the token once it exists, or the production deploy cannot attach its domain). |
 | `CLOUDFLARE_ACCOUNT_ID` | web, android | The account id shown on the Workers overview page (`0f8fe574f3489eda5a599104efd24d26`). |
 | `ANDROID_DEBUG_KEYSTORE_B64` | android, optional | `base64 -w0 ~/.android/debug.keystore` from the machine whose builds are already installed on phones. Without it each run signs with a fresh key and a phone must uninstall the app before it accepts the new APK. |
+| `ANDROID_RELEASE_KEYSTORE_B64`, `ANDROID_RELEASE_KEY_ALIAS`, `ANDROID_RELEASE_KEYSTORE_PASSWORD`, `ANDROID_RELEASE_KEY_PASSWORD` | android-release (production only), optional | The upload key Play Console expects, generated once with `keytool -genkeypair -v -keystore release.keystore -alias rabble -keyalg RSA -keysize 2048 -validity 10000` and kept outside git; the base64 of that file plus the alias and the two passwords chosen at generation time. Until all four exist the `android-release` job's steps are skipped, not failed. |
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` | ios | The App Store Connect API key already used by `scripts/ios-testflight.sh`: the two ids from `~/.config/rabble/testflight.env` on the Mac mini and the contents of `AuthKey_<id>.p8`. The key must have the **Admin** role; App Manager keys fail cloud signing. |
 
 Repository variables:
@@ -59,6 +60,10 @@ Setting the secrets from this machine:
 gh secret set CLOUDFLARE_API_TOKEN            # paste the token
 gh secret set CLOUDFLARE_ACCOUNT_ID --body 0f8fe574f3489eda5a599104efd24d26
 gh secret set ANDROID_DEBUG_KEYSTORE_B64 --body "$(base64 -w0 ~/.android/debug.keystore)"
+gh secret set ANDROID_RELEASE_KEYSTORE_B64 --body "$(base64 -w0 release.keystore)"
+gh secret set ANDROID_RELEASE_KEY_ALIAS --body rabble
+gh secret set ANDROID_RELEASE_KEYSTORE_PASSWORD   # paste the keystore password
+gh secret set ANDROID_RELEASE_KEY_PASSWORD        # paste the key password
 gh secret set ASC_KEY_ID --body "$ASC_KEY_ID"
 gh secret set ASC_ISSUER_ID --body "$ASC_ISSUER_ID"
 gh secret set ASC_PRIVATE_KEY < AuthKey_XXXXXXXXXX.p8
@@ -96,6 +101,15 @@ https://rabble.radio/downloads/rabble-android.apk), then runs
 updates the "QA: production checks failing after deploy" issue. iOS is not
 part of it: TestFlight builds point at `RABBLE_BASE_URL` in
 `ios/project.yml`, still rabble.rodeo; change it there when the apps move.
+
+The same run's `android-release` job builds a signed `.aab` against
+`https://rabble.radio` with `./gradlew bundleRelease` and keeps it as the
+`rabble-android-release-<sha>` run artifact — Play Console accepts only
+`.aab` uploads. It's skipped, not failed, until the four
+`ANDROID_RELEASE_*` secrets above exist. To ship a build: let the tag push
+run it (or trigger it by hand with `android_release` checked), download the
+artifact from the run, and upload it to Play Console yourself; nothing here
+talks to the Play Store API.
 
 The D1 database and R2 bucket exist and the environment deploys cleanly in a
 dry run. Before the first real deploy:

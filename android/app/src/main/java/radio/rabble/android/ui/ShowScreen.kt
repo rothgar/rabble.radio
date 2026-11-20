@@ -708,6 +708,17 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     // Top box: title, host, on-air state and the stage.
                     val topBox: @Composable () -> Unit = {
                         ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive, room = connected, avatarCentres = avatarCentres)
+                        if (connected != null && (s.show.musicMood != null || (isHostOfShow && !connected.onAir))) {
+                            MusicCard(
+                                baseUrl = app.baseUrl,
+                                spaceId = s.show.id,
+                                moodId = s.show.musicMood,
+                                active = s.show.musicMood != null && (!connected.onAir || !connected.remoteAudio),
+                                canPick = isHostOfShow && !connected.onAir,
+                                busy = moodBusy,
+                                onPick = ::setMusicMood,
+                            )
+                        }
                         if (showReplay && replay != null) {
                             // Off air with a recording: play it instead of opening an empty stage.
                             ReplayPanel(show = s.show, replay = replay, audioUrl = app.api.absolute(replay.audioUrl))
@@ -739,7 +750,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             onLogin = onLogin,
                         )
                     }
-                    // Below: who is listening, then the music (its credit sits last).
+                    // Below: who is listening.
                     val bottom: @Composable () -> Unit = {
                         if (connected != null) {
                             if (isHostOfShow) RaisedHandsPanel(connected, onInvite = ::invite)
@@ -755,20 +766,9 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                 }
                             }
                         }
-                        if (connected != null && (s.show.musicMood != null || (isHostOfShow && !connected.onAir))) {
-                            MusicCard(
-                                baseUrl = app.baseUrl,
-                                spaceId = s.show.id,
-                                moodId = s.show.musicMood,
-                                active = s.show.musicMood != null && (!connected.onAir || !connected.remoteAudio),
-                                canPick = isHostOfShow && !connected.onAir,
-                                busy = moodBusy,
-                                onPick = ::setMusicMood,
-                            )
-                        }
                     }
                     if (isWideScreen()) {
-                        // Unfolded: stage and controls on the left, the audience and music on the right.
+                        // Unfolded: stage, music and controls on the left, the audience on the right.
                         Row(
                             Modifier.fillMaxSize().widthIn(max = ContentMaxWidth).align(Alignment.TopCenter).padding(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(24.dp),

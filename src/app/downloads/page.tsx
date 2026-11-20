@@ -6,6 +6,7 @@
 import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import { SiteHeader } from '@/components/SiteHeader';
+import { AndroidBetaSignup } from '@/components/AndroidBetaSignup';
 import { Button, Card, PageLayout } from '@/components/ui';
 import { ANDROID_APK_PATH, TESTFLIGHT_URL } from '@/lib/apps';
 
@@ -52,6 +53,18 @@ export default function DownloadsPage(): ReactElement {
             <Button href={ANDROID_APK_PATH} size="lg" variant="accent" data-testid="download-android-link">
               Download the APK
             </Button>
+          </div>
+        </Card>
+
+        <Card data-testid="download-android-beta">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-heading">Android on Google Play</h2>
+            <p className="text-body text-[var(--color-text-secondary)]">
+              We&apos;re setting up a closed beta on Google Play. Leave your email and
+              we&apos;ll add you once it opens — no automatic enrollment, a person reviews
+              every request.
+            </p>
+            <AndroidBetaSignup />
           </div>
         </Card>
       </PageLayout>

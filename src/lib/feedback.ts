@@ -10,7 +10,7 @@
 
 import { prisma } from '@/lib/db';
 
-export const FEEDBACK_CATEGORIES = ['problem', 'idea', 'other'] as const;
+export const FEEDBACK_CATEGORIES = ['problem', 'idea', 'other', 'beta'] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
 export const FEEDBACK_PLATFORMS = ['web', 'android', 'ios'] as const;
 export type FeedbackPlatform = (typeof FEEDBACK_PLATFORMS)[number];
@@ -24,6 +24,7 @@ export interface FeedbackInput {
   handle?: string | null;
   category?: string;
   message: string;
+  email?: string | null;
   platform?: string;
   appVersion?: string | null;
   page?: string | null;
@@ -39,6 +40,7 @@ export interface FeedbackRow {
   handle: string | null;
   category: FeedbackCategory;
   message: string;
+  email: string | null;
   platform: FeedbackPlatform;
   appVersion: string | null;
   page: string | null;
@@ -67,6 +69,9 @@ function clampString(value: unknown, max: number): string | null {
   if (!trimmed) return null;
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
+
+export const FEEDBACK_EMAIL_MAX = 254;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Serialize the captured context, truncating oversized blobs with a marker. */
 export function serializeContext(context: unknown): string {
@@ -101,6 +106,7 @@ function rowToFeedback(row: Record<string, unknown>): FeedbackRow {
       ? (row.category as FeedbackCategory)
       : 'other',
     message: String(row.message ?? ''),
+    email: (row.email as string | null) ?? null,
     platform: (FEEDBACK_PLATFORMS as readonly string[]).includes(String(row.platform))
       ? (row.platform as FeedbackPlatform)
       : 'web',
@@ -126,6 +132,13 @@ export async function createFeedback(input: FeedbackInput): Promise<FeedbackRow>
   const platform = (FEEDBACK_PLATFORMS as readonly string[]).includes(input.platform ?? '')
     ? (input.platform as FeedbackPlatform)
     : 'web';
+  const email = clampString(input.email, FEEDBACK_EMAIL_MAX);
+  if (category === 'beta' && !email) {
+    throw new FeedbackValidationError('Email is required for a beta sign-up.');
+  }
+  if (email && !EMAIL_RE.test(email)) {
+    throw new FeedbackValidationError('Email must be a valid address.');
+  }
 
   const row = await prisma.feedback.create({
     data: {
@@ -133,6 +146,7 @@ export async function createFeedback(input: FeedbackInput): Promise<FeedbackRow>
       handle: input.handle ?? null,
       category,
       message,
+      email,
       platform,
       appVersion: clampString(input.appVersion, 100),
       page: clampString(input.page, 500),

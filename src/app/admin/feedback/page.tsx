@@ -29,6 +29,7 @@ function FeedbackEntry({ row }: { row: FeedbackRow }): ReactElement {
         {row.appVersion ? <span>v{row.appVersion}</span> : null}
         <span>{formatWhen(row.createdAt)}</span>
         <span>{row.handle ? `@${row.handle}` : 'signed out'}</span>
+        {row.email ? <span>{row.email}</span> : null}
         {row.page ? <span className="truncate">{row.page}</span> : null}
       </div>
       <p className="whitespace-pre-wrap text-body text-[var(--color-text)]" data-testid="feedback-message">

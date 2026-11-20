@@ -42,9 +42,9 @@ const config: Config = {
       borderRadius: {
         xs:   'var(--radius-xs)',   /* 4 px  — chips, badges */
         sm:   'var(--radius-sm)',   /* 8 px  — buttons, inputs */
-        md:   'var(--radius-md)',   /* 12 px — cards */
-        lg:   'var(--radius-lg)',   /* 16 px — panels */
-        xl:   'var(--radius-xl)',   /* 24 px — sheets, modals */
+        md:   'var(--radius-md)',   /* 8 px  — cards */
+        lg:   'var(--radius-lg)',   /* 12 px — panels, dialogs */
+        xl:   'var(--radius-xl)',   /* 16 px — sheets, modals */
       },
 
       /* ── Spacing — semantic additions on top of Tailwind's 4 px scale ── */

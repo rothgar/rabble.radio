@@ -20,6 +20,7 @@ rabble.radio on its own.
 | `.discobox/services/20-livekit.sh` | LiveKit server in `--dev` mode on `:7880` (Docker), so the live room works. |
 | `.discobox/hooks/` | Hook declarations (typecheck and lint on save, Prisma regenerate plus migration check, vitest at review) in the `discobox-ai/hooks` format. Boxes on v0.19.5 ship no hook runner yet, so they are inert until one does; workers run the checks themselves. |
 | `.discobox/skills/verify-recipes/` | How to drive the running app, take screenshots, join a room anonymously, and what cannot run in a box. The generic `verify` skill reads it. Linked into `.claude/skills/`. |
+| `DESIGN.md` (repo root) | The design brief in the [design.md](https://github.com/google-labs-code/design.md) format: tokens as YAML (colours with a `dark` set, type scale, radii, spacing, motion, components) and the rationale, with the web name of every token. The design-system skill and reviewer read it first; `tests/design` keeps it in step with `globals.css`. |
 | `.discobox/skills/rabble-design-system` | Link to the design-system skill so non-Claude harnesses get it too. |
 | `.discobox/skills/frontend-design/` | Anthropic's `frontend-design` skill (Apache-2.0, vendored): aesthetic direction for new or reshaped UI. Workers load it for issues that change how a screen looks. |
 | `.discobox/skills/mobile-apps/` | The Android and iOS clients: screens, the flows they share with the web and their wire contract, screen conventions, how to build and verify each. Loaded before touching `android/`, `ios/` or a shared flow. |

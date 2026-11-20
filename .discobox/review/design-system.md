@@ -9,10 +9,13 @@ another has security; leave those to them.
 
 Read first:
 
-1. `.claude/skills/rabble-design-system/SKILL.md`: the rules.
-2. `docs/brand.md`: palette, typography, the mark, dark appearance.
-3. `src/app/globals.css` and `src/components/ui/`: the tokens and primitives
-   the change should be using.
+1. `DESIGN.md`: the brief, with every token, its web name, and the do's
+   and don'ts.
+2. `.claude/skills/rabble-design-system/SKILL.md`: the rules.
+3. `docs/brand.md`: palette, typography, the mark, dark appearance.
+4. `src/app/globals.css` and `src/components/ui/`: the tokens and primitives
+   the change should be using. A new token in one without the other (or
+   without `DESIGN.md`) is a finding.
 
 Then read the change and the components around it.
 

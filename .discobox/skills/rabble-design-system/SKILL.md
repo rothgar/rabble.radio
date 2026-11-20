@@ -5,9 +5,13 @@ description: How to build and change rabble.radio UI (Next.js App Router, React 
 
 # rabble.radio design system
 
-Single source of truth: `src/app/globals.css` (tokens) and `tailwind.config.ts`
-(aliases). Primitives live in `src/components/ui/` (`Button`, `Card`,
-`PageLayout`). Read those three files before writing UI.
+The brief is `DESIGN.md` at the repo root (design.md format: the tokens as
+YAML, then the rationale, the web name of every token, and the do's and
+don'ts). Read it first. The implementation is `src/app/globals.css` (tokens)
+and `tailwind.config.ts` (aliases); primitives live in `src/components/ui/`
+(`Button`, `Card`, `PageLayout`). Read those three before writing UI. A new
+token goes in both `globals.css` and `DESIGN.md` (`tests/design` fails on
+drift; `pnpm design:lint` checks the file's format).
 
 ## Brand (docs/brand.md)
 

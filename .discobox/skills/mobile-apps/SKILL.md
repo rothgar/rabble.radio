@@ -96,8 +96,9 @@ equals `show.host.did`.
 
 ## Screen conventions
 
-Both apps implement the brand in `docs/brand.md`; the web tokens in
-`src/app/globals.css` are the source and the two theme files mirror them.
+Both apps implement the brand in `docs/brand.md` (tokens and rationale in
+`DESIGN.md`); the web tokens in `src/app/globals.css` are the source and the
+two theme files mirror them.
 
 - **Colours** only through `RabbleColors.X` (same names on both platforms:
   `bg`, `surface`, `surfaceRaised`, `ink`, `text`, `textSecondary`,

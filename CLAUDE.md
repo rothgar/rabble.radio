@@ -24,6 +24,7 @@ Always prefix shell commands with `rtk` (see ~/CLAUDE.md).
 ## Conventions
 
 - Design system: 4px grid tokens in `src/app/globals.css`, exposed through Tailwind aliases. Use `var(--color-*)` tokens and the `ui/` primitives. No hardcoded colors. Min 44px touch targets. Mobile-first.
+  `DESIGN.md` (repo root, [design.md](https://github.com/google-labs-code/design.md) format) is the design brief: the same tokens with the rationale, the web name of each, and the do's and don'ts. Read it before any UI work; `tests/design` fails when its colours drift from `globals.css`, and `pnpm design:lint` validates the file.
 - Any `prisma/schema.prisma` change needs a D1 migration in `prisma/d1/<nnnn>_<name>.sql` (apply with `pnpm d1:migrate:local` / `pnpm d1:migrate:remote`) and `pnpm prisma:generate`.
 - Every new lib function or API route gets a test in the matching `tests/` folder.
 - Commit straight to `main` is the repo convention. A push to `main` deploys

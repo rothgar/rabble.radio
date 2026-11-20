@@ -2,9 +2,10 @@
 
 Bold retro / modern vintage: warm cream paper, teal ink, red and orange
 accents, a heavy soft serif for the name and headers, a clean sans for
-everything else. This file is the hand-off spec; the implementation lives in
-`src/app/globals.css` (web), `android/.../ui/Theme.kt` and
-`ios/Rabble/Theme.swift`.
+everything else. This file is the hand-off spec; `DESIGN.md` at the repo root is the
+machine-readable version for agents (tokens plus rationale); the
+implementation lives in `src/app/globals.css` (web),
+`android/.../ui/Theme.kt` and `ios/Rabble/Theme.swift`.
 
 ## Colours
 

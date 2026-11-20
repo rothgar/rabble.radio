@@ -146,8 +146,11 @@ async function callXrpc<T>(input: {
     init?: RequestInit
   ) => Promise<Response>;
   body?: Record<string, unknown>;
+  query?: Record<string, string>;
 }): Promise<T> {
-  const pathname = `/xrpc/${input.nsid}`;
+  const pathname = input.query
+    ? `/xrpc/${input.nsid}?${new URLSearchParams(input.query).toString()}`
+    : `/xrpc/${input.nsid}`;
   const headers: Record<string, string> = {
     accept: 'application/json',
   };
@@ -261,4 +264,41 @@ export async function deleteLiveStatus(
           : 'Failed to delete live status record.',
     };
   }
+}
+
+interface GetBlocksPage {
+  blocks?: Array<{ did?: string }>;
+  cursor?: string;
+}
+
+const BLOCKS_PAGE_SIZE = 100;
+
+/**
+ * Page through the signed-in user's own block list. Unlike follows,
+ * `app.bsky.graph.getBlocks` is scoped to the authenticated caller (there's
+ * no `actor` param), so this needs the OAuth session rather than a plain
+ * fetch. Throws when the session can't be restored or Bluesky errors.
+ */
+export async function fetchBlockedDids(did: string, max = 2000): Promise<string[]> {
+  const session = await resolveOAuthSession(did);
+  const out: string[] = [];
+  let cursor: string | undefined;
+  while (out.length < max) {
+    const query: Record<string, string> = { limit: String(BLOCKS_PAGE_SIZE) };
+    if (cursor) query.cursor = cursor;
+    const page = await callXrpc<GetBlocksPage>({
+      method: 'GET',
+      nsid: 'app.bsky.graph.getBlocks',
+      fetch: session.fetchHandler.bind(session),
+      query,
+    });
+    const got: string[] = [];
+    for (const b of page.blocks ?? []) {
+      if (typeof b.did === 'string') got.push(b.did);
+    }
+    out.push(...got);
+    if (!page.cursor || got.length === 0) break;
+    cursor = page.cursor;
+  }
+  return out.slice(0, max);
 }

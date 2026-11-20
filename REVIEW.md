@@ -249,6 +249,23 @@ code, and mistakes already made there.
   this guard reset itself (e.g. clear `justSavedRef.current` when the
   `title`/`description`/`tags` props actually change).
 
+## src/app/hosts/page.tsx and src/app/page.tsx (blocked-host filter buffer)
+
+- `getTopHosts`'s `blockedDids` option filters before ranking, but neither
+  call site (issue #70) uses it that way: each passes only `excludeDid` and
+  fetches `HOSTS_LIMIT`/`HOME_HOSTS_LIMIT` + `BLOCK_FILTER_BUFFER` (10) extra
+  candidates, then filters `blockedDids` out of that fixed window afterward —
+  so `getTopHosts`'s DB query and `getBlockedDids`'s OAuth-backed Bluesky call
+  can run concurrently instead of the latter serializing ahead of the former.
+  A viewer who has blocked more than `BLOCK_FILTER_BUFFER` of the current top
+  `HOSTS_LIMIT + BLOCK_FILTER_BUFFER` hosts gets fewer than the intended count
+  rather than a backfilled page/strip from further down the ranking — accepted
+  as unlikely given realistic block-list sizes, not fixed. Raising either
+  limit, or anything that could make a viewer's blocked-host overlap with the
+  top ranks larger, should re-check whether the buffer is still big enough, or
+  switch to passing `blockedDids` into `getTopHosts` directly (pre-ranking,
+  always correct) and accept the serialization cost that brings back.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

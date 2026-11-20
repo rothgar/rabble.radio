@@ -28,7 +28,18 @@ export function isForYou(s: PublicSpace): boolean {
   return Boolean(s.hostFollowed) || (s.followedInRoom?.length ?? 0) > 0;
 }
 
-export function buildHomeSections(spaces: PublicSpace[], limits = { forYou: 6, onAir: 12, popular: 12 }): HomeSections {
+export interface BuildHomeSectionsOptions {
+  /** Never put the viewer's own shows in "Popular shows" — they know their own show. */
+  viewerDid?: string | null;
+  /** Never put a blocked host's shows in "Popular shows". */
+  blockedDids?: Set<string>;
+}
+
+export function buildHomeSections(
+  spaces: PublicSpace[],
+  limits = { forYou: 6, onAir: 12, popular: 12 },
+  opts: BuildHomeSectionsOptions = {}
+): HomeSections {
   const byLive = (a: PublicSpace, b: PublicSpace) => {
     if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
     return (a.isLive ? liveScore(b) - liveScore(a) : lifetimeScore(b) - lifetimeScore(a)) || a.title.localeCompare(b.title);
@@ -39,7 +50,7 @@ export function buildHomeSections(spaces: PublicSpace[], limits = { forYou: 6, o
     .sort((a, b) => liveScore(b) - liveScore(a) || a.title.localeCompare(b.title))
     .slice(0, limits.onAir);
   const popular = spaces
-    .filter((s) => !s.isLive)
+    .filter((s) => !s.isLive && s.host.did !== opts.viewerDid && !opts.blockedDids?.has(s.host.did))
     .sort((a, b) => {
       // Replays and scheduled shows are both one tap away; order by engagement.
       return lifetimeScore(b) - lifetimeScore(a) || a.title.localeCompare(b.title);

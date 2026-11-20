@@ -19,6 +19,7 @@ vi.mock('@/lib/auth', () => ({
 import {
   buildLiveStatusRecord,
   deleteLiveStatus,
+  fetchBlockedDids,
   publishLiveStatus,
 } from '@/lib/atproto';
 
@@ -200,5 +201,51 @@ describe('deleteLiveStatus', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/DID/);
     expect(fetchHandlerMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchBlockedDids', () => {
+  function blocksResponse(dids: string[], cursor?: string): Response {
+    return new Response(
+      JSON.stringify({ blocks: dids.map((did) => ({ did })), cursor }),
+      { status: 200 }
+    );
+  }
+
+  it('calls getBlocks with no actor param, through the OAuth session', async () => {
+    fetchHandlerMock.mockResolvedValueOnce(blocksResponse(['did:a', 'did:b']));
+    const out = await fetchBlockedDids('did:plc:host123');
+    expect(out).toEqual(['did:a', 'did:b']);
+
+    const [calledPathname, calledInit] = fetchHandlerMock.mock.calls[0];
+    expect(String(calledPathname)).toMatch(/^\/xrpc\/app\.bsky\.graph\.getBlocks\?/);
+    expect(String(calledPathname)).not.toMatch(/actor=/);
+    expect(calledInit.method).toBe('GET');
+    expect(
+      (calledInit.headers as Record<string, string>).authorization
+    ).toBeUndefined();
+  });
+
+  it('pages through the cursor', async () => {
+    fetchHandlerMock
+      .mockResolvedValueOnce(blocksResponse(['did:a'], 'c1'))
+      .mockResolvedValueOnce(blocksResponse(['did:b']));
+    const out = await fetchBlockedDids('did:plc:host123');
+    expect(out).toEqual(['did:a', 'did:b']);
+    const second = new URL(`https://x${fetchHandlerMock.mock.calls[1][0]}`);
+    expect(second.searchParams.get('cursor')).toBe('c1');
+  });
+
+  it('stops at the cap', async () => {
+    fetchHandlerMock.mockImplementation(async () =>
+      blocksResponse(Array.from({ length: 100 }, (_, i) => `did:${i}`), 'more')
+    );
+    const out = await fetchBlockedDids('did:plc:host123', 150);
+    expect(out).toHaveLength(150);
+  });
+
+  it('throws on HTTP errors', async () => {
+    fetchHandlerMock.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+    await expect(fetchBlockedDids('did:plc:host123')).rejects.toThrow(/500/);
   });
 });

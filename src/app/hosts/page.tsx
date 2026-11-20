@@ -7,6 +7,7 @@
 import type { ReactElement } from 'react';
 import { getTopHosts } from '@/lib/hosts';
 import { getFollowedHostDids } from '@/lib/host-follows';
+import { getBlockedDids } from '@/lib/blocks';
 import { getCurrentUser } from '@/lib/session';
 import { HostCard } from '@/components/HostCard';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -14,8 +15,19 @@ import { PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
+const HOSTS_LIMIT = 10;
+// Extra hosts fetched above the limit so filtering out blocked hosts (known
+// only once getBlockedDids resolves) rarely leaves the page short, without
+// serializing that fetch behind the ranking query.
+const BLOCK_FILTER_BUFFER = 10;
+
 export default async function HostsPage(): Promise<ReactElement> {
-  const [hosts, user] = await Promise.all([getTopHosts(10), getCurrentUser()]);
+  const user = await getCurrentUser();
+  const [candidateHosts, blockedDids] = await Promise.all([
+    getTopHosts(HOSTS_LIMIT + BLOCK_FILTER_BUFFER, undefined, { excludeDid: user?.did ?? null }),
+    getBlockedDids(user?.did ?? null),
+  ]);
+  const hosts = candidateHosts.filter((h) => !blockedDids.has(h.host.did)).slice(0, HOSTS_LIMIT);
   const followedHostDids = await getFollowedHostDids(
     user?.did ?? null,
     hosts.map((h) => h.host.did)

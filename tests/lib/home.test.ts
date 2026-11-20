@@ -43,4 +43,22 @@ describe('buildHomeSections', () => {
     const many = Array.from({ length: 20 }, (_, i) => show({ id: `s${i}`, isLive: true, status: 'live' }));
     expect(buildHomeSections(many, { forYou: 6, onAir: 3, popular: 3 }).onAir).toHaveLength(3);
   });
+
+  it('hides the viewer\'s own shows and blocked hosts from Popular, but not On air or For you', () => {
+    const me = { did: 'did:me', handle: 'me', displayName: null, avatarUrl: null };
+    const blocked = { did: 'did:blocked', handle: 'blocked', displayName: null, avatarUrl: null };
+    const { popular, onAir, forYou } = buildHomeSections(
+      [
+        show({ id: 'mine', host: me, totalListeners: 100 }),
+        show({ id: 'mine-live', isLive: true, status: 'live', host: me, hostFollowed: true, listenerCount: 5 }),
+        show({ id: 'blocked-show', host: blocked, totalListeners: 100 }),
+        show({ id: 'other', totalListeners: 1 }),
+      ],
+      undefined,
+      { viewerDid: 'did:me', blockedDids: new Set(['did:blocked']) }
+    );
+    expect(popular.map((s) => s.id)).toEqual(['other']);
+    expect(onAir.map((s) => s.id)).toEqual(['mine-live']);
+    expect(forYou.map((s) => s.id)).toEqual(['mine-live']);
+  });
 });

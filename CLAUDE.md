@@ -87,6 +87,7 @@ commands yourself regardless.
 - QA of the live site: `scripts/qa-live.mjs` (deterministic, run after
   every deploy) and the `qa-live` skill (daily box that also screenshots
   and files `qa` issues). Issues labelled `qa` come from it; issues labelled
-  `feedback` come from the `feedback-intake` skill reading the feedback
-  button's reports, and carry `status/needs-decision` until the owner
-  decides.
+  `logs` come from `scripts/log-triage.mjs` scanning the Workers' error
+  logs every six hours; issues labelled `feedback` come from the
+  `feedback-intake` skill reading the feedback button's reports, and carry
+  `status/needs-decision` until the owner decides.

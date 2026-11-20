@@ -1,0 +1,47 @@
+# Scan the Workers' error logs and file one `logs` issue per new kind of
+# error (scripts/log-triage.mjs), for the factory to triage. Every six hours
+# with a wider window than the gap, so nothing between runs is missed; the
+# script de-duplicates against open `logs` issues. Needs CLOUDFLARE_API_TOKEN
+# with the account permission "Workers Observability" (docs/discobox.md, QA).
+name: Log triage
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: How many hours of logs to scan
+        default: '8'
+      dry_run:
+        description: Only report the groups, file nothing
+        type: boolean
+        default: false
+
+concurrency:
+  group: log-triage
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    name: Error logs to issues
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scan rabble-dev and rabble-prod
+        run: |
+          node scripts/log-triage.mjs \
+            --services=rabble-dev,rabble-prod \
+            --hours=${{ inputs.hours || '8' }} \
+            ${{ inputs.dry_run && '--dry-run' || '' }}

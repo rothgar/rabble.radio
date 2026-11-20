@@ -188,7 +188,7 @@ discobox run -H aperture-deliver --skills <manager-checkout>/worker-skills \
 
 ## QA agent
 
-Two layers watch the deployed site and turn what they find into issues the
+Three layers watch the deployed site and turn what they find into issues the
 manager then triages like any other:
 
 1. **After every web deploy**, the `qa` job of `.github/workflows/deploy.yml`
@@ -219,6 +219,22 @@ yes before the manager starts any work, whatever `auto` says. Duplicates
 become a comment on the open issue; everything handled is listed in the
 "Feedback intake log" issue, which is how the next run knows what it has
 seen. Noise is logged and nothing else.
+
+3. **Every six hours**, `.github/workflows/log-triage.yml` runs
+   `scripts/log-triage.mjs`: it queries Workers Logs (the Workers
+   Observability API) for every error-level line and uncaught exception of
+   `rabble-dev` and `rabble-prod` in the last eight hours, groups them by the
+   logger's event name or the exception's message with ids stripped, and
+   files one issue per new group labelled `logs` and `bug`, titled
+   `Logs (dev|prod): <event>`, with counts, routes, request ids and a
+   redacted sample line, written as Today / Wanted / Done when. A group
+   with an open `logs` issue gets a "still happening" comment at most once
+   a day; one closed as `wontfix` is never filed again. Workers Logs keep
+   three days on the free plan (seven on paid), so the scan is the only
+   durable record. Run it by hand with `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…
+   node scripts/log-triage.mjs --dry-run --bodies`; the token needs the
+   account permission "Workers Observability" (the CI token has to be
+   given it too).
 
 `aperture-qa` is a gateway config like the others; its `github` binding is
 narrowed to listing, creating and commenting on this repository's issues,

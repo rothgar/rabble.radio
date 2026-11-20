@@ -39,7 +39,6 @@ struct ConnectedRoom {
     var anonymousListeners: Int = 0
     var micOn: Bool = false
     var onAir: Bool = false
-    var invitePending: Bool = false
     var stageBusy: Bool = false
     var notice: String?
     /// Someone other than us is publishing audio (so pre-show music should yield).
@@ -243,7 +242,7 @@ final class ShowModel: ObservableObject {
         }
     }
 
-    /// accept = take the stage; leave = decline an invite or step down. Both reconnect with the new token.
+    /// Step down from the stage, reconnecting with an audience token.
     func stage(_ action: String) {
         guard let current = room.connected else { return }
         update { $0.stageBusy = true; $0.notice = nil }
@@ -251,7 +250,7 @@ final class ShowModel: ObservableObject {
             do {
                 let result = try await env.api.stageAction(showId: showId, action: action)
                 if let token = result.token, let wsUrl = result.wsUrl {
-                    let role = result.role ?? (action == "accept" ? "speaker" : "audience")
+                    let role = result.role ?? "audience"
                     let goingOnStage = role != "audience"
                     var join = current.join
                     join.token = token
@@ -262,16 +261,15 @@ final class ShowModel: ObservableObject {
                     try await connect(with: join, enableMic: goingOnStage)
                     reconnecting = false
                     update {
-                        $0.invitePending = false
                         $0.stageBusy = false
                         $0.notice = goingOnStage ? "You're on stage." : nil
                     }
                 } else {
-                    update { $0.invitePending = false; $0.stageBusy = false }
+                    update { $0.stageBusy = false }
                 }
             } catch {
                 reconnecting = false
-                update { $0.stageBusy = false; $0.invitePending = false; $0.notice = error.localizedDescription }
+                update { $0.stageBusy = false; $0.notice = error.localizedDescription }
             }
         }
     }
@@ -395,7 +393,10 @@ final class ShowModel: ObservableObject {
         room = .connected(current)
         Diagnostics.setRoom(
             showId: showId, role: current.join.role, connected: true, onAir: current.onAir, micOn: current.micOn,
-            members: current.members.count, anonymousListeners: current.anonymousListeners, invitePending: current.invitePending
+            members: current.members.count, anonymousListeners: current.anonymousListeners,
+            // No stage invites to accept anymore; always false, kept so the
+            // feedback context key stays stable.
+            invitePending: false
         )
     }
 
@@ -471,18 +472,15 @@ final class ShowModel: ObservableObject {
         }
     }
 
-    /// Poll the stage status while connected: invites and on-air changes reach
-    /// listeners this way even when data messages do not.
+    /// Poll the stage status while connected: on-air changes reach listeners
+    /// this way even when data messages do not.
     private func startPolling() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, let current = self.room.connected else { return }
                 if !current.join.anonymous, let status = try? await self.env.api.stageStatus(showId: self.showId) {
-                    self.update {
-                        $0.onAir = status.onAir
-                        $0.invitePending = $0.invitePending || (status.pendingInviteFrom != nil && !status.onStage)
-                    }
+                    self.update { $0.onAir = status.onAir }
                 }
                 try? await Task.sleep(for: .seconds(stagePollSeconds))
             }
@@ -494,10 +492,6 @@ final class ShowModel: ObservableObject {
               let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = msg["type"] as? String else { return }
         switch type {
-        case "stage_invite":
-            if msg["targetIdentity"] as? String == current.join.identity {
-                update { $0.invitePending = true }
-            }
         case "on_air_changed":
             update { $0.onAir = msg["onAir"] as? Bool ?? current.onAir }
         case "space_updated":

@@ -105,7 +105,7 @@ class RabbleApi(
     suspend fun stageAction(showId: String, action: String): StageActionResponse =
         StageActionResponse.fromJson(request(post("/api/spaces/$showId/stage", JSONObject().put("action", action))))
 
-    /** Host: invite an audience member to the stage (they get a `stage_invite` data message). */
+    /** Host: bring an audience member on stage immediately, muted. */
     suspend fun inviteToStage(showId: String, targetIdentity: String) {
         request(post("/api/spaces/$showId/stage", JSONObject().put("action", "invite").put("targetIdentity", targetIdentity)))
     }

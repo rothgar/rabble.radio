@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import radio.rabble.android.BuildConfig
 import radio.rabble.android.data.Diagnostics
 import radio.rabble.android.data.JoinedShow
 import radio.rabble.android.data.Me
@@ -208,6 +209,16 @@ fun MeScreen(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                             Text("Log out", color = RabbleColors.Live)
+                        }
+                    }
+                    if (BuildConfig.DEBUG) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            OutlinedButton(
+                                onClick = { throw RuntimeException("Debug: forced crash from Me screen") },
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                            ) {
+                                Text("Debug: force a crash", color = RabbleColors.TextTertiary)
+                            }
                         }
                     }
                 }

@@ -112,6 +112,19 @@ struct ShowView: View {
                 VStack(spacing: 16) {
                     // Top box: title, host, on-air state and the stage.
                     ShowHeader(show: show, onAir: onAir, room: connected)
+                    if let connected {
+                        if show.musicMood != nil || (model.isHostOfShow && !connected.onAir) {
+                            MusicCard(
+                                baseURL: env.baseURL,
+                                spaceId: show.id,
+                                moodId: show.musicMood,
+                                active: show.musicMood != nil && (!connected.onAir || !connected.remoteAudio),
+                                canPick: model.isHostOfShow && !connected.onAir,
+                                busy: model.moodBusy,
+                                onPick: { model.setMusicMood($0) }
+                            )
+                        }
+                    }
                     if showReplay, let replay = show.replay {
                         // Off air with a recording: play it instead of opening an empty stage.
                         ReplayPanel(show: show, replay: replay, audioUrl: env.api.absolute(replay.audioUrl))
@@ -128,20 +141,9 @@ struct ShowView: View {
                     if !showReplay {
                         RoomPanel(model: model, show: show, onLogin: { showLogin = true })
                     }
-                    // Below: who is listening, then the music (its credit sits last).
+                    // Below: who is listening.
                     if let connected {
                         AudiencePanel(room: connected, onInvite: connected.isHost ? { model.invite($0) } : nil)
-                        if show.musicMood != nil || (model.isHostOfShow && !connected.onAir) {
-                            MusicCard(
-                                baseURL: env.baseURL,
-                                spaceId: show.id,
-                                moodId: show.musicMood,
-                                active: show.musicMood != nil && (!connected.onAir || !connected.remoteAudio),
-                                canPick: model.isHostOfShow && !connected.onAir,
-                                busy: model.moodBusy,
-                                onPick: { model.setMusicMood($0) }
-                            )
-                        }
                     }
                     Spacer(minLength: 24)
                 }

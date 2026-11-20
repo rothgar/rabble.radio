@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import {
   getSpacesForUser,
@@ -19,6 +20,19 @@ import { Button, PageLayout } from '@/components/ui';
 export const dynamic = 'force-dynamic';
 
 const SUGGESTION_COUNT = 2;
+
+const STATIONS_TITLE = 'Stations — Rabble';
+const STATIONS_DESCRIPTION = 'Every show category on Rabble Radio, on-air and upcoming.';
+
+export const metadata: Metadata = {
+  title: STATIONS_TITLE,
+  description: STATIONS_DESCRIPTION,
+  openGraph: {
+    title: STATIONS_TITLE,
+    description: STATIONS_DESCRIPTION,
+    images: [{ url: '/og-default.png', width: 1200, height: 630 }],
+  },
+};
 
 export default async function StationsPage(): Promise<ReactElement> {
   const user = await getCurrentUser();

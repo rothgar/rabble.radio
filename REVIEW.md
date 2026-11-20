@@ -271,6 +271,19 @@ code, and mistakes already made there.
   switch to passing `blockedDids` into `getTopHosts` directly (pre-ranking,
   always correct) and accept the serialization cost that brings back.
 
+## src/app/station/[tag]/page.tsx (decoding the `tag` param)
+
+- `decodeURIComponent` throws a `URIError` on a malformed percent sequence
+  (e.g. a bare `%`) instead of returning an invalid string, so `isValidTag`
+  never gets a chance to reject it — a crawler or link-preview bot hitting a
+  stray-`%` station link would 500 the page and crash `generateMetadata`
+  too. Issue #78 added `generateMetadata` and both it and the page body now
+  decode through the shared `decodeTagParam` helper in this file, which
+  catches that and treats an unparseable tag as just another invalid one.
+  Any further decoding of this param (or a similar route param elsewhere)
+  needs the same guard; `decodeURIComponent` is never safe to call directly
+  on a value that came from the URL.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

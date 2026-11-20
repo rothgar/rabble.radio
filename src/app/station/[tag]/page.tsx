@@ -7,6 +7,7 @@
 // to their own stations.
 
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import {
   getSpacesForUser,
@@ -15,12 +16,48 @@ import {
 import { getCurrentUser } from '@/lib/session';
 import { decoratePublicSpaces } from '@/lib/space-extras';
 import { countPostsBySpace } from '@/lib/posts';
-import { isValidTag, YOUTUBE_CATEGORIES } from '@/lib/tags';
+import { CATEGORY_PROMPTS, isValidTag, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { StationShowCard } from '@/components/StationShowCard';
 import { SiteHeader } from '@/components/SiteHeader';
 import { PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * `decodeURIComponent` throws a `URIError` on a malformed percent sequence
+ * (e.g. a bare `%`) instead of returning an invalid string, so both the
+ * route's `generateMetadata` and its page body decode through this instead
+ * of calling it directly — an unparseable `tag` is just another invalid one.
+ */
+function decodeTagParam(tag: string): string | null {
+  try {
+    return decodeURIComponent(tag);
+  } catch {
+    return null;
+  }
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ tag: string }>;
+}): Promise<Metadata> {
+  const { tag } = await params;
+  const decoded = decodeTagParam(tag);
+  if (decoded === null || !isValidTag(decoded)) return {};
+
+  const title = `${decoded} shows — Rabble`;
+  const description = CATEGORY_PROMPTS[decoded] ?? `${decoded} shows on Rabble Radio.`;
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [{ url: '/og-default.png', width: 1200, height: 630 }],
+    },
+  };
+}
 
 export default async function StationPage({
   params,
@@ -28,7 +65,7 @@ export default async function StationPage({
   params: Promise<{ tag: string }>;
 }): Promise<ReactElement> {
   const { tag } = await params;
-  const decoded = decodeURIComponent(tag);
+  const decoded = decodeTagParam(tag) ?? '';
 
   if (!isValidTag(decoded)) {
     return (

@@ -207,13 +207,32 @@ code, and mistakes already made there.
 ## src/components/RoomSidebar.tsx (host editing gated on isLive)
 
 - A new `isHost && !isLive` gate on a web editing control (issue #53 hid
-  `ShowDetailsForm` once the show goes live, following the `PreShowMusic`
-  precedent in `SpaceRoom.tsx`) has no Android/iOS counterpart unless someone
-  adds one: `ShowScreen.kt`'s and `ShowView.swift`'s `Edit` buttons gate on
-  `isHost` alone, with no on-air check, since "show details" is a shared
-  flow (`mobile-apps` skill) that predates this gate. Check both apps'
-  gating whenever a host-only editing control on web picks up a new
-  `!isLive`/on-air condition; filed as issue #56 for this one.
+  `ShowDetailsForm` once the show goes live, following the `MusicCard`
+  (then `PreShowMusic`) precedent in `SpaceRoom.tsx`) has no Android/iOS
+  counterpart unless someone adds one: `ShowScreen.kt`'s and
+  `ShowView.swift`'s `Edit` buttons gate on `isHost` alone, with no on-air
+  check, since "show details" is a shared flow (`mobile-apps` skill) that
+  predates this gate. Check both apps' gating whenever a host-only editing
+  control on web picks up a new `!isLive`/on-air condition; filed as issue
+  #56 for this one.
+
+## src/components/MusicCard.tsx (host editing gated on isLive)
+
+- `MusicCard`'s host-only mood-change/remove menu is gated by
+  `isHost && !isLive`, passed into its `isHost` prop from `SpaceRoom.tsx`
+  (`isHost={isHost && !isLive}`) rather than inside the component itself —
+  the same `isHost && !isLive` precedent as `RoomSidebar.tsx`'s
+  `ShowDetailsForm` gate, above. Issue #69's refactor (moving this control
+  from a standalone `PreShowMusic` section into a stage-grid tile) dropped
+  this gate once already (passed `isHost={isHost}` unconditionally) before
+  review caught it against this exact note. The
+  tile itself (`showMusicCard`) stays visible while live once a mood is
+  set — only the menu that lets the host change it is off-air-only. Any
+  future refactor of this call site must keep the `!isLive` term in the
+  prop it passes, not just in `showMusicCard`'s own visibility formula.
+  Android's `ShowScreen` and iOS's `ShowView.swift`
+  (`canPick: model.isHostOfShow && !connected.onAir`) gate their own music
+  picker the same off-air-only way — keep that in step if this changes.
 
 ## src/components/ShowDetailsForm.tsx (unmount while dirty)
 

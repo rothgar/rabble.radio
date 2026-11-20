@@ -33,7 +33,7 @@ import {
 } from '@livekit/components-react';
 import type { Participant } from 'livekit-client';
 import { RoomEvent, Track } from 'livekit-client';
-import { PreShowMusic } from '@/components/PreShowMusic';
+import { MusicCard } from '@/components/MusicCard';
 import { useRoomContext } from '@livekit/components-react';
 import { useActiveRoom, type SpaceRole } from '@/components/ActiveRoomProvider';
 import { NocturneShell } from '@/components/NocturneShell';
@@ -431,6 +431,10 @@ function Inner({
   const micTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
   const liveAudioCount = micTracks.filter((t) => Boolean(t.publication)).length;
   const musicActive = Boolean(musicMood) && (!isLive || liveAudioCount === 0);
+  // Music shows up on stage like any other guest: visible to everyone once
+  // a mood is set, and to the host beforehand too so there's a tile to tap
+  // to pick one.
+  const showMusicCard = Boolean(musicMood) || (isHost && !isLive);
   const localAvatarRef = useRef<HTMLDivElement | null>(null);
   const [micOn, setMicOn] = useState<boolean>(
     Boolean(localParticipant?.isMicrophoneEnabled)
@@ -632,7 +636,7 @@ function Inner({
       <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
         On stage
       </h2>
-      {speakers.length === 0 ? (
+      {speakers.length === 0 && !showMusicCard ? (
         <p
           className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-text-secondary)]"
           data-testid="on-stage-empty"
@@ -644,6 +648,15 @@ function Inner({
           className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"
           data-testid="speakers-grid"
         >
+          {showMusicCard ? (
+            <MusicCard
+              spaceId={spaceId}
+              moodId={musicMood}
+              active={musicActive}
+              isHost={isHost && !isLive}
+              onMoodChange={onMusicMoodChange}
+            />
+          ) : null}
           {speakers.map((p) => {
             const id = resolveIdentity(p);
             const isLocal = isLocalParticipant(p);
@@ -834,15 +847,6 @@ function Inner({
             {preShowBanner}
             {onStageSection}
             {audienceSection}
-            {musicMood || (isHost && !isLive) ? (
-              <PreShowMusic
-                spaceId={spaceId}
-                moodId={musicMood}
-                active={musicActive}
-                isHost={isHost && !isLive}
-                onMoodChange={onMusicMoodChange}
-              />
-            ) : null}
           </div>
         }
         sidebar={

@@ -88,6 +88,10 @@ data class Show(
     val hostFollowed: Boolean = false,
     /** Signed-in viewers: whether they get notified whenever this host goes live, on any show. */
     val hostSubscribed: Boolean = false,
+    /** Whether this show has its own title, rather than the host's default. */
+    val isNamedShow: Boolean = false,
+    /** Signed-in viewers: whether they get notified whenever this exact show goes live. */
+    val showFollowed: Boolean = false,
     /** Signed-in viewers: people they follow who are in the room right now. */
     val followedInRoom: List<PublicHost> = emptyList(),
     /** Pre-show music mood id (see Music), null for silence. */
@@ -121,6 +125,8 @@ data class Show(
             reminded = o.optBoolean("reminded", false),
             hostFollowed = o.optBoolean("hostFollowed", false),
             hostSubscribed = o.optBoolean("hostSubscribed", false),
+            isNamedShow = o.optBoolean("isNamedShow", false),
+            showFollowed = o.optBoolean("showFollowed", false),
             followedInRoom = o.optJSONArray("followedInRoom")?.let { arr ->
                 (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { PublicHost.fromJson(it) } }
             } ?: emptyList(),

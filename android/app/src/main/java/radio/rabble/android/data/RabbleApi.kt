@@ -139,6 +139,10 @@ class RabbleApi(
     suspend fun followHost(hostDid: String, on: Boolean): Boolean =
         request(post("/api/hosts/$hostDid/follow", JSONObject().put("on", on))).optBoolean("following", on)
 
+    /** "Follow this show": notified only when this exact named show goes live. Returns the resulting state. */
+    suspend fun followShow(showId: String, on: Boolean): Boolean =
+        request(post("/api/spaces/$showId/follow", JSONObject().put("on", on))).optBoolean("following", on)
+
     /** Reminders whose show just went on air; each is returned once. */
     suspend fun dueReminders(): List<DueReminder> {
         val arr = request(get("/api/me/reminders?due=1")).optJSONArray("due") ?: return emptyList()

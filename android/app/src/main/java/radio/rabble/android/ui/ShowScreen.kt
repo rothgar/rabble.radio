@@ -204,6 +204,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     var remindBusy by remember { mutableStateOf(false) }
     var hostFollowing by remember { mutableStateOf(false) }
     var hostFollowBusy by remember { mutableStateOf(false) }
+    var showFollowing by remember { mutableStateOf(false) }
+    var showFollowBusy by remember { mutableStateOf(false) }
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     fun toggleRemind() {
@@ -237,6 +239,24 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 Diagnostics.event("host_follow_failed", e.message ?: "")
             } finally {
                 hostFollowBusy = false
+            }
+        }
+    }
+
+    /** "Follow this show": notified only when this exact named show goes live. */
+    fun toggleShowFollow(showId: String) {
+        if (showFollowBusy) return
+        showFollowBusy = true
+        val next = !showFollowing
+        scope.launch {
+            try {
+                showFollowing = app.api.followShow(showId, next)
+                if (showFollowing && !Reminders.canPost(context)) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                if (showFollowing) Reminders.schedule(context.applicationContext)
+            } catch (e: Exception) {
+                Diagnostics.event("show_follow_failed", e.message ?: "")
+            } finally {
+                showFollowBusy = false
             }
         }
     }
@@ -291,6 +311,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             val show = app.api.show(showId)
             reminded = show.reminded
             hostFollowing = show.hostSubscribed
+            showFollowing = show.showFollowed
             ShowState.Ready(show)
         } catch (e: Exception) {
             ShowState.Failed(e.message ?: "Could not load this show.")
@@ -723,6 +744,9 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             hostFollowing = hostFollowing,
                             hostFollowBusy = hostFollowBusy,
                             onToggleHostFollow = { toggleHostFollow(s.show.host.did) },
+                            showFollowing = showFollowing,
+                            showFollowBusy = showFollowBusy,
+                            onToggleShowFollow = { toggleShowFollow(s.show.id) },
                             onJoin = ::joinShow,
                             onToggleMic = ::toggleMic,
                             onStepDown = { stage("leave") },
@@ -889,6 +913,9 @@ private fun RoomPanel(
     hostFollowing: Boolean,
     hostFollowBusy: Boolean,
     onToggleHostFollow: () -> Unit,
+    showFollowing: Boolean,
+    showFollowBusy: Boolean,
+    onToggleShowFollow: () -> Unit,
     onJoin: () -> Unit,
     onToggleMic: () -> Unit,
     onStepDown: () -> Unit,
@@ -935,6 +962,19 @@ private fun RoomPanel(
                             Text(
                                 if (hostFollowing) "We'll tell you whenever $hostName goes on air, on any show. Tap again to stop."
                                 else "Get notified whenever $hostName goes on air, on any show, not just this one.",
+                                color = RabbleColors.TextTertiary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (signedIn && show.isNamedShow) {
+                            OutlinedButton(onClick = onToggleShowFollow, enabled = !showFollowBusy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                                Icon(if (showFollowing) Icons.Filled.NotificationsActive else Icons.Outlined.Notifications, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (showFollowBusy) "Saving…" else if (showFollowing) "Following ${show.title}" else "Follow ${show.title}")
+                            }
+                            Text(
+                                if (showFollowing) "We'll tell you whenever ${show.title} goes on air. Tap again to stop."
+                                else "Get notified whenever ${show.title} goes on air.",
                                 color = RabbleColors.TextTertiary,
                                 style = MaterialTheme.typography.bodySmall,
                             )

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { LinkSimple, ShareNetwork } from '@phosphor-icons/react';
+import { buildBlueskyShareHref } from '@/lib/share';
 
 export interface ShareButtonsProps {
   shareableUrl: string;
@@ -15,9 +16,7 @@ export function ShareButtons({
 }: ShareButtonsProps): ReactElement {
   const [copied, setCopied] = useState(false);
 
-  const bskyHref = `https://bsky.app/intent/compose?text=${encodeURIComponent(
-    `Tune in to my show on Rabble Radio: ${title}\n${shareableUrl}`
-  )}`;
+  const bskyHref = buildBlueskyShareHref(shareableUrl, title);
 
   const onCopy = async (): Promise<void> => {
     try {

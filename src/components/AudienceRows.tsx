@@ -4,11 +4,14 @@ import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Hand, Plus } from '@phosphor-icons/react';
 import type { AudienceMember } from '@/components/AudienceBubbles';
+import { ShareEntry } from '@/components/ShareEntry';
 
 export interface AudienceRowsProps {
   audience: AudienceMember[];
   invitedSet: Set<string>;
   onInvite: (identity: string) => void;
+  shareableUrl: string;
+  title: string;
 }
 
 function initialsFor(name: string): string {
@@ -97,14 +100,20 @@ export function AudienceRows({
   audience,
   invitedSet,
   onInvite,
+  shareableUrl,
+  title,
 }: AudienceRowsProps): ReactElement {
+  const shareEntry = <ShareEntry variant="row" shareableUrl={shareableUrl} title={title} />;
   if (audience.length === 0) {
     return (
-      <div
-        className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-text-secondary)]"
-        data-testid="audience-rows-empty"
-      >
-        No listeners yet.
+      <div className="flex flex-col gap-3" data-testid="audience-rows" data-count={0}>
+        {shareEntry}
+        <div
+          className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-divider)] bg-[var(--color-surface-translucent)] p-4 text-sm text-[var(--color-text-secondary)]"
+          data-testid="audience-rows-empty"
+        >
+          No listeners yet.
+        </div>
       </div>
     );
   }
@@ -121,6 +130,7 @@ export function AudienceRows({
     ));
   return (
     <div className="flex flex-col gap-4" data-testid="audience-rows" data-count={audience.length}>
+      {shareEntry}
       {raised.length > 0 ? (
         <section
           className="flex flex-col gap-2 rounded-[var(--radius-md)] border-2 border-[var(--color-border)] bg-[var(--color-highlight-muted)] p-3"

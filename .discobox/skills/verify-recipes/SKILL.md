@@ -149,10 +149,41 @@ PR's Evidence says so.
 
 - **Deploying** (`pnpm cf:deploy`, `pnpm d1:migrate:remote`, R2 uploads,
   TestFlight): never from a box. The owner deploys after merging.
-- **Android** (`android/`): the build needs the Android SDK through
-  `cd android && nix-shell`; with the `nix` feature present a compile check
-  (`./gradlew assembleDebug`) may work but is slow and downloads a lot. No
-  emulator. Say what was and was not built.
+- **Android** (`android/`): no emulator, but a real `assembleDebug` /
+  `bundleRelease` build works from `cd android && nix-shell` — use `gradle`
+  (on `$PATH` in the shell, from `pkgs.gradle_9`), not `./gradlew`: the
+  wrapper tries to download its own Gradle zip and that download, and AGP's
+  fetch from Google's Maven repo, both go through the sandbox's MITM proxy,
+  whose CA the JVM's bundled `cacerts` doesn't trust (`curl` trusts it
+  because the system CA bundle already has it). Fix once per shell:
+
+  ```bash
+  JDK_CACERTS="$JAVA_HOME/lib/security/cacerts"   # set by shell.nix
+  cp "$JDK_CACERTS" /path/outside/the/repo/cacerts-with-mitm
+  chmod u+w /path/outside/the/repo/cacerts-with-mitm   # cp preserves read-only
+  keytool -importcert -noprompt -trustcacerts -alias discobox-mitm \
+    -file /etc/discobox/proxy/mitm-ca.crt \
+    -keystore /path/outside/the/repo/cacerts-with-mitm -storepass changeit
+  proxy=${https_proxy#http://}   # host:port this box's proxy actually listens on
+  export GRADLE_OPTS="-Dhttps.proxyHost=${proxy%:*} -Dhttps.proxyPort=${proxy##*:} \
+    -Dhttp.proxyHost=${proxy%:*} -Dhttp.proxyPort=${proxy##*:} \
+    -Djavax.net.ssl.trustStore=/path/outside/the/repo/cacerts-with-mitm \
+    -Djavax.net.ssl.trustStorePassword=changeit"
+  gradle --no-daemon assembleDebug
+  ```
+
+  A release
+  build needs a throwaway keystore to exercise `signingConfigs.release`:
+  `keytool -genkeypair -v -keystore /tmp/t.keystore -alias t -keyalg RSA
+  -keysize 2048 -validity 1 -storepass x -keypass x -dname 'CN=Test'`, then
+  `ANDROID_RELEASE_KEYSTORE_PATH=/tmp/t.keystore
+  ANDROID_RELEASE_KEYSTORE_PASSWORD=x ANDROID_RELEASE_KEY_ALIAS=t
+  ANDROID_RELEASE_KEY_PASSWORD=x gradle --no-daemon bundleRelease
+  -PrabbleBaseUrl=https://rabble.radio`; check the result with `jarsigner
+  -verify app/build/outputs/bundle/release/app-release.aab` (expect "jar
+  verified", ignore the self-signed/no-timestamp warnings — that's the
+  throwaway key). Clean up `android/build` and `android/app/build`
+  afterwards; they're large. Say what was and was not built.
 - **iOS** (`ios/`): macOS only. Unverifiable here; say so.
 - **Push notifications, recordings to R2, Bluesky posting**: external
   services with no dev-mode stand-in. Covered by tests only.

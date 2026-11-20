@@ -91,6 +91,61 @@ export function handleFromDidDocument(doc: DidDocumentLike): string {
   return aka ? aka.slice('at://'.length) : HANDLE_INVALID;
 }
 
+export interface DidAuditLogEntry {
+  did: string;
+  operation: { type: string; alsoKnownAs?: string[]; [key: string]: unknown };
+  nullified?: boolean;
+  createdAt: string;
+}
+
+export function didAuditLogUrl(did: string): string {
+  if (!did.startsWith('did:plc:')) {
+    throw new Error(`No PLC audit log for DID method: ${did}`);
+  }
+  return `${PLC_DIRECTORY_URL}/${encodeURIComponent(did)}/log/audit`;
+}
+
+/**
+ * The DID a retired `did:plc` identity migrated to, confirmed by the PLC
+ * directory's own append-only operation log rather than by the old DID
+ * merely failing to resolve (a tombstoned DID and a transient lookup
+ * failure look identical from the outside, and a released handle can be
+ * reclaimed by anyone). Only the old DID's own rotation keys can add an
+ * operation to its log, so a redirect recorded there can't be forged by
+ * whoever later happens to claim its old handle under an unrelated DID.
+ * Returns null when there's no such pointer, including on any fetch
+ * failure — an inability to check is never treated as confirmation.
+ */
+export async function resolveDidMigrationTarget(
+  did: string,
+  options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<string | null> {
+  if (!did.startsWith('did:plc:')) return null;
+  const f = options.fetchImpl ?? fetch;
+  let res: Response;
+  try {
+    res = await f(didAuditLogUrl(did), { signal: options.signal, redirect: 'manual' });
+  } catch {
+    return null;
+  }
+  if (res.status !== 200) return null;
+  let log: DidAuditLogEntry[];
+  try {
+    log = (await res.json()) as DidAuditLogEntry[];
+  } catch {
+    return null;
+  }
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const entry = log[i];
+    if (entry.nullified) continue;
+    const target = (entry.operation.alsoKnownAs ?? []).find(
+      (a) => a.startsWith('did:') && a !== did
+    );
+    if (target) return target;
+  }
+  return null;
+}
+
 /**
  * Identity resolver for the atproto OAuth client. Accepts a handle or a DID,
  * verifies the handle bidirectionally, and returns the DID document.

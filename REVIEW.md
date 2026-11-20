@@ -179,6 +179,26 @@ code, and mistakes already made there.
   don't assume the push and poll paths for `HostFollow` are mutually
   exclusive from either call site.
 
+## src/lib/atproto-runtime.ts (resolveDidMigrationTarget)
+
+- `resolveDidMigrationTarget` looks for a `did:`-prefixed entry in a PLC
+  operation's `alsoKnownAs` array as proof a retired DID migrated to a new
+  one. The real did:plc method has no such field: `alsoKnownAs` only ever
+  holds `at://<handle>` URIs in practice (this file's own
+  `handleFromDidDocument`, a few lines above, reads the same field that way),
+  and no PLC operation type records "this identity continues as a different
+  DID" — did:plc has no redirect/successor concept today. Against the real
+  `plc.directory`, this function will never return non-null, so
+  `findMigratedHostDid` (src/lib/users.ts) can never fire in production; it
+  was built this way anyway; the only alternative weaker signal
+  (handle-matching plus the old DID failing to resolve, tried first) is a
+  forgeable host-takeover vector — see the issue #41 security review — and
+  the owner chose shipping an inert-but-safe check over a working-but-forgeable
+  one. If atproto ever adds a real cross-DID continuity mechanism, this is
+  the function to update; until then, don't read a green test suite here as
+  proof the feature does anything against the live PLC directory — the test
+  fixtures invent a log shape the real service doesn't produce.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

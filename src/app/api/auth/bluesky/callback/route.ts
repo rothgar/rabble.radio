@@ -11,6 +11,7 @@ import { getOAuthClient } from '@/lib/auth';
 import { getSession, setSession, getAndClearLoginRedirect } from '@/lib/session';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 import { warmFollowCache } from '@/lib/follows';
+import { findMigratedHostDid, reassignHostIdentity } from '@/lib/users';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -69,6 +70,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   if (handle) {
+    try {
+      const existing = await prisma.user.findUnique({ where: { did } });
+      if (!existing) {
+        const migratedFromDid = await findMigratedHostDid(did, handle);
+        if (migratedFromDid) {
+          log.info('oauth.callback.did_migrated', { from: migratedFromDid, to: did });
+          await reassignHostIdentity(migratedFromDid, did);
+        }
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to migrate host identity.';
+      log.error('oauth.callback.did_migration_failed', { err, did, message });
+      return NextResponse.json(
+        { error: 'did_migration_failed', message, correlationId },
+        { status: 500 }
+      );
+    }
+
     let user;
     try {
       user = await prisma.user.upsert({

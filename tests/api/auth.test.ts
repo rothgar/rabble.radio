@@ -16,7 +16,11 @@ const {
   mockRevoke,
   mockRestore,
   mockUpsert,
+  mockFindUnique,
+  mockFindFirst,
+  mockExecuteRaw,
   mockGetProfile,
+  mockResolveDidMigrationTarget,
 } = vi.hoisted(() => {
   return {
     mockAuthorize: vi.fn(),
@@ -24,7 +28,11 @@ const {
     mockRevoke: vi.fn(),
     mockRestore: vi.fn(),
     mockUpsert: vi.fn(),
+    mockFindUnique: vi.fn(),
+    mockFindFirst: vi.fn(),
+    mockExecuteRaw: vi.fn(),
     mockGetProfile: vi.fn(),
+    mockResolveDidMigrationTarget: vi.fn(),
   };
 });
 
@@ -42,15 +50,21 @@ vi.mock('@/lib/auth', () => {
   };
 });
 
+vi.mock('@/lib/atproto-runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/atproto-runtime')>();
+  return { ...actual, resolveDidMigrationTarget: mockResolveDidMigrationTarget };
+});
+
 vi.mock('@/lib/db', () => {
   const user = {
     upsert: mockUpsert,
-    findUnique: vi.fn(),
+    findUnique: mockFindUnique,
+    findFirst: mockFindFirst,
     findMany: vi.fn(),
     create: vi.fn(),
   };
   return {
-    prisma: { user },
+    prisma: { user, $executeRaw: mockExecuteRaw },
   };
 });
 
@@ -300,6 +314,95 @@ describe('GET /api/auth/bluesky/callback', () => {
     );
     const res = await GET(req);
     expect(res.status).toBe(400);
+  });
+
+  it('re-points a migrated host onto their new DID instead of creating a second account', async () => {
+    mockCallback.mockResolvedValueOnce({
+      session: { sub: 'did:plc:new', did: () => 'did:plc:new' },
+      state: null,
+    });
+    mockGetProfile.mockResolvedValueOnce({
+      data: { did: 'did:plc:new', handle: 'alice.bsky.social', displayName: 'Alice' },
+    });
+    // No User row yet under the new DID.
+    mockFindUnique.mockResolvedValueOnce(undefined);
+    // The same handle already belongs to a User under the old DID.
+    mockFindFirst.mockResolvedValueOnce({ did: 'did:plc:old' });
+    // The old DID's own PLC log records a pointer to the new DID.
+    mockResolveDidMigrationTarget.mockResolvedValueOnce('did:plc:new');
+    mockExecuteRaw.mockResolvedValue(1);
+    mockUpsert.mockResolvedValueOnce({
+      id: 'u1',
+      did: 'did:plc:new',
+      handle: 'alice.bsky.social',
+      displayName: 'Alice',
+      avatarUrl: null,
+    });
+
+    const { GET } = await import('@/app/api/auth/bluesky/callback/route');
+    const req = new NextRequest(
+      'http://localhost/api/auth/bluesky/callback?code=abc&state=s1'
+    );
+    const res = await GET(req);
+
+    expect(mockExecuteRaw).toHaveBeenCalled();
+    expect(mockUpsert).toHaveBeenCalledOnce();
+    expect(mockUpsert.mock.calls[0][0]).toMatchObject({ where: { did: 'did:plc:new' } });
+    expect(res.status).toBe(302);
+  });
+
+  it('does not reassign a recycled handle with no recorded migration pointer', async () => {
+    mockCallback.mockResolvedValueOnce({
+      session: { sub: 'did:plc:new', did: () => 'did:plc:new' },
+      state: null,
+    });
+    mockGetProfile.mockResolvedValueOnce({
+      data: { did: 'did:plc:new', handle: 'alice.bsky.social', displayName: 'Alice' },
+    });
+    mockFindUnique.mockResolvedValueOnce(undefined);
+    // A stale row shares the handle, but it's an unrelated account: its old
+    // DID's PLC log has no pointer to this new DID (e.g. the handle was
+    // simply released and reclaimed).
+    mockFindFirst.mockResolvedValueOnce({ did: 'did:plc:old' });
+    mockResolveDidMigrationTarget.mockResolvedValueOnce(null);
+    mockUpsert.mockResolvedValueOnce({
+      id: 'u2',
+      did: 'did:plc:new',
+      handle: 'alice.bsky.social',
+      displayName: 'Alice',
+      avatarUrl: null,
+    });
+
+    const { GET } = await import('@/app/api/auth/bluesky/callback/route');
+    const req = new NextRequest(
+      'http://localhost/api/auth/bluesky/callback?code=abc&state=s1'
+    );
+    const res = await GET(req);
+
+    expect(mockExecuteRaw).not.toHaveBeenCalled();
+    expect(res.status).toBe(302);
+  });
+
+  it('returns a structured 500 instead of throwing when the migration check fails', async () => {
+    mockCallback.mockResolvedValueOnce({
+      session: { sub: 'did:plc:new', did: () => 'did:plc:new' },
+      state: null,
+    });
+    mockGetProfile.mockResolvedValueOnce({
+      data: { did: 'did:plc:new', handle: 'alice.bsky.social', displayName: 'Alice' },
+    });
+    mockFindUnique.mockRejectedValueOnce(new Error('D1 unavailable'));
+
+    const { GET } = await import('@/app/api/auth/bluesky/callback/route');
+    const req = new NextRequest(
+      'http://localhost/api/auth/bluesky/callback?code=abc&state=s1'
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('did_migration_failed');
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 });
 

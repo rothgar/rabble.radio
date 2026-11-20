@@ -17,8 +17,24 @@ enum Diagnostics {
         return m
     }()
 
-    nonisolated(unsafe) static var screen: String = "launch"
+    nonisolated(unsafe) static var screen: String = "launch" {
+        didSet { updateScreenBuffer() }
+    }
     nonisolated(unsafe) static var roomSnapshot: [String: Any]?
+
+    /// `screen` mirrored into raw bytes so `CrashReporter`'s signal handler
+    /// can read it without touching Swift `String` (not async-signal-safe)
+    /// from inside the handler. Updated on every `screen` write; read-only
+    /// by the time a signal could fire.
+    private static let screenBufferCapacity = 64
+    nonisolated(unsafe) static var screenBuffer = [UInt8](repeating: 0, count: screenBufferCapacity)
+    nonisolated(unsafe) static var screenBufferLength = 0
+
+    private static func updateScreenBuffer() {
+        let bytes = Array(screen.utf8.prefix(screenBufferCapacity))
+        for i in 0..<screenBufferCapacity { screenBuffer[i] = i < bytes.count ? bytes[i] : 0 }
+        screenBufferLength = bytes.count
+    }
 
     static var appVersion: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
@@ -27,6 +43,16 @@ enum Diagnostics {
     }
 
     private static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
+
+    /// Hardware model identifier (e.g. "iPhone15,4"), read via `uname(3)`
+    /// since `UIDevice.current.model` only returns the generic "iPhone".
+    static var deviceModel: String {
+        var sysinfo = utsname()
+        uname(&sysinfo)
+        return withUnsafePointer(to: &sysinfo.machine) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 256) { String(cString: $0) }
+        }
+    }
 
     /// Note something worth seeing in a report: API failures, room drops, permission denials.
     static func event(_ kind: String, _ message: String, extra: [String: Any]? = nil) {
@@ -55,7 +81,10 @@ enum Diagnostics {
     static func clearRoom() { roomSnapshot = nil }
 
     /// Start watching the network early so the type is known at report time.
-    static func start() { _ = monitor }
+    static func start() {
+        _ = monitor
+        updateScreenBuffer()
+    }
 
     @MainActor
     static func collect(baseURL: URL) -> [String: Any] {
@@ -83,12 +112,6 @@ enum Diagnostics {
         lock.lock()
         let recent = events
         lock.unlock()
-        var model = ""
-        var sysinfo = utsname()
-        uname(&sysinfo)
-        withUnsafePointer(to: &sysinfo.machine) { ptr in
-            ptr.withMemoryRebound(to: CChar.self, capacity: 256) { model = String(cString: $0) }
-        }
         return [
             "capturedAt": now(),
             "screen": screen,
@@ -98,7 +121,7 @@ enum Diagnostics {
                 "baseUrl": baseURL.absoluteString,
             ],
             "device": [
-                "model": model,
+                "model": deviceModel,
                 "name": device.model,
                 "systemName": device.systemName,
                 "systemVersion": device.systemVersion,

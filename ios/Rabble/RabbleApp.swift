@@ -13,7 +13,11 @@ struct RabbleApp: App {
         _env = StateObject(wrappedValue: env)
         AppDelegate.env = env
         Diagnostics.start()
+        CrashReporter.install()
         Reminders.register(env: env)
+        Task { @MainActor in
+            await CrashReporter.sendPendingReport(env: env)
+        }
     }
 
     var body: some Scene {

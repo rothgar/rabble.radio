@@ -122,6 +122,23 @@ final class RabbleAPI {
         _ = try await raw(path: "/api/feedback", method: "POST", json: body)
     }
 
+    /// Send a crash report persisted by `CrashReporter` on a previous
+    /// launch. Works signed out; fire-and-forget, same as `sendFeedback`.
+    func reportCrash(exceptionClass: String, message: String, stack: String, osVersion: String, device: String, screen: String) async throws {
+        let body: [String: Any] = [
+            "platform": "ios",
+            "message": message,
+            "exceptionClass": exceptionClass,
+            "stack": stack,
+            "appVersion": Diagnostics.appVersion,
+            "osVersion": osVersion,
+            "device": device,
+            "screen": screen,
+            "fatal": true,
+        ]
+        _ = try await raw(path: "/api/crashes", method: "POST", json: body)
+    }
+
     /// "Notify me" on a show that is off air. Returns the resulting state.
     func remind(showId: String, on: Bool) async throws -> Bool {
         try await request(RemindResponse.self, path: "/api/spaces/\(showId)/remind", method: "POST", json: ["on": on]).reminded ?? on

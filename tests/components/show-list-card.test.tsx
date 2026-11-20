@@ -11,7 +11,7 @@ function show(overrides: Partial<PublicSpace>): PublicSpace {
   return {
     id: 'sp1', slug: 'sp1', title: 'Morning', description: null, isLive: false, status: 'active',
     scheduledAt: null, expiresAt: null, listenerCount: 3, speakerCount: 1, reactionCount: 0,
-    likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
+    tunedInCount: 3, likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
     tags: [], createdAt: '', updatedAt: '', shareableUrl: '',
     host: { did: 'did:h', handle: 'host.test', displayName: 'Host', avatarUrl: null },
     replay: null, reminded: false, podcastFeedEnabled: false, podcastFeedUrl: null,
@@ -33,8 +33,28 @@ describe('actionFor', () => {
 describe('ShowListCard', () => {
   it('renders the live row with counts and a Listen link', () => {
     render(<ShowListCard space={show({ isLive: true, status: 'live' })} rank={1} />);
+    expect(screen.getByTestId('show-list-card-sp1').dataset.kind).toBe('listen');
     expect(screen.getByTestId('show-list-action').textContent).toBe('Listen');
-    expect(screen.getByText(/3 listening · 1 on stage/)).toBeTruthy();
+    expect(screen.getByText(/3 tuned in · 1 on stage/)).toBeTruthy();
+  });
+
+  it('uses the live background and shows topics and reactions when on air', () => {
+    render(
+      <ShowListCard
+        space={show({ isLive: true, status: 'live', tags: ['music', 'news'], reactionCount: 5 })}
+      />
+    );
+    const card = screen.getByTestId('show-list-card-sp1');
+    expect(card.className).toContain('--color-live-muted');
+    const meta = screen.getByTestId('show-list-live-meta');
+    expect(meta.textContent).toContain('5 reactions');
+    expect(screen.getByTestId('tag-chip-music')).toBeTruthy();
+    expect(screen.getByTestId('tag-chip-news')).toBeTruthy();
+  });
+
+  it('omits the live meta row when off air', () => {
+    render(<ShowListCard space={show({ tags: ['music'] })} />);
+    expect(screen.queryByTestId('show-list-live-meta')).toBeNull();
   });
 
   it('shows who you follow in the room and that you follow the host', () => {

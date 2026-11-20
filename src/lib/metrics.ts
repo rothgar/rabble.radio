@@ -380,6 +380,30 @@ export async function recordStageChange(input: StageChangeInput): Promise<void> 
   })().catch(swallow('metrics.stage_failed', { spaceId: input.spaceId, identity: input.identity }));
 }
 
+/**
+ * Cumulative unique listeners (excluding the host) who have joined each
+ * space's currently open session, including ones who already left. Unlike
+ * `listenerCount` (live occupancy), this never goes down while the show is
+ * on air.
+ */
+export async function getTunedInCounts(spaceIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (spaceIds.length === 0) return out;
+  const sessions = await prisma.showSession.findMany({
+    where: { spaceId: { in: spaceIds }, endedAt: null },
+    select: { id: true, spaceId: true, hostDid: true },
+  });
+  await Promise.all(
+    sessions.map(async (session) => {
+      const count = await prisma.showParticipation.count({
+        where: { sessionId: session.id, NOT: { identity: session.hostDid } },
+      });
+      out.set(session.spaceId, count);
+    })
+  );
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Reactions and likes
 // ---------------------------------------------------------------------------

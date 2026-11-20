@@ -798,6 +798,7 @@ export function toPublicSpace(
     listenerCount: space.listenerCount,
     speakerCount: space.speakerCount,
     reactionCount: space.reactionCount,
+    tunedInCount: space.listenerCount,
     likeCount: space.likeCount,
     sessionCount: space.sessionCount,
     totalListeners: space.totalListeners,

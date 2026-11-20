@@ -12,6 +12,7 @@ import { getLatestAvailableRecordings, recordingDurationSeconds, type RecordingR
 import { getRemindedSpaceIds } from '@/lib/reminders';
 import { getFollowedHostDids } from '@/lib/host-follows';
 import { getFollowedDids, getPresentIdentities } from '@/lib/follows';
+import { getTunedInCounts } from '@/lib/metrics';
 import { getUsersByDid } from '@/lib/users';
 
 export function toPublicReplay(row: RecordingRow): PublicReplay {
@@ -35,7 +36,7 @@ export async function decoratePublicSpaces(
   const offAirIds = spaces.filter((s) => !s.isLive).map((s) => s.id);
   const liveIds = spaces.filter((s) => s.isLive).map((s) => s.id);
   // Every lookup is a decoration: if one fails the listing still renders.
-  const [replays, reminded, subscribed, followed, present] = await Promise.all([
+  const [replays, reminded, subscribed, followed, present, tunedIn] = await Promise.all([
     Promise.resolve()
       .then(() => getLatestAvailableRecordings(offAirIds))
       .catch(() => new Map<string, RecordingRow>()),
@@ -51,6 +52,9 @@ export async function decoratePublicSpaces(
     Promise.resolve()
       .then(() => (viewerDid && liveIds.length > 0 ? getPresentIdentities(liveIds) : new Map<string, string[]>()))
       .catch(() => new Map<string, string[]>()),
+    Promise.resolve()
+      .then(() => (liveIds.length > 0 ? getTunedInCounts(liveIds) : new Map<string, number>()))
+      .catch(() => new Map<string, number>()),
   ]);
 
   // Profiles for followed people in rooms, one lookup for all shows.
@@ -83,6 +87,7 @@ export async function decoratePublicSpaces(
       replay: rec ? toPublicReplay(rec) : null,
       reminded: reminded.has(s.id),
       hostSubscribed: subscribed.has(s.host.did),
+      tunedInCount: tunedIn.get(s.id) ?? s.tunedInCount,
       ...(viewerDid
         ? { hostFollowed: followed.has(s.host.did), followedInRoom: inRoom }
         : {}),

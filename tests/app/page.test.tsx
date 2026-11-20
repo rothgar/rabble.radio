@@ -30,7 +30,7 @@ function show(overrides: Partial<PublicSpace>): PublicSpace {
   return {
     id: 'sp', slug: 'sp', title: 'Show', description: null, isLive: false, status: 'active',
     scheduledAt: null, expiresAt: null, listenerCount: 0, speakerCount: 0, reactionCount: 0,
-    likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
+    tunedInCount: 0, likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
     tags: ['Music'], createdAt: '', updatedAt: '', shareableUrl: '',
     host: { did: 'did:h', handle: 'host.test', displayName: 'Host', avatarUrl: null },
     replay: null, reminded: false, podcastFeedEnabled: false, podcastFeedUrl: null,

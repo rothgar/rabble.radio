@@ -9,6 +9,7 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import type { PublicSpace } from '@/types';
+import { TagChip } from '@/components/TagChip';
 
 export interface ShowListCardProps {
   space: PublicSpace;
@@ -56,7 +57,11 @@ export function ShowListCard({ space, rank }: ShowListCardProps): ReactElement {
 
   return (
     <article
-      className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4"
+      className={`flex items-center gap-3 rounded-lg border p-3 sm:p-4 ${
+        space.isLive
+          ? 'border-[var(--color-live-border)] bg-[var(--color-live-muted)]'
+          : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+      }`}
       data-testid={`show-list-card-${space.id}`}
       data-kind={action.kind}
     >
@@ -100,13 +105,25 @@ export function ShowListCard({ space, rank }: ShowListCardProps): ReactElement {
         <p className="truncate text-caption text-[var(--color-text-secondary)]">
           {hostName}
           {space.isLive
-            ? ` · ${space.listenerCount} listening · ${space.speakerCount} on stage`
+            ? ` · ${space.tunedInCount} tuned in · ${space.speakerCount} on stage`
             : space.status === 'scheduled' && space.scheduledAt
               ? ` · starts ${new Date(space.scheduledAt).toLocaleString()}`
               : space.totalListeners > 0
                 ? ` · ${space.totalListeners} listeners all time`
                 : ''}
         </p>
+        {space.isLive && (space.tags.length > 0 || space.reactionCount > 0) ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="show-list-live-meta">
+            {space.reactionCount > 0 ? (
+              <span className="text-caption text-[var(--color-text-secondary)]" title="Reactions">
+                💛 {space.reactionCount} reaction{space.reactionCount === 1 ? '' : 's'}
+              </span>
+            ) : null}
+            {space.tags.map((t) => (
+              <TagChip key={t} tag={t} />
+            ))}
+          </div>
+        ) : null}
         {inRoom.length > 0 ? (
           <p className="mt-1 flex items-center gap-1 text-caption text-[var(--color-accent)]" data-testid="show-list-in-room">
             <span className="flex -space-x-1">

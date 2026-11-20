@@ -22,6 +22,7 @@ function space(overrides: Partial<PublicSpace> = {}): PublicSpace {
     listenerCount: 0,
     speakerCount: 0,
     reactionCount: 0,
+    tunedInCount: 0,
     likeCount: 1,
     sessionCount: 1,
     totalListeners: 1,

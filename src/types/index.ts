@@ -51,6 +51,9 @@ export interface PublicSpace {
   listenerCount: number;
   speakerCount: number;
   reactionCount: number;
+  /** Cumulative unique listeners who joined the open session, even if they've
+   *  since left. Falls back to `listenerCount` when off air or undecorated. */
+  tunedInCount: number;
   /** Lifetime totals rolled up from finished shows (see src/lib/metrics.ts). */
   likeCount: number;
   sessionCount: number;

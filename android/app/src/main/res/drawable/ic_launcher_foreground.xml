@@ -1,19 +1,16 @@
-<!-- Adaptive-icon foreground: the monogram sits in the 66% safe zone of the 108dp canvas. -->
+<!-- Adaptive-icon foreground: the monogram is authored on a 1024-unit artboard,
+     so the group below both converts units and shrinks the result to keep
+     every vertex inside Android's 66dp-diameter (33dp-radius) safe zone
+     (farthest point lands at ~30.8dp from centre). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <group android:translateX="25" android:translateY="25" android:scaleX="0.906" android:scaleY="0.906">
-        <path android:fillColor="#073B4C" android:pathData="M9,10h11v45h-11z"/>
-        <path android:fillColor="#073B4C" android:pathData="M7.5,10h15a1.5,1.5 0 0 1 1.5,1.5v2a1.5,1.5 0 0 1 -1.5,1.5h-15a1.5,1.5 0 0 1 -1.5,-1.5v-2a1.5,1.5 0 0 1 1.5,-1.5z"/>
-        <path android:fillColor="#073B4C" android:pathData="M7.5,50h17a1.5,1.5 0 0 1 1.5,1.5v2a1.5,1.5 0 0 1 -1.5,1.5h-17a1.5,1.5 0 0 1 -1.5,-1.5v-2a1.5,1.5 0 0 1 1.5,-1.5z"/>
-        <path android:fillColor="#073B4C" android:pathData="M29.5,50h15a1.5,1.5 0 0 1 1.5,1.5v2a1.5,1.5 0 0 1 -1.5,1.5h-15a1.5,1.5 0 0 1 -1.5,-1.5v-2a1.5,1.5 0 0 1 1.5,-1.5z"/>
-        <path android:strokeColor="#073B4C" android:strokeWidth="11" android:strokeLineJoin="round" android:fillColor="#00000000"
-            android:pathData="M14,15.5h11.5a9,9 0 0 1 0,18h-11.5"/>
-        <path android:strokeColor="#073B4C" android:strokeWidth="11" android:fillColor="#00000000"
-            android:pathData="M22.5,34l11.5,16.8"/>
-        <path android:strokeColor="#E63946" android:strokeWidth="5" android:strokeLineCap="round" android:fillColor="#00000000"
-            android:pathData="M37.8,8.5a20,20 0 0 1 0,32"/>
-        <path android:strokeColor="#E63946" android:strokeWidth="5" android:strokeLineCap="round" android:fillColor="#00000000"
-            android:pathData="M42.1,3.2a27,27 0 0 1 0,42.6"/>
+    <group android:translateX="10.96" android:translateY="10.96" android:scaleX="0.0841" android:scaleY="0.0841">
+        <path android:fillColor="#073B4C" android:pathData="M268,246 L436,246 L436,505 L522,505 L693,697 L756,716 L756,779 L612,779 L452,582 L436,582 L436,705 L478,717 L478,779 L268,779 L268,717 L313,705 L313,318 L268,306 Z"/>
+        <path android:fillColor="#E63946" android:pathData="M383,450.5 A79.5,79.5 0 1,0 542,450.5 A79.5,79.5 0 1,0 383,450.5 Z"/>
+        <path android:strokeColor="#E63946" android:strokeWidth="58.5" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M477.07,283.94 A167.20,167.20 0 0,1 617.53,513.13"/>
+        <path android:strokeColor="#E63946" android:strokeWidth="58.5" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M472.09,175.77 A274.90,274.90 0 0,1 684.90,612.08"/>
     </group>
 </vector>

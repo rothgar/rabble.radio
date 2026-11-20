@@ -1,0 +1,15 @@
+<!-- Dark-theme counterpart of drawable/ic_launcher_foreground.xml: same
+     geometry and the same safe-zone transform, cream mark on mustard waves
+     for the dark adaptive-icon background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="10.96" android:translateY="10.96" android:scaleX="0.0841" android:scaleY="0.0841">
+        <path android:fillColor="#F1FAEE" android:pathData="M268,246 L436,246 L436,505 L522,505 L693,697 L756,716 L756,779 L612,779 L452,582 L436,582 L436,705 L478,717 L478,779 L268,779 L268,717 L313,705 L313,318 L268,306 Z"/>
+        <path android:fillColor="#F9C74F" android:pathData="M383,450.5 A79.5,79.5 0 1,0 542,450.5 A79.5,79.5 0 1,0 383,450.5 Z"/>
+        <path android:strokeColor="#F9C74F" android:strokeWidth="58.5" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M477.07,283.94 A167.20,167.20 0 0,1 617.53,513.13"/>
+        <path android:strokeColor="#F9C74F" android:strokeWidth="58.5" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M472.09,175.77 A274.90,274.90 0 0,1 684.90,612.08"/>
+    </group>
+</vector>

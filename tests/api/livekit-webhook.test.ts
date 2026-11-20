@@ -7,11 +7,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockReceive, mockGetSpaceById, mockRecordJoin, mockRecordLeave } = vi.hoisted(() => ({
+const {
+  mockReceive,
+  mockGetSpaceById,
+  mockRecordJoin,
+  mockRecordLeave,
+  mockGetRoomParticipantSummary,
+  mockEndLiveShow,
+} = vi.hoisted(() => ({
   mockReceive: vi.fn(),
   mockGetSpaceById: vi.fn(),
   mockRecordJoin: vi.fn(async () => undefined),
   mockRecordLeave: vi.fn(async () => undefined),
+  mockGetRoomParticipantSummary: vi.fn(),
+  mockEndLiveShow: vi.fn(async () => undefined),
 }));
 
 vi.mock('livekit-server-sdk', () => ({
@@ -24,13 +33,16 @@ vi.mock('@/lib/livekit', () => ({
   getLiveKitConfig: () => ({ url: 'ws://livekit:7880', apiKey: 'devkey', apiSecret: 'secret' }),
   LiveKitConfigError: class LiveKitConfigError extends Error {},
   spaceIdFromRoomName: (room: string) => (room.startsWith('space-') ? room.slice(6) : null),
+  roomNameForSpace: (spaceId: string) => `space-${spaceId}`,
+  getRoomParticipantSummary: mockGetRoomParticipantSummary,
 }));
 
 vi.mock('@/lib/spaces', () => ({ getSpaceById: mockGetSpaceById }));
 vi.mock('@/lib/metrics', () => ({ recordJoin: mockRecordJoin, recordLeave: mockRecordLeave }));
+vi.mock('@/lib/live', () => ({ endLiveShow: mockEndLiveShow }));
 vi.mock('@/lib/db', () => ({ prisma: {} }));
 
-const space = { id: 'sp1', hostId: 'did:plc:host' };
+const space = { id: 'sp1', hostId: 'did:plc:host', isLive: true };
 
 function post(body: unknown, authorization = 'signed'): NextRequest {
   return new NextRequest('http://localhost/api/livekit/webhook', {
@@ -43,6 +55,7 @@ function post(body: unknown, authorization = 'signed'): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetSpaceById.mockResolvedValue(space);
+  mockGetRoomParticipantSummary.mockResolvedValue(null);
 });
 
 describe('POST /api/livekit/webhook', () => {
@@ -102,6 +115,88 @@ describe('POST /api/livekit/webhook', () => {
     const { POST } = await import('@/app/api/livekit/webhook/route');
     await POST(post({}));
     expect(mockRecordLeave).toHaveBeenCalledWith({ spaceId: 'sp1', identity: 'anon:1' });
+  });
+
+  it('takes the show off air when the last host/speaker leaves the stage', async () => {
+    vi.useFakeTimers();
+    try {
+      mockReceive.mockResolvedValueOnce({
+        event: 'participant_left',
+        room: { name: 'space-sp1' },
+        participant: { identity: 'did:plc:host' },
+      });
+      // Confirmed empty on both the first read and the re-check.
+      mockGetRoomParticipantSummary.mockResolvedValue({ speakers: 0, listeners: 3 });
+      const { POST } = await import('@/app/api/livekit/webhook/route');
+      const pending = POST(post({}));
+      await vi.advanceTimersByTimeAsync(5000);
+      await pending;
+      expect(mockGetRoomParticipantSummary).toHaveBeenCalledTimes(2);
+      expect(mockEndLiveShow).toHaveBeenCalledWith('sp1', { did: 'did:plc:host' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not end the show when a re-check finds a reconnecting host back on stage', async () => {
+    vi.useFakeTimers();
+    try {
+      mockReceive.mockResolvedValueOnce({
+        event: 'participant_left',
+        room: { name: 'space-sp1' },
+        participant: { identity: 'did:plc:host' },
+      });
+      // The first read catches the host's old session mid-reconnect with an
+      // unsynced permission; by the re-check their new session has synced.
+      mockGetRoomParticipantSummary
+        .mockResolvedValueOnce({ speakers: 0, listeners: 3 })
+        .mockResolvedValueOnce({ speakers: 1, listeners: 3 });
+      const { POST } = await import('@/app/api/livekit/webhook/route');
+      const pending = POST(post({}));
+      await vi.advanceTimersByTimeAsync(5000);
+      await pending;
+      expect(mockGetRoomParticipantSummary).toHaveBeenCalledTimes(2);
+      expect(mockEndLiveShow).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves the show live when another speaker is still on stage', async () => {
+    mockReceive.mockResolvedValueOnce({
+      event: 'participant_left',
+      room: { name: 'space-sp1' },
+      participant: { identity: 'did:plc:cohost' },
+    });
+    mockGetRoomParticipantSummary.mockResolvedValueOnce({ speakers: 1, listeners: 3 });
+    const { POST } = await import('@/app/api/livekit/webhook/route');
+    await POST(post({}));
+    expect(mockEndLiveShow).not.toHaveBeenCalled();
+  });
+
+  it('does not end a show that is already off air', async () => {
+    mockGetSpaceById.mockResolvedValueOnce({ ...space, isLive: false });
+    mockReceive.mockResolvedValueOnce({
+      event: 'participant_left',
+      room: { name: 'space-sp1' },
+      participant: { identity: 'did:plc:host' },
+    });
+    const { POST } = await import('@/app/api/livekit/webhook/route');
+    await POST(post({}));
+    expect(mockGetRoomParticipantSummary).not.toHaveBeenCalled();
+    expect(mockEndLiveShow).not.toHaveBeenCalled();
+  });
+
+  it('does not end the show when LiveKit cannot be reached', async () => {
+    mockReceive.mockResolvedValueOnce({
+      event: 'participant_left',
+      room: { name: 'space-sp1' },
+      participant: { identity: 'did:plc:host' },
+    });
+    mockGetRoomParticipantSummary.mockResolvedValueOnce(null);
+    const { POST } = await import('@/app/api/livekit/webhook/route');
+    await POST(post({}));
+    expect(mockEndLiveShow).not.toHaveBeenCalled();
   });
 
   it('ignores rooms that are not shows or no longer exist', async () => {

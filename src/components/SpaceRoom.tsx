@@ -883,6 +883,7 @@ function Inner({
             onAir={isLive}
             onToggleOnAir={isHost ? onToggleOnAir : undefined}
             onAirBusy={onAirBusy}
+            lastOnStage={isLive && localOnStage && speakers.length <= 1}
           />
         }
       />

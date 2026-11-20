@@ -8,19 +8,38 @@
 // with the LiveKit API key/secret via the SDK's WebhookReceiver; anything
 // that fails verification gets a 401.
 //
-// Other event types are acknowledged and ignored: a show starts and ends
-// through POST /api/spaces/[id]/live, not when the LiveKit room is created or
-// torn down.
+// A show otherwise starts and ends through POST /api/spaces/[id]/live, not
+// when the LiveKit room is created or torn down. The one exception: when a
+// participant_left leaves a live show with nobody left on stage (no
+// publish-rights participants), this route ends the show itself — the host
+// who would normally call that route is the one who just left.
+//
+// Other event types are acknowledged and ignored.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { WebhookReceiver } from 'livekit-server-sdk';
-import { getLiveKitConfig, LiveKitConfigError, spaceIdFromRoomName } from '@/lib/livekit';
+import {
+  getLiveKitConfig,
+  getRoomParticipantSummary,
+  LiveKitConfigError,
+  roomNameForSpace,
+  spaceIdFromRoomName,
+} from '@/lib/livekit';
 import { recordJoin, recordLeave, type ParticipantRole } from '@/lib/metrics';
 import { getSpaceById } from '@/lib/spaces';
+import { endLiveShow } from '@/lib/live';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+// A participant reconnecting (not actually leaving) can briefly read as a
+// zero-speaker room: LiveKit syncs their new session's `canPublish` a moment
+// after it appears in `listParticipants`, and `getRoomParticipantSummary`
+// defaults that unsynced window to listener (see REVIEW.md,
+// src/lib/livekit.ts). A second reading after this delay confirms the room
+// is actually empty of speakers before taking an irreversible action.
+const SPEAKER_RECHECK_DELAY_MS = 1500;
 
 let receiver: WebhookReceiver | null = null;
 
@@ -82,6 +101,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     await recordJoin({ spaceId: space.id, identity, role });
   } else {
     await recordLeave({ spaceId: space.id, identity });
+
+    if (space.isLive) {
+      const summary = await getRoomParticipantSummary(roomNameForSpace(space.id));
+      if (summary && summary.speakers === 0) {
+        await new Promise((resolve) => setTimeout(resolve, SPEAKER_RECHECK_DELAY_MS));
+        const recheck = await getRoomParticipantSummary(roomNameForSpace(space.id));
+        if (recheck && recheck.speakers === 0) {
+          await endLiveShow(space.id, { did: space.hostId });
+          log.debug('livekit.webhook.auto_ended', { spaceId: space.id, identity });
+        }
+      }
+    }
   }
 
   log.debug('livekit.webhook.recorded', { event: name, spaceId: space.id, identity });

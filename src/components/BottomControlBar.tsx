@@ -27,6 +27,13 @@ export interface BottomControlBarProps {
   onAir?: boolean;
   onToggleOnAir?: () => void;
   onAirBusy?: boolean;
+  /**
+   * Host or speaker only: true when this is the only participant left on
+   * stage, so leaving will take the show off air. Changes the "Leave the
+   * show?" dialog copy to warn about it instead of saying the show stays
+   * open.
+   */
+  lastOnStage?: boolean;
 }
 
 /**
@@ -54,6 +61,7 @@ export function BottomControlBar({
   onAir = false,
   onToggleOnAir,
   onAirBusy = false,
+  lastOnStage = false,
 }: BottomControlBarProps): ReactElement {
   // Leaving is one tap on a bar people are already tapping, so it asks first.
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -80,9 +88,11 @@ export function BottomControlBar({
               Leave the show?
             </h2>
             <p className="text-body text-[var(--color-text-secondary)]">
-              {role === 'host'
-                ? 'You will leave the studio. The show stays open and you can come back from your shows list.'
-                : 'You will stop listening and leave the room.'}
+              {role === 'audience'
+                ? 'You will stop listening and leave the room.'
+                : lastOnStage
+                  ? "You're the last one on stage. Leaving will take the show off air."
+                  : 'You will leave the studio. The show stays open and you can come back from your shows list.'}
             </p>
             <div className="flex justify-end gap-2">
               <button

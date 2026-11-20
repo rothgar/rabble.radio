@@ -23,6 +23,17 @@ struct ShowView: View {
         self.autoJoin = autoJoin
     }
 
+    /// Copy for the leave-confirmation alert: audience leaves quietly, stage
+    /// members are warned when they are the last one and leaving ends the show.
+    private var leaveMessage: String {
+        guard let connected = model.room.connected, connected.onStage else {
+            return "You'll stop listening and leave the room."
+        }
+        return connected.lastOnStage
+            ? "You're the last one on stage. Leaving will take the show off air."
+            : "You'll leave the studio. The show stays open and you can come back from your shows list."
+    }
+
     var body: some View {
         Group {
             if let show = model.show {
@@ -70,9 +81,7 @@ struct ShowView: View {
                 nav.pop()
             }
         } message: {
-            Text(model.isHost
-                 ? "You'll leave the studio. The show stays open and you can come back from your shows list."
-                 : "You'll stop listening and leave the room.")
+            Text(leaveMessage)
         }
         .sheet(isPresented: $model.editing) {
             if let show = model.show {

@@ -595,6 +595,10 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
 
     val isHost = (room as? RoomState.Connected)?.join?.role == "host"
     val isHostOfShow = isHost || ((state as? ShowState.Ready)?.show?.host?.did != null && me?.did == (state as? ShowState.Ready)?.show?.host?.did)
+    // Audience leaves quietly; the stage is warned when they are the last one and leaving ends the show.
+    val connectedRoom = room as? RoomState.Connected
+    val selfOnStage = connectedRoom != null && connectedRoom.join.role != "audience"
+    val lastOnStage = connectedRoom != null && connectedRoom.onAir && selfOnStage && connectedRoom.members.count { it.onStage } <= 1
 
     if (editing) {
         val show = (state as? ShowState.Ready)?.show
@@ -613,7 +617,15 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         AlertDialog(
             onDismissRequest = { confirmLeave = false },
             title = { Text("Leave the show?") },
-            text = { Text(if (isHost) "You'll leave the studio. The show stays open and you can come back from your shows list." else "You'll stop listening and leave the room.") },
+            text = {
+                Text(
+                    when {
+                        !selfOnStage -> "You'll stop listening and leave the room."
+                        lastOnStage -> "You're the last one on stage. Leaving will take the show off air."
+                        else -> "You'll leave the studio. The show stays open and you can come back from your shows list."
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { confirmLeave = false; leave(); onBack() }) { Text("Leave", color = RabbleColors.Live) }
             },

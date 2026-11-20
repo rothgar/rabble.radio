@@ -3,8 +3,8 @@
 // A single station: lists every show carrying the given category tag
 // (including shows where it is a secondary tag). Shows all host profile
 // pictures for the station and, for each show, the host's picture, a stacked
-// listener cluster, and posts/reaction metrics. Each show's other tags link
-// to their own stations.
+// listener cluster, and a reaction metric. Each show's other tags link to
+// their own stations.
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -15,7 +15,6 @@ import {
 } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
 import { decoratePublicSpaces } from '@/lib/space-extras';
-import { countPostsBySpace } from '@/lib/posts';
 import { CATEGORY_PROMPTS, isValidTag, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { StationShowCard } from '@/components/StationShowCard';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -95,8 +94,6 @@ export default async function StationPage({
       user?.did ?? null
     )
   ).filter((s) => s.tags.includes(decoded));
-
-  const postCounts = await countPostsBySpace(shows.map((s) => s.id));
 
   const hosts = Array.from(
     new Map(shows.map((s) => [s.host.did, s.host])).values()
@@ -188,7 +185,6 @@ export default async function StationPage({
             <StationShowCard
               key={show.id}
               show={show}
-              postCount={postCounts[show.id] ?? 0}
               activeTag={decoded}
             />
           ))}

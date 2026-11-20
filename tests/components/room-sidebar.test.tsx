@@ -4,16 +4,13 @@
 // (the footer's Go off air / Leave already cover that), shown pre-show
 // and off-air since it's the only way to delete a station.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RoomSidebar } from '@/components/RoomSidebar';
 
 const baseProps = {
   spaceId: 'space-1',
   title: 'Show',
-  posts: [],
-  postsError: null,
-  onPostAdded: vi.fn(),
   recording: null,
 };
 

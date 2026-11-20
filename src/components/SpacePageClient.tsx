@@ -2,18 +2,17 @@
 
 // src/components/SpacePageClient.tsx
 //
-// Client-side join flow for the space detail page. Fetches posts, exposes
-// a "Join Space" button that POSTs to /api/spaces/[id]/join and, on
-// success, mounts SpaceRoom with the redesigned Nocturne layout. The
-// joined-state layout is owned entirely by SpaceRoom — this component
-// just forwards the metadata it needs.
+// Client-side join flow for the space detail page. Exposes a "Join Space"
+// button that POSTs to /api/spaces/[id]/join and, on success, mounts
+// SpaceRoom with the redesigned Nocturne layout. The joined-state layout is
+// owned entirely by SpaceRoom — this component just forwards the metadata
+// it needs.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { SpaceRoom, type SpaceRole } from '@/components/SpaceRoom';
 import { useActiveRoom } from '@/components/ActiveRoomProvider';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
-import type { PublicSpacePost } from '@/lib/posts';
 import type { PublicRecording } from '@/components/RoomSidebar';
 import type { PublicReplay } from '@/types';
 import { NotifyMeButton } from '@/components/NotifyMeButton';
@@ -74,11 +73,6 @@ interface JoinResponse {
   onAir?: boolean;
   /** Per-join STUN/TURN servers; absent when no relay is configured. */
   iceServers?: RTCIceServer[];
-}
-
-interface PostsListResponse {
-  posts?: PublicSpacePost[];
-  error?: string;
 }
 
 export function SpacePageClient({
@@ -145,40 +139,11 @@ export function SpacePageClient({
     },
     [spaceId]
   );
-  const [posts, setPosts] = useState<PublicSpacePost[]>([]);
-  const [postsError, setPostsError] = useState<string | null>(null);
-
   // Notify the surrounding page whenever the user enters or leaves the
   // room so it can hide the page chrome while the full-screen shell is up.
   useEffect(() => {
     onJoinedChange?.(joinedHere);
   }, [joinedHere, onJoinedChange]);
-
-  const refreshPosts = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/spaces/${spaceId}/posts`, {
-        method: 'GET',
-        cache: 'no-store',
-      });
-      const body = (await res
-        .json()
-        .catch(() => ({}))) as PostsListResponse;
-      if (!res.ok) {
-        setPostsError(body.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setPostsError(null);
-      setPosts(body.posts ?? []);
-    } catch (err) {
-      setPostsError(
-        err instanceof Error ? err.message : 'Failed to load posts.'
-      );
-    }
-  }, [spaceId]);
-
-  useEffect(() => {
-    void refreshPosts();
-  }, [refreshPosts]);
 
   // Auto-join handoff: when the user just created a space with "Start
   // now", the create form stored a join payload under
@@ -421,11 +386,6 @@ export function SpacePageClient({
         host={host}
         hostSubscribed={hostSubscribed}
         shareableUrl={shareableUrl}
-        posts={posts}
-        postsError={postsError}
-        onPostAdded={() => {
-          void refreshPosts();
-        }}
         isLive={live}
         onLiveChange={setLive}
         spaceId={spaceId}

@@ -55,8 +55,7 @@ environment to compare against.
   `@prisma/nextjs-monorepo-workaround-plugin` and the `--webpack` flag.
 - Postgres arrays become join tables: `SpaceTag(spaceId, tag)` and
   `ShowSessionTag(sessionId, tag)`. `tags: { has }` queries become joins.
-- `Json` columns (`OAuthSession.data`, `SpacePost.embed`) become `String`
-  holding JSON.
+- `Json` columns (e.g. `OAuthSession.data`) become `String` holding JSON.
 - Live stage state moves from memory into D1 tables; `src/lib/stage.ts`
   keeps its API, tests keep passing.
 - Metrics roll-ups (`src/lib/metrics.ts`) stop relying on `$transaction`

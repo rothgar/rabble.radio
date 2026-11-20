@@ -3,7 +3,6 @@
 // Consolidated security/authorization tests. Verifies:
 //   - LiveKit audience tokens cannot publish audio (canPublish === false).
 //   - LiveKit speaker/host tokens can publish audio (canPublish === true).
-//   - Non-host users cannot POST /api/spaces/:id/posts (403).
 //   - Non-host users cannot POST /api/spaces/:id/live (403).
 //   - Non-host users cannot invoke host-only stage actions (403).
 //   - OAuth callback with mismatched state returns 400.
@@ -24,9 +23,6 @@ const {
   mockSetSpaceLive,
   mockPublishLiveStatus,
   mockDeleteLiveStatus,
-  mockCreateSpacePost,
-  mockFetchPostView,
-  mockResolvePostUrl,
   mockUpsert,
   mockGetProfile,
   mockAuthorize,
@@ -43,9 +39,6 @@ const {
   mockSetSpaceLive: vi.fn(),
   mockPublishLiveStatus: vi.fn(),
   mockDeleteLiveStatus: vi.fn(),
-  mockCreateSpacePost: vi.fn(),
-  mockFetchPostView: vi.fn(),
-  mockResolvePostUrl: vi.fn(),
   mockUpsert: vi.fn(),
   mockGetProfile: vi.fn(),
   mockAuthorize: vi.fn(),
@@ -81,15 +74,6 @@ vi.mock('@/lib/spaces', () => ({
 vi.mock('@/lib/atproto', () => ({
   publishLiveStatus: mockPublishLiveStatus,
   deleteLiveStatus: mockDeleteLiveStatus,
-}));
-
-vi.mock('@/lib/posts', () => ({
-  createSpacePost: mockCreateSpacePost,
-}));
-
-vi.mock('@/lib/bsky', () => ({
-  fetchPostView: mockFetchPostView,
-  resolvePostUrl: mockResolvePostUrl,
 }));
 
 vi.mock('@/lib/stage', () => ({
@@ -288,27 +272,6 @@ function jsonRequest(url: string, body: unknown): NextRequest {
     body: JSON.stringify(body),
   });
 }
-
-describe('POST /api/spaces/[id]/posts — host only', () => {
-  it('returns 403 when non-host tries to share', async () => {
-    mockGetCurrentUser.mockResolvedValueOnce({
-      did: 'did:plc:listener',
-      handle: 'bob.bsky.social',
-    });
-    mockResolveSpaceForUser.mockResolvedValueOnce({
-      space: makeSpace(),
-      isHost: false,
-    });
-    const { POST } = await import('@/app/api/spaces/[id]/posts/route');
-    const res = await POST(
-      jsonRequest('http://localhost/api/spaces/sp1/posts', {
-        postUrl: 'https://bsky.app/profile/alice.bsky.social/post/abc',
-      }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
-    expect(res.status).toBe(403);
-  });
-});
 
 describe('POST /api/spaces/[id]/live — host only', () => {
   it('returns 403 when non-host tries to start live', async () => {

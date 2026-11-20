@@ -90,4 +90,6 @@ commands yourself regardless.
   `logs` come from `scripts/log-triage.mjs` scanning the Workers' error
   logs every six hours; issues labelled `feedback` come from the
   `feedback-intake` skill reading the feedback button's reports, and carry
-  `status/needs-decision` until the owner decides.
+  `status/needs-decision` until the owner decides. Issues labelled `ops`
+  come from `scripts/box-watch.mjs`, which watches boxes for Claude usage
+  limits and resumes them at the reset (`docs/discobox.md`, Usage limits).

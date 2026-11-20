@@ -1,0 +1,10 @@
+[Unit]
+Description=Every five minutes: watch discoboxes for Claude usage limits
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

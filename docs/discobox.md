@@ -253,6 +253,37 @@ discobox secret create --name feedback-read --type token --route 'GET rabble.rod
 discobox secret bind feedback-read --harness aperture-qa --as FEEDBACK_READ_TOKEN --for forever
 ```
 
+## Usage limits: when the factory goes quiet
+
+Every Claude Code box (manager, workers, QA) shares the one Claude
+subscription behind the aperture gateway, so the five-hour or weekly limit
+stops all of them at once: each shows "You've hit your … limit · resets …"
+and waits. The manager only handles the "login expired" prompt, so without
+help the table just goes still.
+
+`scripts/box-watch.mjs`, run every five minutes by the `rabble-boxwatch.timer`
+user unit (`scripts/systemd/`; install like the QA timer:
+`cp scripts/systemd/rabble-boxwatch.* ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now rabble-boxwatch.timer`),
+reads every live box's screen (`discobox capture`), matches the limit
+message, and asks the gateway's local `qwen3.8-27b-nvfp4` (OpenAI chat
+endpoint, thinking off, no usage limit, about two seconds a box) to
+classify any screen that matches nothing. A stopped box is recorded in
+`~/.local/state/rabble-boxwatch/state.json` and reported once on one issue
+titled "Claude usage limit reached", labelled `ops`; when the reset time
+has passed (parsed from the message, zone included), it types `continue`
+into the box, comments, and closes the issue once every box is working
+again. `node scripts/box-watch.mjs --dry-run --verbose` shows what it
+would do.
+
+A fallback model at the limit is prepared but off: `BOXWATCH_FALLBACK_MODEL`
+makes it type `/model <id>` into a stopped box and switch back at the
+reset. It cannot name the gateway's local models yet, because aperture
+serves them on the OpenAI chat endpoint only and Claude Code speaks the
+Anthropic messages endpoint; once the gateway (or a translating proxy in
+front of it) serves such a model on `/v1/messages`, set the variable in the
+service unit. A second Anthropic credential bound to a second harness
+config is the other route, paid per token.
+
 ## Branch protection
 
 Workers push to a fork and open PRs, so `main` needs no rule for them. A

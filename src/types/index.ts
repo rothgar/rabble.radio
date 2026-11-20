@@ -76,6 +76,8 @@ export interface PublicSpace {
   podcastFeedUrl: string | null;
   /** Signed-in viewers: the host is someone they follow on Bluesky. */
   hostFollowed?: boolean;
+  /** True when the viewer asked to be notified whenever this host goes on air, any show. */
+  hostSubscribed?: boolean;
   /** Signed-in viewers: people they follow who are in the room right now. */
   followedInRoom?: PublicHost[];
 }

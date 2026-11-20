@@ -10,6 +10,9 @@ const m = vi.hoisted(() => ({
   update: vi.fn(),
   reminderFindMany: vi.fn(),
   reminderUpdateMany: vi.fn(),
+  hostFollowFindMany: vi.fn(),
+  hostFollowUpdateMany: vi.fn(),
+  resetHostFollowNotifications: vi.fn(async () => undefined),
   buildPushPayload: vi.fn(),
 }));
 
@@ -23,12 +26,15 @@ vi.mock('@/lib/db', () => ({
       update: m.update,
     },
     showReminder: { findMany: m.reminderFindMany, updateMany: m.reminderUpdateMany },
+    hostFollow: { findMany: m.hostFollowFindMany, updateMany: m.hostFollowUpdateMany },
   },
 }));
+vi.mock('@/lib/host-follows', () => ({ resetHostFollowNotifications: m.resetHostFollowNotifications }));
 vi.mock('@block65/webcrypto-web-push', () => ({ buildPushPayload: m.buildPushPayload }));
 
 import {
   parseSubscription,
+  pushHostFollowersOnAir,
   pushRemindersOnAir,
   PushValidationError,
   saveSubscription,
@@ -149,5 +155,41 @@ describe('sendPushToUser / pushRemindersOnAir', () => {
   it('never throws', async () => {
     m.reminderFindMany.mockRejectedValue(new Error('d1 down'));
     expect(await pushRemindersOnAir({ id: 'sp1', title: 'T', host: { handle: 'h' } }, 'o', ENV)).toEqual({ users: 0, delivered: 0 });
+  });
+});
+
+describe('pushHostFollowersOnAir', () => {
+  it('resets the notified flag, pushes to followers and marks only the delivered ones notified', async () => {
+    m.hostFollowFindMany.mockResolvedValue([{ did: 'did:a' }, { did: 'did:b' }]);
+    m.findMany.mockImplementation(async ({ where }: { where: { did: string } }) =>
+      where.did === 'did:a' ? [SUB] : []
+    );
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 201 })) as unknown as typeof fetch;
+    const out = await pushHostFollowersOnAir(
+      { id: 'sp1', title: 'Morning', host: { did: 'did:host', handle: 'h.test', displayName: 'Host' } },
+      'https://rabble.rodeo',
+      ENV,
+      fetchImpl
+    );
+    expect(out).toEqual({ users: 2, delivered: 1 });
+    expect(m.resetHostFollowNotifications).toHaveBeenCalledWith('did:host');
+    expect(m.buildPushPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { title: 'Host is on air', body: 'Morning just went live on Rabble Radio.', url: 'https://rabble.rodeo/show/sp1', tag: 'rabble-host-did:host' },
+      }),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(m.hostFollowUpdateMany).toHaveBeenCalledWith({
+      where: { hostDid: 'did:host', did: { in: ['did:a'] } },
+      data: { notifiedAt: expect.any(Date) },
+    });
+  });
+
+  it('never throws', async () => {
+    m.resetHostFollowNotifications.mockRejectedValueOnce(new Error('d1 down'));
+    expect(
+      await pushHostFollowersOnAir({ id: 'sp1', title: 'T', host: { did: 'did:host', handle: 'h' } }, 'o', ENV)
+    ).toEqual({ users: 0, delivered: 0 });
   });
 });

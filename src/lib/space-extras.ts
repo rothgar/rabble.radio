@@ -4,11 +4,13 @@
 //   - `replay`: the newest playable recording for off-air shows, so the
 //     clients can offer "Replay" instead of a join button.
 //   - `reminded`: whether the viewer set "Notify me" on the show.
+//   - `hostSubscribed`: whether the viewer follows the host (any show).
 // Kept out of `toPublicSpace` so that stays a pure mapper.
 
 import type { PublicHost, PublicReplay, PublicSpace } from '@/types';
 import { getLatestAvailableRecordings, recordingDurationSeconds, type RecordingRow } from '@/lib/recording';
 import { getRemindedSpaceIds } from '@/lib/reminders';
+import { getFollowedHostDids } from '@/lib/host-follows';
 import { getFollowedDids, getPresentIdentities } from '@/lib/follows';
 import { getUsersByDid } from '@/lib/users';
 
@@ -33,12 +35,15 @@ export async function decoratePublicSpaces(
   const offAirIds = spaces.filter((s) => !s.isLive).map((s) => s.id);
   const liveIds = spaces.filter((s) => s.isLive).map((s) => s.id);
   // Every lookup is a decoration: if one fails the listing still renders.
-  const [replays, reminded, followed, present] = await Promise.all([
+  const [replays, reminded, subscribed, followed, present] = await Promise.all([
     Promise.resolve()
       .then(() => getLatestAvailableRecordings(offAirIds))
       .catch(() => new Map<string, RecordingRow>()),
     Promise.resolve()
       .then(() => getRemindedSpaceIds(viewerDid, ids))
+      .catch(() => new Set<string>()),
+    Promise.resolve()
+      .then(() => getFollowedHostDids(viewerDid, spaces.map((s) => s.host.did)))
       .catch(() => new Set<string>()),
     Promise.resolve()
       .then(() => (viewerDid ? getFollowedDids(viewerDid) : new Set<string>()))
@@ -77,6 +82,7 @@ export async function decoratePublicSpaces(
       ...s,
       replay: rec ? toPublicReplay(rec) : null,
       reminded: reminded.has(s.id),
+      hostSubscribed: subscribed.has(s.host.did),
       ...(viewerDid
         ? { hostFollowed: followed.has(s.host.did), followedInRoom: inRoom }
         : {}),

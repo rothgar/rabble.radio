@@ -6,6 +6,7 @@ import type { PublicSpace } from '@/types';
 const m = vi.hoisted(() => ({
   getLatestAvailableRecordings: vi.fn(),
   getRemindedSpaceIds: vi.fn(),
+  getFollowedHostDids: vi.fn(),
   getFollowedDids: vi.fn(),
   getPresentIdentities: vi.fn(),
   getUsersByDid: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock('@/lib/recording', async () => {
   return { ...actual, getLatestAvailableRecordings: m.getLatestAvailableRecordings };
 });
 vi.mock('@/lib/reminders', () => ({ getRemindedSpaceIds: m.getRemindedSpaceIds }));
+vi.mock('@/lib/host-follows', () => ({ getFollowedHostDids: m.getFollowedHostDids }));
 vi.mock('@/lib/follows', () => ({ getFollowedDids: m.getFollowedDids, getPresentIdentities: m.getPresentIdentities }));
 vi.mock('@/lib/users', () => ({ getUsersByDid: m.getUsersByDid }));
 vi.mock('@/lib/db', () => ({ prisma: {} }));
@@ -52,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.getLatestAvailableRecordings.mockResolvedValue(new Map());
   m.getRemindedSpaceIds.mockResolvedValue(new Set());
+  m.getFollowedHostDids.mockResolvedValue(new Set());
   m.getFollowedDids.mockResolvedValue(new Set());
   m.getPresentIdentities.mockResolvedValue(new Map());
   m.getUsersByDid.mockResolvedValue([]);
@@ -116,9 +119,24 @@ describe('decoratePublicSpaces', () => {
     expect(out[1].followedInRoom).toEqual([{ did: 'did:friend', handle: 'friend.test', displayName: 'Friend', avatarUrl: null }]);
   });
 
+  it('marks hosts the viewer is subscribed to (notify on any show)', async () => {
+    m.getFollowedHostDids.mockResolvedValue(new Set(['did:h']));
+    const out = await decoratePublicSpaces(
+      [
+        space({ id: 'sp1', host: { did: 'did:h', handle: 'h', displayName: null, avatarUrl: null } }),
+        space({ id: 'sp2', host: { did: 'did:other', handle: 'o', displayName: null, avatarUrl: null } }),
+      ],
+      'did:v'
+    );
+    expect(m.getFollowedHostDids).toHaveBeenCalledWith('did:v', ['did:h', 'did:other']);
+    expect(out[0].hostSubscribed).toBe(true);
+    expect(out[1].hostSubscribed).toBe(false);
+  });
+
   it('adds no social fields for anonymous viewers', async () => {
     const out = await decoratePublicSpaces([space({})], null);
     expect(m.getFollowedDids).not.toHaveBeenCalled();
     expect('hostFollowed' in out[0]).toBe(false);
+    expect(out[0].hostSubscribed).toBe(false);
   });
 });

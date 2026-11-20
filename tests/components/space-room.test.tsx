@@ -134,7 +134,7 @@ function baseProps(overrides: Partial<SpaceRoomProps> = {}): SpaceRoomProps {
     role: 'audience',
     identity: 'did:plc:listener1',
     title: 'Test show',
-    host: { handle: 'host.bsky.social' },
+    host: { did: 'did:plc:host1', handle: 'host.bsky.social' },
     shareableUrl: 'https://rabble.example/show/sp1',
     posts: [],
     postsError: null,
@@ -292,5 +292,48 @@ describe('<SpaceRoom /> pre-show music follows on-air state', () => {
 
     const music = await findByTestId('pre-show-music');
     expect(music.getAttribute('data-playing')).toBe('true');
+  });
+});
+
+describe('<SpaceRoom /> show-ended follow popup (issue #22)', () => {
+  it('offers a listener who was in the room to follow the host once the show ends', () => {
+    const { getByTestId, rerender } = render(
+      <SpaceRoom {...baseProps({ role: 'audience', isLive: true })} />
+    );
+
+    expect(() => getByTestId('show-ended-follow-dialog')).toThrow();
+
+    rerender(<SpaceRoom {...baseProps({ role: 'audience', isLive: false })} />);
+
+    expect(getByTestId('show-ended-follow-dialog')).toHaveTextContent('host.bsky.social');
+  });
+
+  it('does not offer the popup to the host themselves', () => {
+    const { getByTestId, rerender } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: true })} />
+    );
+
+    rerender(<SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: false })} />);
+
+    expect(() => getByTestId('show-ended-follow-dialog')).toThrow();
+  });
+
+  it('does not show the popup to someone who joins a room that is already off air', () => {
+    const { getByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'audience', isLive: false })} />
+    );
+
+    expect(() => getByTestId('show-ended-follow-dialog')).toThrow();
+  });
+
+  it('lets the listener dismiss the popup', () => {
+    const { getByTestId, rerender } = render(
+      <SpaceRoom {...baseProps({ role: 'audience', isLive: true })} />
+    );
+    rerender(<SpaceRoom {...baseProps({ role: 'audience', isLive: false })} />);
+    expect(getByTestId('show-ended-follow-dialog')).toBeTruthy();
+
+    fireEvent.click(getByTestId('show-ended-follow-close'));
+    expect(() => getByTestId('show-ended-follow-dialog')).toThrow();
   });
 });

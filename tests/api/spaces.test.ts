@@ -254,6 +254,7 @@ describe('POST /api/spaces', () => {
       tags: [],
       hostId: 'did:plc:host123',
       scheduledAt: null,
+      isDefaultTitled: false,
     });
   });
 
@@ -435,6 +436,7 @@ describe('POST /api/spaces', () => {
       tags: [],
       hostId: 'did:plc:host123',
       scheduledAt: scheduled,
+      isDefaultTitled: false,
     });
   });
 
@@ -482,6 +484,7 @@ describe('POST /api/spaces', () => {
       tags: [],
       hostId: 'did:plc:host123',
       scheduledAt: null,
+      isDefaultTitled: false,
     });
     expect(mockCreateHostToken).toHaveBeenCalledWith('sp1', {
       did: 'did:plc:host123',
@@ -523,7 +526,11 @@ describe('POST /api/spaces', () => {
     const res = await POST(req);
     expect(res.status).toBe(201);
     expect(mockCreateSpace).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'The @alice.bsky.social show', hostId: 'did:plc:host123' })
+      expect.objectContaining({
+        title: 'The @alice.bsky.social show',
+        hostId: 'did:plc:host123',
+        isDefaultTitled: true,
+      })
     );
   });
 
@@ -552,7 +559,11 @@ describe('POST /api/spaces', () => {
     const res = await POST(req);
     expect(res.status).toBe(201);
     expect(mockCreateSpace).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'The Alice Example show', hostId: 'did:plc:host123' })
+      expect.objectContaining({
+        title: 'The Alice Example show',
+        hostId: 'did:plc:host123',
+        isDefaultTitled: true,
+      })
     );
   });
 
@@ -580,7 +591,7 @@ describe('POST /api/spaces', () => {
     const res = await POST(req);
     const body = await res.json();
     expect(res.status).toBe(201);
-    expect(mockFindDefaultHostedSpace).toHaveBeenCalledWith('did:plc:host123', 'alice.bsky.social', null);
+    expect(mockFindDefaultHostedSpace).toHaveBeenCalledWith('did:plc:host123');
     expect(mockReopenSpace).toHaveBeenCalledWith('sp-old');
     expect(mockCreateSpace).not.toHaveBeenCalled();
     expect(body.reopened).toBe(true);

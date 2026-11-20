@@ -205,6 +205,23 @@ describe('createSpace', () => {
     ).rejects.toThrow(/host/i);
     expect(mockSpaceCreate).not.toHaveBeenCalled();
   });
+
+  it('defaults isDefaultTitled to false, and passes it through when set', async () => {
+    mockUserFindUnique.mockResolvedValue(makeHost());
+    mockSpaceCreate.mockImplementation(async ({ data }) => makeSpaceRow({ title: data.title }));
+
+    await createSpace(
+      { title: 'Custom title', hostId: HOST_DID },
+      { slugFactory: () => 'fixed-slug' }
+    );
+    expect(mockSpaceCreate.mock.calls[0][0].data.isDefaultTitled).toBe(false);
+
+    await createSpace(
+      { title: 'The Alice show', hostId: HOST_DID, isDefaultTitled: true },
+      { slugFactory: () => 'fixed-slug' }
+    );
+    expect(mockSpaceCreate.mock.calls[1][0].data.isDefaultTitled).toBe(true);
+  });
 });
 
 describe('getSpaces', () => {
@@ -411,6 +428,13 @@ describe('updateSpace', () => {
     const args = mockSpaceUpdate.mock.calls[0][0];
     expect(args.data).toEqual({ podcastFeedEnabled: true });
   });
+
+  it('clears isDefaultTitled when the host edits the title themselves', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'My real show', tags: [], host: {} });
+    await updateSpace('sp1', { title: 'My real show' });
+    const args = mockSpaceUpdate.mock.calls[0][0];
+    expect(args.data).toEqual({ title: 'My real show', isDefaultTitled: false });
+  });
 });
 
 describe('toPublicSpace', () => {
@@ -471,16 +495,16 @@ describe('defaultShowTitle', () => {
 });
 
 describe('findDefaultHostedSpace', () => {
-  it("looks up the host's default-titled, unscheduled show", async () => {
+  it("looks up the host's isDefaultTitled, unscheduled show", async () => {
     mockSpaceFindFirst.mockResolvedValueOnce(makeSpaceRow({ id: 'd1', tags: [{ tag: 'Music' }] }));
-    const row = await findDefaultHostedSpace('did:plc:host', 'alice.bsky.social');
+    const row = await findDefaultHostedSpace('did:plc:host');
     expect(row?.id).toBe('d1');
     expect(row?.tags).toEqual(['Music']);
     expect(mockSpaceFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           hostId: 'did:plc:host',
-          title: { in: ['The @alice.bsky.social show', "@alice.bsky.social's show"] },
+          isDefaultTitled: true,
           status: { not: 'scheduled' },
         },
         orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
@@ -488,21 +512,22 @@ describe('findDefaultHostedSpace', () => {
     );
   });
 
-  it('matches on the display-name title when the host has one', async () => {
-    mockSpaceFindFirst.mockResolvedValueOnce(makeSpaceRow({ id: 'd1', tags: [] }));
-    await findDefaultHostedSpace('did:plc:host', 'alice.bsky.social', 'Alice Example');
-    expect(mockSpaceFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          title: { in: ['The Alice Example show', "@alice.bsky.social's show"] },
-        }),
-      })
-    );
-  });
-
   it('returns null when the host has none', async () => {
     mockSpaceFindFirst.mockResolvedValueOnce(null);
-    expect(await findDefaultHostedSpace('did:plc:host', 'alice')).toBeNull();
+    expect(await findDefaultHostedSpace('did:plc:host')).toBeNull();
+  });
+
+  it('still finds the default show after the host renames on Bluesky (issue #33)', async () => {
+    // The row was created while the host was "alice.bsky.social" / no
+    // display name, so its title is the old rendering — but the marker was
+    // set at creation time and the lookup never recomputes or matches title.
+    mockSpaceFindFirst.mockImplementationOnce(async ({ where }) =>
+      where.isDefaultTitled === true
+        ? makeSpaceRow({ id: 'd1', title: 'The @alice.bsky.social show' })
+        : null
+    );
+    const row = await findDefaultHostedSpace('did:plc:host');
+    expect(row?.id).toBe('d1');
   });
 });
 

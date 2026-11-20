@@ -86,6 +86,7 @@ model Space {
   speakers   StageSpeaker[]
   blocks     StageBlock[]
   reminders  ShowReminder[]
+  followers  ShowFollow[]
 
   @@index([hostId])
   @@index([isLive])
@@ -405,6 +406,25 @@ model HostFollow {
   @@id([hostDid, did])
   @@index([did])
   @@index([hostDid, notifiedAt])
+}
+
+/// A listener following one specific named show, notified only when its
+/// host goes live as the host of that exact show (Space.hostId never
+/// changes, so a guest appearance on another host's show never fires this).
+/// Like HostFollow, `notifiedAt` is cleared each time the show goes live
+/// (see resetShowFollowNotifications in src/lib/show-follows.ts) so the
+/// same follow fires again every session.
+model ShowFollow {
+  spaceId    String
+  did        String
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, did])
+  @@index([did])
+  @@index([spaceId, notifiedAt])
 }
 
 /// A browser's Web Push subscription (one per browser profile per user).

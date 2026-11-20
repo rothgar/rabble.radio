@@ -81,6 +81,10 @@ export interface PublicSpace {
   hostFollowed?: boolean;
   /** True when the viewer asked to be notified whenever this host goes on air, any show. */
   hostSubscribed?: boolean;
+  /** True when this show has a name of its own, not the host's default-titled show. */
+  isNamedShow: boolean;
+  /** True when the viewer asked to be notified whenever this exact show goes on air. */
+  showFollowed?: boolean;
   /** Signed-in viewers: people they follow who are in the room right now. */
   followedInRoom?: PublicHost[];
 }

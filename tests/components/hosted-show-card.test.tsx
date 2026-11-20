@@ -35,6 +35,7 @@ function space(overrides: Partial<PublicSpace> = {}): PublicSpace {
     shareableUrl: 'https://rabble.rodeo/show/sp1',
     replay: null,
     reminded: false,
+    isNamedShow: false,
     podcastFeedEnabled: false,
     podcastFeedUrl: null,
     ...overrides,

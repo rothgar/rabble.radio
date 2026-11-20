@@ -163,6 +163,17 @@ code, and mistakes already made there.
   Space selection is now ordered (`createdAt` ascending) so which one wins
   is at least deterministic; the second-room gap itself is still open if a
   multi-show host going live twice at once turns out to be reachable.
+- `acceptStageInvite` (src/lib/stage.ts) is a second call site into the same
+  `pushHostFollowersOnAir` read-then-write race described above: it now
+  fires on a stage-accept while the show is already live (`space.isLive`
+  gates it — not on every accept, e.g. not during the pre-show hold), for a
+  guest going on-air as a speaker, not only on a host's own go-live. The same
+  `GET /api/me/reminders?due=1` poll can land between `markSpeaker` and the
+  push path's `resetHostFollowNotifications`/query/`updateMany` cycle and
+  double-notify the guest's own follower. Any future caller of
+  `pushHostFollowersOnAir` (host-live or guest-accept) shares this window —
+  don't assume the push and poll paths for `HostFollow` are mutually
+  exclusive from either call site.
 
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 

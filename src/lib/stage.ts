@@ -21,6 +21,7 @@
 import { getLiveKitClient, generateToken, roomNameForSpace, muteParticipant, removeParticipant, type SpaceRole } from '@/lib/livekit';
 import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { recordLeave, recordStageChange } from '@/lib/metrics';
+import { pushHostFollowersOnAir } from '@/lib/push';
 import { prisma } from '@/lib/db';
 
 export interface StageParticipantSummary {
@@ -117,6 +118,16 @@ export interface AcceptStageInviteInput {
   spaceId: string;
   userDid: string;
   displayName?: string;
+  /**
+   * The accepting user's own @handle and profile display name, and the
+   * request origin: when all three are given, their own followers are
+   * notified they're on air (src/lib/push.ts#pushHostFollowersOnAir), same
+   * as when a host goes live. Omitted in tests that don't exercise that
+   * best-effort path.
+   */
+  handle?: string;
+  profileDisplayName?: string | null;
+  origin?: string;
 }
 
 export interface LeaveStageInput {
@@ -137,6 +148,7 @@ export interface RemoveFromStageInput {
 async function resolveSpace(spaceId: string): Promise<{
   id: string;
   hostId: string;
+  title: string;
   roomName: string;
   /** True while the show is on air; audience tokens may subscribe only then. */
   isLive: boolean;
@@ -155,6 +167,7 @@ async function resolveSpace(spaceId: string): Promise<{
   return {
     id: space.id,
     hostId: space.hostId,
+    title: space.title,
     roomName: roomNameForSpace(space.id),
     isLive: space.isLive === true,
   };
@@ -326,6 +339,23 @@ export async function acceptStageInvite(
   await deleteInvite(space.id, input.userDid);
   await markSpeaker(space.id, input.userDid);
   await recordStageChange({ spaceId: space.id, identity: input.userDid, onStage: true });
+
+  // Push to this speaker's own followers, the same as when a host goes
+  // live: "follow the host" should notify whenever the followed person is
+  // on-air at all, not only when they're that show's Space.hostId. Gated on
+  // isLive: a guest can accept an invite during the pre-show hold, before
+  // the host has gone live, and followers should not be told someone is
+  // on-air until the room actually is.
+  if (input.handle && input.origin && space.isLive) {
+    await pushHostFollowersOnAir(
+      {
+        id: space.id,
+        title: space.title,
+        host: { did: input.userDid, handle: input.handle, displayName: input.profileDisplayName },
+      },
+      input.origin
+    );
+  }
 
   const { token, wsUrl } = await generateToken({
     room: space.roomName,

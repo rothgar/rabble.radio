@@ -10,11 +10,13 @@ const {
   mockGenerateToken,
   mockGetSpaceById,
   mockGetSpaceBySlug,
+  mockPushHostFollowersOnAir,
 } = vi.hoisted(() => ({
   mockGetLiveKitClient: vi.fn(),
   mockGenerateToken: vi.fn(),
   mockGetSpaceById: vi.fn(),
   mockGetSpaceBySlug: vi.fn(),
+  mockPushHostFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
 }));
 
 vi.mock('@/lib/metrics', () => ({
@@ -24,6 +26,10 @@ vi.mock('@/lib/metrics', () => ({
   recordLeave: vi.fn(async () => undefined),
   recordStageChange: vi.fn(async () => undefined),
   recordReaction: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/lib/push', () => ({
+  pushHostFollowersOnAir: mockPushHostFollowersOnAir,
 }));
 
 
@@ -197,6 +203,59 @@ describe('acceptStageInvite', () => {
     expect(await stage.getPendingInvite('sp1', 'did:plc:listener')).toBeNull();
     // Speaker tracked.
     expect(await stage.listActiveSpeakers('sp1')).toContain('did:plc:listener');
+    // No handle/origin given, so the best-effort push to the new speaker's
+    // own followers (issue #37) is skipped, same as tests above it.
+    expect(mockPushHostFollowersOnAir).not.toHaveBeenCalled();
+  });
+
+  it('notifies the new speaker\'s own followers that they are on air, not just the host\'s', async () => {
+    const stage = await import('@/lib/stage');
+    fakeDb.reset();
+    mockGetSpaceById.mockImplementation(async (id: string) => makeSpace({ id, isLive: true }));
+    await stage.inviteToStage({
+      spaceId: 'sp1',
+      hostDid: 'did:plc:host123',
+      targetIdentity: 'did:plc:listener',
+    });
+
+    await stage.acceptStageInvite({
+      spaceId: 'sp1',
+      userDid: 'did:plc:listener',
+      handle: 'listener.bsky.social',
+      profileDisplayName: 'Listener',
+      origin: 'https://rabble.rodeo',
+    });
+
+    expect(mockPushHostFollowersOnAir).toHaveBeenCalledWith(
+      {
+        id: 'sp1',
+        title: 'My room',
+        host: { did: 'did:plc:listener', handle: 'listener.bsky.social', displayName: 'Listener' },
+      },
+      'https://rabble.rodeo'
+    );
+  });
+
+  it('does not push when the guest accepts before the show is live (pre-show hold)', async () => {
+    const stage = await import('@/lib/stage');
+    fakeDb.reset();
+    // Default makeSpace() fixture is isLive: false — a guest can accept an
+    // invite during the pre-show hold, before the host has gone live.
+    await stage.inviteToStage({
+      spaceId: 'sp1',
+      hostDid: 'did:plc:host123',
+      targetIdentity: 'did:plc:listener',
+    });
+
+    await stage.acceptStageInvite({
+      spaceId: 'sp1',
+      userDid: 'did:plc:listener',
+      handle: 'listener.bsky.social',
+      profileDisplayName: 'Listener',
+      origin: 'https://rabble.rodeo',
+    });
+
+    expect(mockPushHostFollowersOnAir).not.toHaveBeenCalled();
   });
 
   it('throws 404 when there is no pending invite', async () => {

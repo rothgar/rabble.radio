@@ -174,6 +174,9 @@ describe('POST /api/spaces/[id]/stage', () => {
       spaceId: 'sp1',
       userDid: LISTENER.did,
       displayName: LISTENER.handle,
+      handle: LISTENER.handle,
+      profileDisplayName: undefined,
+      origin: 'http://localhost',
     });
   });
 

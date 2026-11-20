@@ -101,15 +101,41 @@ the PR when a change is about audio quality or device handling.
 
 ## What needs a logged-in user
 
-Login is Bluesky OAuth against a real account; a box has none. Host-only
-flows (creating a show, inviting to stage, recording, admin) are verified by:
+Login is Bluesky OAuth against a real account; a box has none. But a session
+is just a sealed `bs_spaces_session` cookie (`src/lib/session.ts`, iron-session,
+password = `SESSION_SECRET` from `.env.local`) — you can seal one yourself for
+a seeded demo user (`did:plc:demo...`) and drive host-only API routes and
+pages for real, with no app change:
+
+```bash
+node -e "
+const { sealData } = require('./node_modules/.pnpm/iron-session@9.0.1/node_modules/iron-session/dist/index.js');
+sealData({ bluesky: { did: 'did:plc:demo00000000000000000003', handle: 'priya.demo.rabble.rodeo' } },
+  { password: process.argv[1] }).then(console.log);
+" "$(grep '^SESSION_SECRET' .env.local | cut -d= -f2-)"
+# -> Fe26.2*... ; then: curl -b "bs_spaces_session=$COOKIE" http://localhost:3000/api/me/shows
+```
+
+(adjust the `iron-session@9.0.1` path to whatever `pnpm list iron-session`
+resolves). This is not a bypass — it's the same cookie the real OAuth
+callback would set — so it's fine to use for verification; still don't add a
+login bypass or dev-only auth route to the app itself.
+
+For a **screenshot** of a logged-in page, plain `chromium --screenshot` can't
+set cookies (there's no cookie flag), so drive it over CDP instead: launch
+`chromium --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9333 "--remote-allow-origins=*"`,
+then use `Target.createTarget`/`Target.attachToTarget`, `Network.setCookie`
+(`domain: 'localhost'`), `Emulation.setDeviceMetricsOverride` for phone width,
+`Page.navigate`, and `Page.captureScreenshot` over the tab's WebSocket
+(Node 22+ has a global `WebSocket` and `fetch`, no extra package needed).
+
+Routes/pages this can't reach (LiveKit grants beyond listener, Bluesky
+posting, anything needing a *real* Bluesky identity) are still verified by:
 
 1. The route's tests under `tests/api/` and `tests/lib/` (they mock the
    session), extended for the change.
 2. Reading the handler to confirm the session check and the call path.
 3. Saying in the PR's Evidence which flow was not driven live and why.
-
-Do not add a login bypass or a dev-only auth route to get past this.
 
 ## Checks (CI's job, not verification)
 

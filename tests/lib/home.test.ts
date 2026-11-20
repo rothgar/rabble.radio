@@ -11,7 +11,7 @@ function show(overrides: Partial<PublicSpace>): PublicSpace {
     likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
     tags: [], createdAt: '', updatedAt: '', shareableUrl: '',
     host: { did: 'did:h', handle: 'h', displayName: null, avatarUrl: null },
-    replay: null, reminded: false,
+    replay: null, reminded: false, podcastFeedEnabled: false, podcastFeedUrl: null,
     ...overrides,
   };
 }

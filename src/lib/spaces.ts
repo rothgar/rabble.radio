@@ -33,6 +33,8 @@ export interface SpaceModel {
   lastLiveAt: Date | null;
   /** Pre-show music mood id (src/lib/music.ts), null for silence. */
   musicMood?: string | null;
+  /** True once the host has turned this show into its own podcast feed. */
+  podcastFeedEnabled: boolean;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -244,6 +246,7 @@ export interface UpdateSpaceInput {
   description?: string | null;
   tags?: string[];
   musicMood?: string | null;
+  podcastFeedEnabled?: boolean;
 }
 
 /**
@@ -271,6 +274,9 @@ export async function updateSpace(
   }
   if (input.musicMood !== undefined) {
     data.musicMood = input.musicMood;
+  }
+  if (input.podcastFeedEnabled !== undefined) {
+    data.podcastFeedEnabled = input.podcastFeedEnabled;
   }
   const row = await prisma.space.update({
     where: { id },
@@ -775,6 +781,10 @@ export function toPublicSpace(
 ): PublicSpace {
   const base = canonicalizeOrigin(origin);
   const shareableUrl = `${base}/show/${space.id}`;
+  const podcastFeedEnabled = Boolean(space.podcastFeedEnabled);
+  const podcastFeedUrl = podcastFeedEnabled
+    ? `${base}/podcast/${encodeURIComponent(space.host.handle)}/show/${space.id}/feed.xml`
+    : null;
   return {
     id: space.id,
     slug: space.slug,
@@ -800,5 +810,7 @@ export function toPublicSpace(
     replay: extras.replay ?? null,
     reminded: extras.reminded ?? false,
     musicMood: space.musicMood ?? null,
+    podcastFeedEnabled,
+    podcastFeedUrl,
   };
 }

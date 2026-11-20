@@ -64,6 +64,9 @@ model Space {
   lastLiveAt     DateTime?
   /// Pre-show music mood (see src/lib/music.ts), null for silence.
   musicMood      String?
+  /// True once the host has turned this show into its own podcast feed,
+  /// scoped to just its published recordings (/podcast/[handle]/show/[id]/feed.xml).
+  podcastFeedEnabled Boolean @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

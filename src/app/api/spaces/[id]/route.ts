@@ -78,6 +78,8 @@ interface PatchBody {
   tags?: unknown;
   /** Pre-show music mood id, or null for silence. */
   musicMood?: unknown;
+  /** Turn this show's own podcast feed on or off. */
+  podcastFeedEnabled?: unknown;
 }
 
 export async function PATCH(
@@ -103,7 +105,13 @@ export async function PATCH(
     );
   }
 
-  const patch: { title?: string; description?: string | null; tags?: string[]; musicMood?: string | null } = {};
+  const patch: {
+    title?: string;
+    description?: string | null;
+    tags?: string[];
+    musicMood?: string | null;
+    podcastFeedEnabled?: boolean;
+  } = {};
   if (body.title !== undefined) {
     if (typeof body.title !== 'string' || body.title.trim().length === 0) {
       return NextResponse.json(
@@ -161,6 +169,15 @@ export async function PATCH(
       );
     }
     patch.musicMood = body.musicMood;
+  }
+  if (body.podcastFeedEnabled !== undefined) {
+    if (typeof body.podcastFeedEnabled !== 'boolean') {
+      return NextResponse.json(
+        { error: 'validation_error', message: 'podcastFeedEnabled must be a boolean.' },
+        { status: 400 }
+      );
+    }
+    patch.podcastFeedEnabled = body.podcastFeedEnabled;
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(

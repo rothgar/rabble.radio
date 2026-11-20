@@ -42,6 +42,7 @@ import {
   createRecording,
   expireOldRecordings,
   getPublishedEpisodesForHost,
+  getPublishedEpisodesForSpace,
   getRecordingById,
   RecordingStateError,
   setRecordingPublished,
@@ -170,6 +171,25 @@ describe('getPublishedEpisodesForHost', () => {
     expect(m.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { hostDid: 'did:plc:host', published: true, status: 'available' },
+      })
+    );
+  });
+});
+
+describe('getPublishedEpisodesForSpace', () => {
+  it('scopes the query to one show', async () => {
+    m.findMany.mockResolvedValueOnce([
+      {
+        ...row({ published: 1 }),
+        space: { id: 'sp1', title: 'Friday jams', description: null, tags: [{ tag: 'Music' }] },
+      },
+    ]);
+    const episodes = await getPublishedEpisodesForSpace('sp1');
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0].space.id).toBe('sp1');
+    expect(m.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { spaceId: 'sp1', published: true, status: 'available' },
       })
     );
   });

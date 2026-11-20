@@ -156,8 +156,18 @@ function RecordingRow({ recording: initial }: { recording: HostedRecording }): R
   );
 }
 
-/** The show's landing-page URL with a copy button; this is what hosts share. */
-function ShareLine({ url }: { url: string }): ReactElement {
+/** A URL with a copy button; this is what hosts share. */
+function ShareLine({
+  url,
+  testId = 'hosted-show-share',
+  urlTestId = 'hosted-show-share-url',
+  copyTestId = 'hosted-show-copy',
+}: {
+  url: string;
+  testId?: string;
+  urlTestId?: string;
+  copyTestId?: string;
+}): ReactElement {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(async () => {
     try {
@@ -171,18 +181,101 @@ function ShareLine({ url }: { url: string }): ReactElement {
   return (
     <div
       className="flex items-center gap-2 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-      data-testid="hosted-show-share"
+      data-testid={testId}
     >
       <a
         href={url}
         className="min-w-0 flex-1 truncate text-caption text-[var(--color-accent-2-700)] hover:underline"
-        data-testid="hosted-show-share-url"
+        data-testid={urlTestId}
       >
         {url}
       </a>
-      <Button type="button" variant="ghost" size="sm" onClick={() => void copy()} data-testid="hosted-show-copy">
+      <Button type="button" variant="ghost" size="sm" onClick={() => void copy()} data-testid={copyTestId}>
         {copied ? 'Copied' : 'Copy link'}
       </Button>
+    </div>
+  );
+}
+
+/** Toggle to turn a show's own podcast feed, scoped to just its episodes, on or off. */
+function PodcastFeedToggle({ spaceId, enabled: initialEnabled, feedUrl: initialFeedUrl }: {
+  spaceId: string;
+  enabled: boolean;
+  feedUrl: string | null;
+}): ReactElement {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [feedUrl, setFeedUrl] = useState(initialFeedUrl);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/spaces/${encodeURIComponent(spaceId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ podcastFeedEnabled: !enabled }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        space?: { podcastFeedEnabled: boolean; podcastFeedUrl: string | null };
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !body.space) {
+        setError(body.message || body.error || `HTTP ${res.status}`);
+        return;
+      }
+      setEnabled(body.space.podcastFeedEnabled);
+      setFeedUrl(body.space.podcastFeedUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the show feed.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, enabled, spaceId]);
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg)] p-3"
+      data-testid="hosted-show-podcast-feed"
+      data-enabled={enabled ? 'true' : 'false'}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-label font-semibold text-[var(--color-text)]">Show podcast feed</span>
+          <span className="text-caption text-[var(--color-text-tertiary)]">
+            {enabled ? 'On — a feed of just this show.' : 'Give this show its own feed, separate from your account feed.'}
+          </span>
+        </div>
+        <Button
+          type="button"
+          variant={enabled ? 'secondary' : 'primary'}
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            void toggle();
+          }}
+          aria-pressed={enabled}
+          data-testid="hosted-show-podcast-feed-toggle"
+        >
+          {busy ? 'Working…' : enabled ? 'Turn off' : 'Turn on'}
+        </Button>
+      </div>
+      {error ? (
+        <span role="alert" className="text-caption text-[var(--color-live)]" data-testid="hosted-show-podcast-feed-error">
+          {error}
+        </span>
+      ) : null}
+      {enabled && feedUrl ? (
+        <ShareLine
+          url={feedUrl}
+          testId="hosted-show-podcast-feed-share"
+          urlTestId="hosted-show-podcast-feed-url"
+          copyTestId="hosted-show-podcast-feed-copy"
+        />
+      ) : null}
     </div>
   );
 }
@@ -227,6 +320,12 @@ export function HostedShowCard({ space, recordings }: HostedShowCardProps): Reac
       )}
 
       <ShareLine url={space.shareableUrl} />
+
+      <PodcastFeedToggle
+        spaceId={space.id}
+        enabled={space.podcastFeedEnabled}
+        feedUrl={space.podcastFeedUrl}
+      />
 
       <div className="flex flex-wrap gap-2">
         {space.isLive ? null : (

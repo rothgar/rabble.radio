@@ -185,6 +185,34 @@ export interface PublishedEpisode {
   space: { id: string; title: string; description: string | null; tags: string[] };
 }
 
+function rowToPublishedEpisode(
+  row: Record<string, unknown> & {
+    space: {
+      id: string;
+      title: string;
+      description: string | null;
+      tags: Array<{ tag: string } | string>;
+    };
+  }
+): PublishedEpisode {
+  const { space, ...rest } = row;
+  return {
+    recording: rowToRecording(rest),
+    space: {
+      id: space.id,
+      title: space.title,
+      description: space.description,
+      tags: (space.tags ?? []).map((t) => (typeof t === 'string' ? t : t.tag)),
+    },
+  };
+}
+
+const publishedEpisodeInclude = {
+  space: {
+    select: { id: true, title: true, description: true, tags: { select: { tag: true } } },
+  },
+} as const;
+
 /** Published, playable recordings for a host's podcast feed, newest first. */
 export async function getPublishedEpisodesForHost(
   hostDid: string
@@ -192,31 +220,21 @@ export async function getPublishedEpisodesForHost(
   const rows = await prisma.recording.findMany({
     where: { hostDid, published: true, status: 'available' },
     orderBy: { startedAt: 'desc' },
-    include: {
-      space: {
-        select: { id: true, title: true, description: true, tags: { select: { tag: true } } },
-      },
-    },
+    include: publishedEpisodeInclude,
   });
-  return rows.map((r) => {
-    const { space, ...rest } = r as unknown as Record<string, unknown> & {
-      space: {
-        id: string;
-        title: string;
-        description: string | null;
-        tags: Array<{ tag: string } | string>;
-      };
-    };
-    return {
-      recording: rowToRecording(rest),
-      space: {
-        id: space.id,
-        title: space.title,
-        description: space.description,
-        tags: (space.tags ?? []).map((t) => (typeof t === 'string' ? t : t.tag)),
-      },
-    };
+  return rows.map((r) => rowToPublishedEpisode(r as unknown as Parameters<typeof rowToPublishedEpisode>[0]));
+}
+
+/** Published, playable recordings for one show's own podcast feed, newest first. */
+export async function getPublishedEpisodesForSpace(
+  spaceId: string
+): Promise<PublishedEpisode[]> {
+  const rows = await prisma.recording.findMany({
+    where: { spaceId, published: true, status: 'available' },
+    orderBy: { startedAt: 'desc' },
+    include: publishedEpisodeInclude,
   });
+  return rows.map((r) => rowToPublishedEpisode(r as unknown as Parameters<typeof rowToPublishedEpisode>[0]));
 }
 
 /**

@@ -75,6 +75,7 @@ import {
   getSpacesForUser,
   incrementSpaceReactions,
   generateSlugSuffix,
+  toPublicSpace,
   SPACE_STATUS,
   EMPTY_SPACE_TTL_MS,
 } from '@/lib/spaces';
@@ -402,6 +403,35 @@ describe('updateSpace', () => {
   it('rejects an empty title', async () => {
     await expect(updateSpace('sp1', { title: '  ' })).rejects.toThrow(/Title is required/);
     expect(mockSpaceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('turns the per-show podcast feed on or off', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
+    await updateSpace('sp1', { podcastFeedEnabled: true });
+    const args = mockSpaceUpdate.mock.calls[0][0];
+    expect(args.data).toEqual({ podcastFeedEnabled: true });
+  });
+});
+
+describe('toPublicSpace', () => {
+  it('omits the per-show feed URL when the feed is disabled', () => {
+    const space = toPublicSpace(
+      makeSpaceRow({ podcastFeedEnabled: false, tags: [] }) as never,
+      'https://rabble.example'
+    );
+    expect(space.podcastFeedEnabled).toBe(false);
+    expect(space.podcastFeedUrl).toBeNull();
+  });
+
+  it('builds a stable feed URL scoped to the show when enabled', () => {
+    const space = toPublicSpace(
+      makeSpaceRow({ podcastFeedEnabled: true, tags: [] }) as never,
+      'https://rabble.example'
+    );
+    expect(space.podcastFeedEnabled).toBe(true);
+    expect(space.podcastFeedUrl).toBe(
+      'https://rabble.example/podcast/alice.bsky.social/show/sp1/feed.xml'
+    );
   });
 });
 

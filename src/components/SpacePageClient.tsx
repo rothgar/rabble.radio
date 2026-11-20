@@ -17,6 +17,7 @@ import type { PublicSpacePost } from '@/lib/posts';
 import type { PublicRecording } from '@/components/RoomSidebar';
 import type { PublicReplay } from '@/types';
 import { NotifyMeButton } from '@/components/NotifyMeButton';
+import { FollowHostButton } from '@/components/FollowHostButton';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
 
 export interface SpacePageClientProps {
@@ -30,6 +31,7 @@ export interface SpacePageClientProps {
   description?: string | null;
   tags?: string[];
   host: {
+    did?: string;
     handle: string;
     displayName?: string | null;
     avatarUrl?: string | null;
@@ -40,6 +42,8 @@ export interface SpacePageClientProps {
   replay?: PublicReplay | null;
   /** Whether the viewer already asked to be notified (scheduled shows). */
   reminded?: boolean;
+  /** Whether the viewer already follows this host (any of their shows). */
+  hostSubscribed?: boolean;
   /** Pre-show music mood id, null for silence. */
   musicMood?: string | null;
   /**
@@ -87,6 +91,7 @@ export function SpacePageClient({
   recording,
   replay = null,
   reminded = false,
+  hostSubscribed = false,
   musicMood = null,
   onJoinedChange,
 }: SpacePageClientProps): ReactElement {
@@ -485,6 +490,17 @@ export function SpacePageClient({
             scheduledAt={scheduledAt}
           />
         </div>
+        {host.did ? (
+          <div>
+            <FollowHostButton
+              hostDid={host.did}
+              hostName={host.displayName?.trim() || `@${host.handle}`}
+              isAuthenticated={isAuthenticated}
+              following={hostSubscribed}
+              loginNext={`/show/${spaceId}`}
+            />
+          </div>
+        ) : null}
         {isAuthenticated && !scheduled ? (
           <button
             type="button"

@@ -95,6 +95,32 @@ code, and mistakes already made there.
   at all, so an explicit added border there is also the odd one out, visible
   on one button and not its neighbour.
 
+## src/lib/host-follows.ts and src/lib/push.ts (host-follow due/push race)
+
+- `pushHostFollowersOnAir` and `takeDueHostFollows` both do a read-then-write
+  over the same `HostFollow.notifiedAt` rows (query where `notifiedAt: null`,
+  then mark the ones it handled), so a `GET /api/me/reminders?due=1` poll
+  landing between the push path's query and its own `updateMany` can claim
+  and return the same due item the push path is about to deliver —
+  double-notifying a follower who has the site open (toast + push) on that
+  go-live. `src/lib/reminders.ts`/`pushRemindersOnAir` has the identical
+  shape for `ShowReminder`, but there it only matters once per reminder's
+  lifetime since `notifiedAt` is never reset; `resetHostFollowNotifications`
+  reopens this window on every single go-live (issue #19's review, round 1).
+  Wrapping the read+mark in `prisma.$transaction` would not close this
+  window: D1 has no real transactions (see the note at the top of
+  `prisma/schema.prisma` — `$transaction` calls run statement by statement).
+  Closing it for real needs a single atomic claim (e.g. a parameterized
+  `UPDATE ... RETURNING`) shared by both call sites; until that lands, don't
+  assume the push and poll paths for `HostFollow` are mutually exclusive.
+- `takeDueHostFollows` (src/lib/host-follows.ts) picks one live space per
+  followed host with no ordering when a host is live on two spaces at once,
+  and marks the `HostFollow` row notified regardless — so the follower never
+  hears about the second room until the host's next go-live resets things.
+  Space selection is now ordered (`createdAt` ascending) so which one wins
+  is at least deterministic; the second-room gap itself is still open if a
+  multi-show host going live twice at once turns out to be reachable.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

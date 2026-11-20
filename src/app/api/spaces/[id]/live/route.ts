@@ -36,7 +36,7 @@ import {
 } from '@/lib/livekit';
 import { logger } from '@/lib/logger';
 import { endShowSession, startShowSession } from '@/lib/metrics';
-import { pushRemindersOnAir } from '@/lib/push';
+import { pushHostFollowersOnAir, pushRemindersOnAir } from '@/lib/push';
 import { endLiveShow } from '@/lib/live';
 
 export const dynamic = 'force-dynamic';
@@ -186,6 +186,10 @@ export async function POST(
       // awaited: the Worker may not keep running after the response.
       await pushRemindersOnAir(
         { id: space.id, title: space.title, host: { handle: user.handle, displayName: null } },
+        origin
+      );
+      await pushHostFollowersOnAir(
+        { id: space.id, title: space.title, host: { did: user.did, handle: user.handle, displayName: null } },
         origin
       );
 

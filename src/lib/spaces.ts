@@ -766,6 +766,7 @@ export function canonicalizeOrigin(origin?: string | null): string {
 export interface PublicSpaceExtras {
   replay?: PublicReplay | null;
   reminded?: boolean;
+  hostSubscribed?: boolean;
 }
 
 export function toPublicSpace(
@@ -799,6 +800,7 @@ export function toPublicSpace(
     shareableUrl,
     replay: extras.replay ?? null,
     reminded: extras.reminded ?? false,
+    hostSubscribed: extras.hostSubscribed ?? false,
     musicMood: space.musicMood ?? null,
   };
 }

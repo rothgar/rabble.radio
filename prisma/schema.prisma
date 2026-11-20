@@ -383,6 +383,22 @@ model ShowReminder {
   @@index([did])
 }
 
+/// A listener following a host, notified whenever any of the host's shows
+/// goes live (scheduled or instant-started) rather than one scheduled show.
+/// Unlike ShowReminder's one-time fire, `notifiedAt` is cleared each time
+/// the host goes live (see resetHostFollowNotifications in
+/// src/lib/host-follows.ts) so the same follow fires again every session.
+model HostFollow {
+  hostDid    String
+  did        String
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  @@id([hostDid, did])
+  @@index([did])
+  @@index([hostDid, notifiedAt])
+}
+
 /// A browser's Web Push subscription (one per browser profile per user).
 /// `failures` counts consecutive delivery errors; 404/410 from the push
 /// service deletes the row outright.

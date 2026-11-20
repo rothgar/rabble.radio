@@ -6,6 +6,8 @@
 
 import type { ReactElement } from 'react';
 import { getTopHosts } from '@/lib/hosts';
+import { getFollowedHostDids } from '@/lib/host-follows';
+import { getCurrentUser } from '@/lib/session';
 import { HostCard } from '@/components/HostCard';
 import { SiteHeader } from '@/components/SiteHeader';
 import { PageLayout } from '@/components/ui';
@@ -13,7 +15,11 @@ import { PageLayout } from '@/components/ui';
 export const dynamic = 'force-dynamic';
 
 export default async function HostsPage(): Promise<ReactElement> {
-  const hosts = await getTopHosts(10);
+  const [hosts, user] = await Promise.all([getTopHosts(10), getCurrentUser()]);
+  const followedHostDids = await getFollowedHostDids(
+    user?.did ?? null,
+    hosts.map((h) => h.host.did)
+  );
 
   return (
     <>
@@ -43,7 +49,13 @@ export default async function HostsPage(): Promise<ReactElement> {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2" data-testid="hosts-grid">
           {hosts.map((host, i) => (
-            <HostCard key={host.host.did} host={host} rank={i + 1} />
+            <HostCard
+              key={host.host.did}
+              host={host}
+              rank={i + 1}
+              isAuthenticated={Boolean(user)}
+              following={followedHostDids.has(host.host.did)}
+            />
           ))}
         </div>
       )}

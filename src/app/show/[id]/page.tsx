@@ -408,6 +408,7 @@ export default function SpacePage(): ReactElement {
           description={view.description}
           tags={view.tags}
           host={{
+            did: view.host.did,
             handle: view.host.handle,
             displayName: view.host.displayName ?? null,
             avatarUrl: view.host.avatarUrl ?? null,
@@ -416,6 +417,7 @@ export default function SpacePage(): ReactElement {
           recording={state.recording}
           replay={view.replay ?? null}
           reminded={view.reminded ?? false}
+          hostSubscribed={view.hostSubscribed ?? false}
           musicMood={view.musicMood ?? null}
           onJoinedChange={setInRoom}
         />

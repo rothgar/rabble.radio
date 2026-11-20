@@ -53,7 +53,7 @@ function baseProps() {
     status: 'live' as const,
     scheduledAt: null,
     title: 'Test Space',
-    host: { handle: 'host.bsky.social' },
+    host: { did: 'did:plc:host', handle: 'host.bsky.social' },
     shareableUrl: 'https://rabble.example/space/sp-auto-join',
     recording: null,
   };
@@ -268,6 +268,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
     );
     expect(screen.getByTestId('space-scheduled')).toBeTruthy();
     expect(screen.getByTestId('notify-me-button')).toBeTruthy();
+    expect(screen.getByTestId('follow-host-button')).toBeTruthy();
     expect(screen.queryByTestId('join-button')).toBeNull();
   });
 
@@ -277,6 +278,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
     );
     expect(screen.getByTestId('space-off-air')).toBeTruthy();
     expect(screen.getByTestId('notify-me-button')).toBeTruthy();
+    expect(screen.getByTestId('follow-host-button')).toBeTruthy();
     expect(screen.queryByTestId('join-button')).toBeNull();
     expect(screen.getByTestId('enter-studio').textContent).toMatch(/enter the studio/i);
     unmount();
@@ -286,6 +288,22 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.getByTestId('space-off-air')).toBeTruthy();
     expect(screen.queryByTestId('enter-studio')).toBeNull();
     expect(screen.queryByTestId('join-button')).toBeNull();
+  });
+
+  it('skips the follow-host button when the host did is not known', () => {
+    renderPage(
+      <SpacePageClient
+        {...baseProps()}
+        host={{ handle: 'host.bsky.social' }}
+        isHost={false}
+        isLive={false}
+        status="active"
+        reminded={false}
+      />
+    );
+    expect(screen.getByTestId('notify-me-button')).toBeTruthy();
+    expect(screen.queryByTestId('follow-host-button')).toBeNull();
+    expect(screen.queryByTestId('follow-host-signin')).toBeNull();
   });
 
   it('plays the recording instead of joining when the show is off air with a replay', () => {

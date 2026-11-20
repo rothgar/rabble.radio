@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   setReminder: vi.fn(),
   listReminders: vi.fn(),
   takeDueReminders: vi.fn(),
+  takeDueHostFollows: vi.fn(),
 }));
 
 vi.mock('@/lib/session', () => ({ getCurrentUser: m.getCurrentUser }));
@@ -21,6 +22,7 @@ vi.mock('@/lib/reminders', () => ({
   listReminders: m.listReminders,
   takeDueReminders: m.takeDueReminders,
 }));
+vi.mock('@/lib/host-follows', () => ({ takeDueHostFollows: m.takeDueHostFollows }));
 
 import { GET as remindGet, POST as remindPost } from '@/app/api/spaces/[id]/remind/route';
 import { GET as meReminders } from '@/app/api/me/reminders/route';
@@ -32,6 +34,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.getCurrentUser.mockResolvedValue(USER);
   m.getSpaceById.mockResolvedValue({ id: 'sp1' });
+  m.takeDueHostFollows.mockResolvedValue([]);
 });
 
 function post(body: unknown): NextRequest {
@@ -87,5 +90,21 @@ describe('GET /api/me/reminders', () => {
     const due = await meReminders(new NextRequest('http://localhost/api/me/reminders?due=1'));
     expect(await due.json()).toEqual({ due: [{ spaceId: 'sp2', title: 'Live' }] });
     expect(m.takeDueReminders).toHaveBeenCalledWith(USER.did);
+    expect(m.takeDueHostFollows).toHaveBeenCalledWith(USER.did);
+  });
+
+  it('merges host-follow due shows with reminder ones and drops duplicate spaceIds', async () => {
+    m.takeDueReminders.mockResolvedValue([{ spaceId: 'sp2', title: 'Show reminder' }]);
+    m.takeDueHostFollows.mockResolvedValue([
+      { spaceId: 'sp2', title: 'Already counted' },
+      { spaceId: 'sp3', title: 'Host follow' },
+    ]);
+    const res = await meReminders(new NextRequest('http://localhost/api/me/reminders?due=1'));
+    expect(await res.json()).toEqual({
+      due: [
+        { spaceId: 'sp2', title: 'Show reminder' },
+        { spaceId: 'sp3', title: 'Host follow' },
+      ],
+    });
   });
 });

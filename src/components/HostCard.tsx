@@ -8,10 +8,13 @@ import Link from 'next/link';
 import { defaultPublicOrigin } from '@/lib/spaces';
 import type { TopHost } from '@/lib/hosts';
 import { AddToCalendar } from '@/components/AddToCalendar';
+import { FollowHostButton } from '@/components/FollowHostButton';
 
 interface HostCardProps {
   host: TopHost;
   rank: number;
+  isAuthenticated: boolean;
+  following: boolean;
 }
 
 function initialsFor(name: string): string {
@@ -30,7 +33,7 @@ function formatWhen(iso: string): string {
   });
 }
 
-export function HostCard({ host, rank }: HostCardProps): ReactElement {
+export function HostCard({ host, rank, isAuthenticated, following }: HostCardProps): ReactElement {
   const profileUrl = `https://bsky.app/profile/${encodeURIComponent(host.host.handle)}`;
   const origin = defaultPublicOrigin();
   const name = host.host.displayName?.trim() || host.host.handle;
@@ -82,6 +85,15 @@ export function HostCard({ host, rank }: HostCardProps): ReactElement {
       <div className="flex items-center gap-3 text-xs text-[var(--color-text-secondary)]" data-testid="host-popularity">
         <span title="On-air audience">👂 {host.popularity}</span>
       </div>
+
+      <FollowHostButton
+        hostDid={host.host.did}
+        hostName={name}
+        isAuthenticated={isAuthenticated}
+        following={following}
+        size="sm"
+        loginNext="/hosts"
+      />
 
       {host.upcoming.length > 0 ? (
         <div className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-3">

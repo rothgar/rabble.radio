@@ -28,6 +28,8 @@ const {
   mockToPublicSpace,
   mockSetAudienceSubscriptions,
   mockBroadcastRoomData,
+  mockPushRemindersOnAir,
+  mockPushHostFollowersOnAir,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockResolveSpaceForUser: vi.fn(),
@@ -37,6 +39,13 @@ const {
   mockToPublicSpace: vi.fn(),
   mockSetAudienceSubscriptions: vi.fn(async () => 0),
   mockBroadcastRoomData: vi.fn(async () => true),
+  mockPushRemindersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
+  mockPushHostFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
+}));
+
+vi.mock('@/lib/push', () => ({
+  pushRemindersOnAir: mockPushRemindersOnAir,
+  pushHostFollowersOnAir: mockPushHostFollowersOnAir,
 }));
 
 vi.mock('@/lib/livekit', () => ({
@@ -199,6 +208,15 @@ describe('POST /api/spaces/[id]/live', () => {
       spaceId: 'sp1',
       onAir: true,
     });
+    // Reminders for this show and this host's followers both get pushed.
+    expect(mockPushRemindersOnAir).toHaveBeenCalledWith(
+      { id: 'sp1', title: 'My room', host: { handle: 'alice.bsky.social', displayName: null } },
+      'http://localhost'
+    );
+    expect(mockPushHostFollowersOnAir).toHaveBeenCalledWith(
+      { id: 'sp1', title: 'My room', host: { did: 'did:plc:host123', handle: 'alice.bsky.social', displayName: null } },
+      'http://localhost'
+    );
   });
 
   it('end: closes the audience subscriptions again', async () => {

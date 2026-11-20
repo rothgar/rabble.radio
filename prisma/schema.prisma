@@ -348,6 +348,7 @@ model Feedback {
   handle     String?
   category   String   @default("problem")
   message    String
+  email      String?
   platform   String   @default("web")
   appVersion String?
   page       String?

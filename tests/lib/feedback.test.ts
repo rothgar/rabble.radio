@@ -82,6 +82,31 @@ describe('createFeedback', () => {
       data: expect.objectContaining({ category: 'problem', platform: 'web' }),
     });
   });
+
+  it('stores a beta sign-up with its email', async () => {
+    await createFeedback({
+      message: 'Requesting Android beta access.',
+      category: 'beta',
+      email: '  Alice@Example.com  ',
+      platform: 'android',
+    });
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ category: 'beta', email: 'Alice@Example.com' }),
+    });
+  });
+
+  it('rejects a beta sign-up with no email', async () => {
+    await expect(
+      createFeedback({ message: 'Requesting Android beta access.', category: 'beta' })
+    ).rejects.toThrow(/Email is required/);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed email', async () => {
+    await expect(createFeedback({ message: 'hi', email: 'not-an-email' })).rejects.toThrow(
+      /valid address/
+    );
+  });
 });
 
 describe('serializeContext', () => {

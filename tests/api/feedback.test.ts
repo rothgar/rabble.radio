@@ -89,6 +89,13 @@ describe('POST /api/feedback', () => {
     mockCreateFeedback.mockRejectedValueOnce(new Error('d1 down'));
     expect((await post({ message: 'x' })).status).toBe(500);
   });
+
+  it('passes an email through for a beta sign-up', async () => {
+    await post({ message: 'Requesting Android beta access.', category: 'beta', email: 'alice@example.com' });
+    expect(mockCreateFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'beta', email: 'alice@example.com' })
+    );
+  });
 });
 
 describe('GET /api/feedback', () => {

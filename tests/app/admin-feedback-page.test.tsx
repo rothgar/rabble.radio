@@ -58,6 +58,26 @@ describe('/admin/feedback', () => {
     expect(screen.getByText(/"onAir": true/)).toBeTruthy();
   });
 
+  it('shows the email on a beta sign-up', async () => {
+    mockIsAdmin.mockReturnValue(true);
+    mockListFeedback.mockResolvedValue([
+      {
+        id: 'fb2',
+        did: null,
+        handle: null,
+        category: 'beta',
+        message: 'Requesting Android beta access.',
+        email: 'alice@example.com',
+        platform: 'android',
+        context: {},
+        createdAt: new Date('2026-11-20T20:00:00Z'),
+      },
+    ]);
+    render(await AdminFeedbackPage());
+    expect(screen.getByText('alice@example.com')).toBeTruthy();
+    expect(screen.getByText('beta')).toBeTruthy();
+  });
+
   it('shows an empty state', async () => {
     mockIsAdmin.mockReturnValue(true);
     mockListFeedback.mockResolvedValue([]);

@@ -4,7 +4,8 @@
 //   Works signed out (login problems are the most common report); when a
 //   session exists the DID and handle are attached. The client sends its
 //   own captured state in `context`; the server adds the User-Agent.
-//   Body: { message, category?, platform?, appVersion?, page?, spaceId?, context? }
+//   Body: { message, category?, email?, platform?, appVersion?, page?, spaceId?, context? }
+//   `email` is required when category is "beta" (Android beta sign-up).
 //   Response: { id } or an error envelope.
 //
 // GET /api/feedback -> newest reports, for the admins listed in
@@ -30,6 +31,7 @@ export const runtime = 'nodejs';
 interface FeedbackBody {
   message?: unknown;
   category?: unknown;
+  email?: unknown;
   platform?: unknown;
   appVersion?: unknown;
   page?: unknown;
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       handle: user?.handle ?? null,
       message: str(body.message) ?? '',
       category: str(body.category),
+      email: str(body.email),
       platform: str(body.platform),
       appVersion: str(body.appVersion),
       page: str(body.page),

@@ -19,9 +19,10 @@ curl -sS -H "Authorization: Bearer $FEEDBACK_READ_TOKEN" \
 jq -r '.[] | "\(.id)\t\(.createdAt)\t\(.category)/\(.platform)\t\(.message|.[0:80])"' /tmp/feedback.json
 ```
 
-Each report has `id`, `message`, `category` (problem, idea, other),
+Each report has `id`, `message`, `category` (problem, idea, other, beta),
 `platform` (web, android, ios), `appVersion`, `page`, `spaceId`, `handle`
-(null when signed out), `userAgent`, `context` (the client's own
+(null when signed out), `email` (set only on a `beta` report — the Android
+closed-testing sign-up address), `userAgent`, `context` (the client's own
 diagnostics: room state, build id, device) and `createdAt`.
 
 ## 2. Find what was already processed
@@ -48,6 +49,11 @@ this box's credential does not cover GraphQL, so `gh issue` commands fail.
   reports of the same thing become one issue quoting each of them.
 - **Matches an open `feedback` issue**: one comment on that issue quoting
   the new report, with its marker.
+- **An Android beta sign-up** (`category: beta`): never file a GitHub issue
+  or quote it in one — the issue would be public and the report carries the
+  submitter's email. Record it in the intake log (step 5) as
+  `skipped: beta sign-up (see /admin/feedback)` and nothing else; the owner
+  reviews and enrolls these from the admin page, by hand.
 - **Not actionable** (a test message, thanks, abuse, empty): record it in
   the intake log (step 5) and nothing else.
 

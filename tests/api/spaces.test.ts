@@ -592,10 +592,78 @@ describe('POST /api/spaces', () => {
     const body = await res.json();
     expect(res.status).toBe(201);
     expect(mockFindDefaultHostedSpace).toHaveBeenCalledWith('did:plc:host123');
-    expect(mockReopenSpace).toHaveBeenCalledWith('sp-old');
+    // The existing row's title ('My room') differs from the freshly computed
+    // default for this host, so the reopen refreshes it.
+    expect(mockReopenSpace).toHaveBeenCalledWith(
+      'sp-old',
+      undefined,
+      'The @alice.bsky.social show'
+    );
     expect(mockCreateSpace).not.toHaveBeenCalled();
     expect(body.reopened).toBe(true);
     expect(mockCreateHostToken).toHaveBeenCalledWith('sp-old', expect.anything());
+  });
+
+  it('startNow without a title refreshes a reopened default show after the host renames on Bluesky (issue #44)', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+      displayName: 'Alice Renamed',
+    });
+    mockFindDefaultHostedSpace.mockResolvedValueOnce(
+      makeSpaceRow({ id: 'sp-old', status: 'expired', title: 'The Alice show', isDefaultTitled: true })
+    );
+    mockReopenSpace.mockResolvedValueOnce(
+      makeSpaceRow({ id: 'sp-old', status: 'active', isLive: false, title: 'The Alice Renamed show', isDefaultTitled: true })
+    );
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 'jwt.host.token',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp-old',
+      identity: 'did:plc:host123',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true }),
+    });
+    const res = await POST(req);
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(mockReopenSpace).toHaveBeenCalledWith('sp-old', undefined, 'The Alice Renamed show');
+    expect(body.space.title).toBe('The Alice Renamed show');
+  });
+
+  it('startNow without a title does not re-write an already up-to-date default title', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+      displayName: 'Alice',
+    });
+    mockFindDefaultHostedSpace.mockResolvedValueOnce(
+      makeSpaceRow({ id: 'sp-old', status: 'expired', title: 'The Alice show', isDefaultTitled: true })
+    );
+    mockReopenSpace.mockResolvedValueOnce(
+      makeSpaceRow({ id: 'sp-old', status: 'active', isLive: false, title: 'The Alice show', isDefaultTitled: true })
+    );
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 'jwt.host.token',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp-old',
+      identity: 'did:plc:host123',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    expect(mockReopenSpace).toHaveBeenCalledWith('sp-old');
   });
 
   it('startNow with a title always creates a new show', async () => {

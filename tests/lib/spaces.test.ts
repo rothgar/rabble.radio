@@ -588,4 +588,27 @@ describe('reopenSpace', () => {
     expect(row.isLive).toBe(true);
     expect(mockSpaceUpdate).not.toHaveBeenCalled();
   });
+
+  it('refreshes the title when a newTitle is given (issue #44)', async () => {
+    const now = new Date('2026-11-07T12:00:00Z');
+    mockSpaceFindUnique.mockResolvedValueOnce({ status: 'expired' });
+    mockSpaceUpdate.mockResolvedValueOnce(
+      makeSpaceRow({ id: 'sp1', status: 'active', title: 'The Alice Renamed show', tags: [] })
+    );
+    const row = await reopenSpace('sp1', now, 'The Alice Renamed show');
+    expect(row.title).toBe('The Alice Renamed show');
+    expect(mockSpaceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'sp1' },
+        data: {
+          status: 'active',
+          isLive: false,
+          scheduledAt: null,
+          emptySince: now,
+          expiresAt: new Date(now.getTime() + 10 * 60 * 1000),
+          title: 'The Alice Renamed show',
+        },
+      })
+    );
+  });
 });

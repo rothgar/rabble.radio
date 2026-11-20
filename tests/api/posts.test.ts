@@ -15,6 +15,7 @@ const {
   mockFetchPostView,
   mockCreateSpacePost,
   mockListSpacePosts,
+  mockLogger,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockGetSpaceById: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockFetchPostView: vi.fn(),
   mockCreateSpacePost: vi.fn(),
   mockListSpacePosts: vi.fn(),
+  mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -45,6 +47,8 @@ vi.mock('@/lib/posts', () => ({
   createSpacePost: mockCreateSpacePost,
   listSpacePosts: mockListSpacePosts,
 }));
+
+vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 
 function makeSpace(overrides: Record<string, unknown> = {}) {
   return {
@@ -170,6 +174,33 @@ describe('POST /api/spaces/[id]/posts', () => {
     expect(mockCreateSpacePost).not.toHaveBeenCalled();
   });
 
+  it('logs the reason when AppView fails', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+    });
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace(),
+      isHost: true,
+    });
+    mockResolvePostUrl.mockReturnValueOnce({
+      atUri: 'at://did:plc:abc/app.bsky.feed.post/abc',
+      handle: 'did:plc:abc',
+      postId: 'abc',
+    });
+    mockFetchPostView.mockRejectedValueOnce(new Error('appview 500'));
+    const { POST } = await import('@/app/api/spaces/[id]/posts/route');
+    const res = await POST(
+      makeRequest({ postUrl: 'https://bsky.app/profile/foo/post/abc' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(502);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'posts.appview_failed',
+      expect.objectContaining({ err: expect.any(Error), spaceId: 'sp1' })
+    );
+  });
+
   it('stores the post and returns 201 for host', async () => {
     mockGetCurrentUser.mockResolvedValueOnce({
       did: 'did:plc:host123',
@@ -227,6 +258,37 @@ describe('POST /api/spaces/[id]/posts', () => {
       expect.objectContaining({ cid: 'cid123' })
     );
   });
+
+  it('logs the reason when storing the post fails', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+    });
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace(),
+      isHost: true,
+    });
+    mockResolvePostUrl.mockReturnValueOnce({
+      atUri: 'at://did:plc:abc/app.bsky.feed.post/abc',
+      handle: 'did:plc:abc',
+      postId: 'abc',
+    });
+    mockFetchPostView.mockResolvedValueOnce({
+      uri: 'at://did:plc:abc/app.bsky.feed.post/abc',
+      cid: 'cid123',
+    });
+    mockCreateSpacePost.mockRejectedValueOnce(new Error('db unavailable'));
+    const { POST } = await import('@/app/api/spaces/[id]/posts/route');
+    const res = await POST(
+      makeRequest({ postUrl: 'https://bsky.app/profile/carol.bsky.social/post/abc' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(500);
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'posts.store_failed',
+      expect.objectContaining({ spaceId: 'sp1' })
+    );
+  });
 });
 
 describe('GET /api/spaces/[id]/posts', () => {
@@ -269,5 +331,20 @@ describe('GET /api/spaces/[id]/posts', () => {
       params: Promise.resolve({ id: 'missing' }),
     });
     expect(res.status).toBe(404);
+  });
+
+  it('logs the reason when listing posts fails', async () => {
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    mockGetSpaceBySlug.mockResolvedValueOnce(null);
+    mockListSpacePosts.mockRejectedValueOnce(new Error('db unavailable'));
+    const { GET } = await import('@/app/api/spaces/[id]/posts/route');
+    const res = await GET(new NextRequest('http://localhost/api/spaces/sp1/posts'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    expect(res.status).toBe(500);
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'posts.list_failed',
+      expect.objectContaining({ spaceId: 'sp1' })
+    );
   });
 });

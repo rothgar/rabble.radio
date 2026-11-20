@@ -154,7 +154,6 @@ sealed interface RoomState {
         val anonymousListeners: Int = 0,
         val micOn: Boolean = false,
         val onAir: Boolean = false,
-        val invitePending: Boolean = false,
         val stageBusy: Boolean = false,
         val notice: String? = null,
         /** Someone other than us is publishing audio (so pre-show music should yield). */
@@ -291,7 +290,9 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 micOn = r.micOn,
                 members = r.members.size,
                 anonymousListeners = r.anonymousListeners,
-                invitePending = r.invitePending,
+                // No stage invites to accept anymore; always false, kept so the
+                // feedback context key stays stable.
+                invitePending = false,
             )
             is RoomState.Failed -> Diagnostics.event("room_failed", r.message)
             else -> Diagnostics.clearRoom()
@@ -402,10 +403,6 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     val current = room as? RoomState.Connected ?: return@collect
                     val msg = runCatching { JSONObject(String(event.data)) }.getOrNull() ?: return@collect
                     when (msg.optString("type")) {
-                        "stage_invite" ->
-                            if (msg.optString("targetIdentity") == current.join.identity) {
-                                room = current.copy(invitePending = true)
-                            }
                         "on_air_changed" -> room = current.copy(onAir = msg.optBoolean("onAir", current.onAir))
                         "space_updated" -> (state as? ShowState.Ready)?.let { ready ->
                             val tags = msg.optJSONArray("tags")?.let { arr -> List(arr.length()) { arr.getString(it) } } ?: ready.show.tags
@@ -441,18 +438,15 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
-    // Poll the stage status while connected: invites and on-air changes reach
-    // listeners this way even when data messages do not.
+    // Poll the stage status while connected: on-air changes reach listeners
+    // this way even when data messages do not.
     LaunchedEffect(room is RoomState.Connected) {
         while (room is RoomState.Connected) {
             val current = room as RoomState.Connected
             if (!current.join.anonymous) {
                 runCatching { app.api.stageStatus(showId) }.getOrNull()?.let { status ->
                     val latest = room as? RoomState.Connected ?: return@let
-                    room = latest.copy(
-                        onAir = status.onAir,
-                        invitePending = latest.invitePending || (status.pendingInviteFrom != null && !status.onStage),
-                    )
+                    room = latest.copy(onAir = status.onAir)
                 }
             }
             delay(STAGE_POLL_MS)
@@ -559,7 +553,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
-    /** accept = take the stage; leave = decline an invite or step down. Both reconnect with the new token. */
+    /** Step down from the stage, reconnecting with an audience token. */
     fun stage(action: String) {
         val current = room as? RoomState.Connected ?: return
         room = current.copy(stageBusy = true, notice = null)
@@ -569,24 +563,23 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                 val token = result.token
                 val wsUrl = result.wsUrl
                 if (token != null && wsUrl != null) {
-                    val role = result.role ?: if (action == "accept") "speaker" else "audience"
+                    val role = result.role ?: "audience"
                     val goingOnStage = role != "audience"
                     if (goingOnStage && !hasMicPermission()) micPermission.launch(Manifest.permission.RECORD_AUDIO)
                     lkRoom.disconnect()
                     connectWith(current.join.copy(token = token, wsUrl = wsUrl, role = role), enableMic = goingOnStage)
                     (room as? RoomState.Connected)?.let {
                         room = it.copy(
-                            invitePending = false,
                             stageBusy = false,
                             notice = if (goingOnStage) "You're on stage." else null,
                         )
                     }
                 } else {
-                    (room as? RoomState.Connected)?.let { room = it.copy(invitePending = false, stageBusy = false) }
+                    (room as? RoomState.Connected)?.let { room = it.copy(stageBusy = false) }
                 }
             } catch (e: Exception) {
                 (room as? RoomState.Connected)?.let {
-                    room = it.copy(stageBusy = false, invitePending = false, notice = e.message ?: "Stage action failed.")
+                    room = it.copy(stageBusy = false, notice = e.message ?: "Stage action failed.")
                 }
             }
         }
@@ -724,14 +717,6 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                     Text(if (room == RoomState.Joining) "Opening…" else "Open the studio")
                                 }
                             }
-                        }
-                        if (connected != null && connected.invitePending) {
-                            InviteBanner(
-                                hostName = s.show.host.displayName ?: "@${s.show.host.handle}",
-                                busy = connected.stageBusy,
-                                onAccept = { stage("accept") },
-                                onDecline = { stage("leave") },
-                            )
                         }
                         if (!showReplay) RoomPanel(
                             show = s.show,
@@ -876,28 +861,6 @@ private fun PlaceholderSeat() {
         ) { Text("👤", fontSize = 22.sp, modifier = Modifier.alpha(0.35f)) }
         Spacer(Modifier.height(4.dp))
         Text("Open seat", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextTertiary)
-    }
-}
-
-@Composable
-private fun InviteBanner(hostName: String, busy: Boolean, onAccept: () -> Unit, onDecline: () -> Unit) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(RabbleColors.Accent.copy(alpha = 0.18f))
-            .padding(16.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("$hostName invited you on stage", fontWeight = FontWeight.SemiBold, color = RabbleColors.Text)
-            Text("Accepting turns your microphone on so the room can hear you.", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAccept, enabled = !busy, modifier = Modifier.weight(1f).height(48.dp)) {
-                    Text(if (busy) "Joining…" else "Take the stage")
-                }
-                OutlinedButton(onClick = onDecline, enabled = !busy, modifier = Modifier.weight(1f).height(48.dp)) { Text("Not now") }
-            }
-        }
     }
 }
 

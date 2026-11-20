@@ -125,14 +125,6 @@ struct ShowView: View {
                                 .wideButton()
                         }
                     }
-                    if let connected, connected.invitePending {
-                        InviteBanner(
-                            hostName: show.host.label,
-                            busy: connected.stageBusy,
-                            onAccept: { model.stage("accept") },
-                            onDecline: { model.stage("leave") }
-                        )
-                    }
                     if !showReplay {
                         RoomPanel(model: model, show: show, onLogin: { showLogin = true })
                     }
@@ -238,31 +230,6 @@ private struct PlaceholderSeat: View {
             Text("Open seat").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
         }
         .frame(width: 80)
-    }
-}
-
-private struct InviteBanner: View {
-    let hostName: String
-    let busy: Bool
-    let onAccept: () -> Void
-    let onDecline: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("\(hostName) invited you on stage").font(RabbleFont.style(.headline))
-            Text("Accepting turns your microphone on so the room can hear you.")
-                .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
-            HStack(spacing: 8) {
-                Button(busy ? "Joining…" : "Take the stage", action: onAccept)
-                    .buttonStyle(.borderedProminent).disabled(busy).wideButton()
-                Button("Not now", action: onDecline)
-                    .buttonStyle(.bordered).disabled(busy).wideButton()
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RabbleColors.accent.opacity(0.18))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

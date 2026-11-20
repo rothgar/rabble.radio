@@ -139,7 +139,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
-  const title = rawTitle || (startNow ? defaultShowTitle(user.handle) : '');
+  const title = rawTitle || (startNow ? defaultShowTitle(user.handle, user.displayName) : '');
   if (!title) {
     return NextResponse.json(
       { error: 'validation_error', message: 'Title is required.' },
@@ -272,7 +272,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
       existing = resolved.space;
     } else if (!rawTitle) {
-      existing = await findDefaultHostedSpace(user.did, user.handle);
+      existing = await findDefaultHostedSpace(user.did, user.handle, user.displayName);
     }
     if (existing) {
       try {
@@ -307,13 +307,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // ---- Start-now flow ---------------------------------------------------
   if (startNow) {
-    // Resolve the latest displayName / avatarUrl for the host so the
-    // SpaceRoom header can render `@handle` immediately on the redirected
-    // page. We query the User row independently from getCurrentUser()
-    // because the session cookie only carries `did` + `handle`.
+    // Resolve the latest avatarUrl for the host so the SpaceRoom header can
+    // render it immediately on the redirected page. displayName comes from
+    // getCurrentUser() already; avatarUrl isn't part of that session shape.
     const hostProfile = await prisma.user.findUnique({
       where: { did: user.did },
-      select: { displayName: true, avatarUrl: true },
+      select: { avatarUrl: true },
     });
     // The space stays `active` (off air). If token minting fails the row is
     // left as a plain active space the host can still open from Stations.
@@ -355,7 +354,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         roomName: hostToken.roomName,
         identity: hostToken.identity,
         handle: user.handle,
-        displayName: hostProfile?.displayName ?? null,
+        displayName: user.displayName,
         avatarUrl: hostProfile?.avatarUrl ?? null,
         onAir: false,
       },

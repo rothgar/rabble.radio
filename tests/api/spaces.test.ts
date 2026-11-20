@@ -60,7 +60,8 @@ const {
 
 vi.mock('@/lib/spaces', () => ({
   createSpace: mockCreateSpace,
-  defaultShowTitle: (handle: string) => `@${handle}'s show`,
+  defaultShowTitle: (handle: string, displayName?: string | null) =>
+    `The ${displayName?.trim() || `@${handle}`} show`,
   getSpaces: mockGetSpaces,
   getSpacesForUser: mockGetSpacesForUser,
   getSpaceById: mockGetSpaceById,
@@ -441,6 +442,7 @@ describe('POST /api/spaces', () => {
     mockGetCurrentUser.mockResolvedValueOnce({
       did: 'did:plc:host123',
       handle: 'alice.bsky.social',
+      displayName: 'Alice',
     });
     mockCreateSpace.mockResolvedValueOnce(
       makeSpaceRow({ status: 'active', isLive: false })
@@ -487,7 +489,7 @@ describe('POST /api/spaces', () => {
     });
     expect(mockFindUserByDid).toHaveBeenCalledWith({
       where: { did: 'did:plc:host123' },
-      select: { displayName: true, avatarUrl: true },
+      select: { avatarUrl: true },
     });
     // Going on air is a separate step (POST /api/spaces/[id]/live): the
     // instant start publishes nothing and records nothing.
@@ -500,9 +502,10 @@ describe('POST /api/spaces', () => {
     mockGetCurrentUser.mockResolvedValueOnce({
       did: 'did:plc:host123',
       handle: 'alice.bsky.social',
+      displayName: null,
     });
     mockCreateSpace.mockResolvedValueOnce(
-      makeSpaceRow({ status: 'active', isLive: false, title: "@alice.bsky.social's show" })
+      makeSpaceRow({ status: 'active', isLive: false, title: 'The @alice.bsky.social show' })
     );
     mockCreateHostToken.mockResolvedValueOnce({
       token: 'jwt.host.token',
@@ -520,12 +523,45 @@ describe('POST /api/spaces', () => {
     const res = await POST(req);
     expect(res.status).toBe(201);
     expect(mockCreateSpace).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "@alice.bsky.social's show", hostId: 'did:plc:host123' })
+      expect.objectContaining({ title: 'The @alice.bsky.social show', hostId: 'did:plc:host123' })
+    );
+  });
+
+  it('startNow: true without a title prefers the display name over the handle (issue #23)', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+      displayName: 'Alice Example',
+    });
+    mockCreateSpace.mockResolvedValueOnce(
+      makeSpaceRow({ status: 'active', isLive: false, title: 'The Alice Example show' })
+    );
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 'jwt.host.token',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp1',
+      identity: 'did:plc:host123',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    expect(mockCreateSpace).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'The Alice Example show', hostId: 'did:plc:host123' })
     );
   });
 
   it('startNow without a title reopens the existing default show instead of creating one', async () => {
-    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:host123', handle: 'alice.bsky.social' });
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+      displayName: null,
+    });
     mockFindDefaultHostedSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp-old', status: 'expired' }));
     mockReopenSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp-old', status: 'active', isLive: false }));
     mockCreateHostToken.mockResolvedValueOnce({
@@ -544,7 +580,7 @@ describe('POST /api/spaces', () => {
     const res = await POST(req);
     const body = await res.json();
     expect(res.status).toBe(201);
-    expect(mockFindDefaultHostedSpace).toHaveBeenCalledWith('did:plc:host123', 'alice.bsky.social');
+    expect(mockFindDefaultHostedSpace).toHaveBeenCalledWith('did:plc:host123', 'alice.bsky.social', null);
     expect(mockReopenSpace).toHaveBeenCalledWith('sp-old');
     expect(mockCreateSpace).not.toHaveBeenCalled();
     expect(body.reopened).toBe(true);

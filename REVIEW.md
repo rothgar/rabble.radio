@@ -68,6 +68,23 @@ code, and mistakes already made there.
   Check any new reader of `permission.canPublish` against which failure mode
   it can cause before picking a default.
 
+## src/lib/spaces.ts (findDefaultHostedSpace)
+
+- `findDefaultHostedSpace` identifies a host's "default" show by matching
+  `Space.title` against the exact string `defaultShowTitle` would render
+  today, not by any marker on the row itself. Issue #23 changed that
+  rendered shape from handle-only (`"@alice's show"`) to display-name-first
+  (`"The Alice show"`) and had to add a second `title: { in: [...] }` branch
+  matching the old shape too, or every host with an existing default-titled
+  show would have silently lost it to a duplicate on their next "Start a
+  show". That branch only covers the one known prior shape: a host whose
+  Bluesky display name changes between sessions can still stop matching
+  their own default show, since `displayName` is captured at login
+  (`src/app/api/auth/bluesky/callback/route.ts`) and the title text isn't
+  re-synced after. Filed as issue #33 to replace text-matching with a
+  dedicated marker on `Space`; any further change to `defaultShowTitle`'s
+  shape needs the same "match the old shape too" treatment until that lands.
+
 ## src/lib/session.ts (getCurrentUser)
 
 - `getCurrentUser` is the single enforcement point for a platform ban

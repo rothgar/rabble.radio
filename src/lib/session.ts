@@ -120,6 +120,7 @@ export async function destroySession(): Promise<void> {
 export async function getCurrentUser(): Promise<{
   did: string;
   handle: string;
+  displayName: string | null;
 } | null> {
   const session = await getSession();
   if (!session.bluesky?.did || !session.bluesky?.handle) {
@@ -127,7 +128,7 @@ export async function getCurrentUser(): Promise<{
   }
   const row = await prisma.user.findUnique({
     where: { did: session.bluesky.did },
-    select: { bannedAt: true },
+    select: { bannedAt: true, displayName: true },
   });
   if (row?.bannedAt) {
     return null;
@@ -135,5 +136,6 @@ export async function getCurrentUser(): Promise<{
   return {
     did: session.bluesky.did,
     handle: session.bluesky.handle,
+    displayName: row?.displayName ?? null,
   };
 }

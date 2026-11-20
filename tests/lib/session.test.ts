@@ -50,9 +50,20 @@ describe('getCurrentUser', () => {
 
   it('returns the session user when not banned', async () => {
     cookieJar.set('bs_spaces_session', JSON.stringify({ bluesky: { did: 'did:plc:a', handle: 'alice.test' } }));
-    mockFindUnique.mockResolvedValueOnce({ bannedAt: null });
+    mockFindUnique.mockResolvedValueOnce({ bannedAt: null, displayName: null });
     const { getCurrentUser } = await import('@/lib/session');
-    expect(await getCurrentUser()).toEqual({ did: 'did:plc:a', handle: 'alice.test' });
+    expect(await getCurrentUser()).toEqual({ did: 'did:plc:a', handle: 'alice.test', displayName: null });
+  });
+
+  it('includes the display name when the user row has one', async () => {
+    cookieJar.set('bs_spaces_session', JSON.stringify({ bluesky: { did: 'did:plc:a', handle: 'alice.test' } }));
+    mockFindUnique.mockResolvedValueOnce({ bannedAt: null, displayName: 'Alice Example' });
+    const { getCurrentUser } = await import('@/lib/session');
+    expect(await getCurrentUser()).toEqual({
+      did: 'did:plc:a',
+      handle: 'alice.test',
+      displayName: 'Alice Example',
+    });
   });
 
   it('returns null for a banned did even with a valid session cookie', async () => {

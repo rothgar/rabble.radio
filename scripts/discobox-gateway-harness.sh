@@ -38,6 +38,9 @@ set -euo pipefail
 slug=${1:?usage: discobox-gateway-harness.sh SLUG MODEL [SMALL_MODEL]}
 model=${2:?usage: discobox-gateway-harness.sh SLUG MODEL [SMALL_MODEL]}
 small=${3:-$model}
+# A limit-free local model box-watch can switch a box to (`/model`); listing
+# it here makes Claude Code accept the id without validation.
+fallback=${FALLBACK_MODEL:-qwen3.8-27b-nvfp4}
 discobox=${DISCOBOX:-discobox}
 secret=${GATEWAY_SECRET:-anthropic}
 gateway=${GATEWAY_URL:-https://ai.gerbil-dragon.ts.net}
@@ -47,7 +50,7 @@ host=${gateway#*://}; host=${host%%/*}
 tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
 # The built-in claude-code settings (theme, no permission prompts) plus the
 # gateway and model mapping. `env` here is applied by Claude Code at start.
-jq -n --arg m "$model" --arg s "$small" --arg g "$gateway" '{
+jq -n --arg m "$model" --arg s "$small" --arg g "$gateway" --arg f "$fallback" '{
   theme: "dark",
   skipDangerousModePermissionPrompt: true,
   permissions: { defaultMode: "bypassPermissions" },
@@ -58,7 +61,8 @@ jq -n --arg m "$model" --arg s "$small" --arg g "$gateway" '{
     ANTHROPIC_DEFAULT_OPUS_MODEL: $m,
     ANTHROPIC_DEFAULT_SONNET_MODEL: $m,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: $s,
-    ANTHROPIC_SMALL_FAST_MODEL: $s
+    ANTHROPIC_SMALL_FAST_MODEL: $s,
+    ANTHROPIC_CUSTOM_MODEL_OPTION: $f
   }
 }' > "$tmp"
 

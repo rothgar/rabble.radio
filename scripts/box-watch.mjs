@@ -13,19 +13,22 @@
 //   3. on the first sighting opens (or comments on) one issue labelled `ops`,
 //      "Claude usage limit reached", so the owner learns why the factory went
 //      quiet, and remembers the box in ~/.local/state/rabble-boxwatch/;
-//   4. when the reset time has passed, types `continue` into the box and
-//      comments; with BOXWATCH_FALLBACK_MODEL set, switches the box to that
-//      model at the limit (`/model`) and back at the reset.
+//   4. with BOXWATCH_FALLBACK_MODEL set (the timer sets qwen3.8-27b-nvfp4),
+//      types `/effort medium`, `/model <fallback>` and `continue` into the
+//      box, so the worker carries on with a local model that has no limit
+//      (the gateway rejects effort "high" for it, hence the effort step);
+//      when the reset time has passed, types `/model <primary>` and
+//      `/effort auto` to put it back. Without a fallback model the box is
+//      parked and gets `continue` at the reset.
 //
-// Only Claude Code boxes through the aperture gateway are affected by the
-// limit; the gateway's local models (qwen) answer the OpenAI chat endpoint,
-// which Claude Code does not speak, so the fallback switch only helps once
-// the gateway serves such a model on the Anthropic messages endpoint.
+// Claude Code's own `fallbackModel` chain does not help here: it skips
+// rate-limit and billing errors by design, and a usage limit is one.
 //
 // Environment: DISCOBOX (cli), BOXWATCH_REPO (rothgar/rabble.radio),
 // BOXWATCH_GATEWAY (https://ai.gerbil-dragon.ts.net), BOXWATCH_LLM_MODEL
-// (qwen3.8-27b-nvfp4), BOXWATCH_FALLBACK_MODEL (unset = no switch),
-// BOXWATCH_STATE (~/.local/state/rabble-boxwatch).
+// (qwen3.8-27b-nvfp4, the classifier), BOXWATCH_FALLBACK_MODEL (unset = park
+// the box), BOXWATCH_FALLBACK_EFFORT (medium), BOXWATCH_STATE
+// (~/.local/state/rabble-boxwatch).
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -44,6 +47,7 @@ const REPO = process.env.BOXWATCH_REPO ?? 'rothgar/rabble.radio';
 const GATEWAY = (process.env.BOXWATCH_GATEWAY ?? 'https://ai.gerbil-dragon.ts.net').replace(/\/$/, '');
 const LLM_MODEL = process.env.BOXWATCH_LLM_MODEL ?? 'qwen3.8-27b-nvfp4';
 const FALLBACK = process.env.BOXWATCH_FALLBACK_MODEL ?? '';
+const FALLBACK_EFFORT = process.env.BOXWATCH_FALLBACK_EFFORT ?? 'medium';
 const STATE_DIR = process.env.BOXWATCH_STATE ?? path.join(homedir(), '.local/state/rabble-boxwatch');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 const ISSUE_TITLE = 'Claude usage limit reached';
@@ -257,7 +261,7 @@ for (const box of boxes) {
       const info = { ...limited, resetsAt };
       const issue = await report(box, info);
       const primary = await modelOf(box.harnessId);
-      if (FALLBACK) { await type(box.id, `/model ${FALLBACK}`); await type(box.id, 'continue'); }
+      if (FALLBACK) { await type(box.id, `/effort ${FALLBACK_EFFORT}`); await type(box.id, `/model ${FALLBACK}`); await type(box.id, 'continue'); }
       state.boxes[box.id] = { name: box.name, seenAt: now, kind: limited.kind, resetsText: limited.resetsText, resetsAt, issue, primary, switched: Boolean(FALLBACK), nudgedAt: 0 };
     } else {
       dbg(`${box.id}: still limited`);
@@ -265,25 +269,32 @@ for (const box of boxes) {
     continue;
   }
 
-  if (entry) {
-    // No limit text on screen any more: either it resumed (after our nudge or on its own) or the screen moved on.
+  if (entry && !entry.switched) {
+    // A parked box no longer shows the limit text: it resumed, after our nudge or someone else's.
     log(`${box.id} (${box.name}): no longer shows the limit`);
-    if (entry.switched) await type(box.id, `/model ${entry.primary}`);
-    await comment(entry.issue, `**${entry.name}** (\`${box.id}\`) is working again${entry.switched ? `, back on \`${entry.primary}\`` : ''}.`);
+    await comment(entry.issue, `**${entry.name}** (\`${box.id}\`) is working again.`);
     delete state.boxes[box.id];
   }
+  // A switched box is expected to show no limit text (it is working on the fallback); only the reset time puts it back.
 }
 
-// Boxes we remember but whose limit has reset: nudge them. Unknown reset time: nudge hourly.
+// Boxes we remember whose limit has reset: put a switched box back on its model, nudge a parked one.
+// Unknown reset time, or a nudge that did not take: try again hourly.
 for (const [id, entry] of Object.entries(state.boxes)) {
   if (!boxes.some((b) => b.id === id)) { delete state.boxes[id]; continue; }
-  const due = entry.resetsAt ? now > entry.resetsAt + 2 * 60000 : now - Math.max(entry.seenAt, entry.nudgedAt) > 3600000;
-  if (!due || now - entry.nudgedAt < 10 * 60000) continue;
+  const due = entry.resetsAt ? now > entry.resetsAt + 2 * 60000 : now - entry.seenAt > 3600000;
+  if (!due || now - entry.nudgedAt < 3600000) continue;
+  if (entry.switched) {
+    log(`${id} (${entry.name}): reset passed, back to ${entry.primary}`);
+    await type(id, `/model ${entry.primary}`);
+    await type(id, '/effort auto');
+    await comment(entry.issue, `**${entry.name}** (\`${id}\`) is back on \`${entry.primary}\`.`);
+    delete state.boxes[id];
+    continue;
+  }
   log(`${id} (${entry.name}): reset ${entry.resetsAt ? 'passed' : 'time unknown'}, typing continue`);
-  if (entry.switched) await type(id, `/model ${entry.primary}`);
   await type(id, 'continue');
   entry.nudgedAt = now;
-  entry.switched = false;
 }
 
 // Close the issue once no box is limited.

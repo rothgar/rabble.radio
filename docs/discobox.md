@@ -275,14 +275,19 @@ into the box, comments, and closes the issue once every box is working
 again. `node scripts/box-watch.mjs --dry-run --verbose` shows what it
 would do.
 
-A fallback model at the limit is prepared but off: `BOXWATCH_FALLBACK_MODEL`
-makes it type `/model <id>` into a stopped box and switch back at the
-reset. It cannot name the gateway's local models yet, because aperture
-serves them on the OpenAI chat endpoint only and Claude Code speaks the
-Anthropic messages endpoint; once the gateway (or a translating proxy in
-front of it) serves such a model on `/v1/messages`, set the variable in the
-service unit. A second Anthropic credential bound to a second harness
-config is the other route, paid per token.
+At the limit it switches the box to a local model instead of parking it:
+the service unit sets `BOXWATCH_FALLBACK_MODEL=qwen3.8-27b-nvfp4`, and the
+watcher types `/effort medium`, `/model qwen3.8-27b-nvfp4` and `continue`
+into the box (the gateway serves the qwen models on `/v1/messages` with
+tool use, and rejects effort `high` for them, hence the effort step). At the
+reset it types `/model <the harness's model>` and `/effort auto`. The
+harness configs list the qwen id as `ANTHROPIC_CUSTOM_MODEL_OPTION` so
+Claude Code accepts it. Claude Code's own `fallbackModel` chain is no use
+here: it skips rate-limit and billing errors by design. Caveats: the 27B
+model does small, well-specified work (triage, a scoped fix) and not design;
+its window is 262k tokens while Claude Code assumes 1M for an unknown id, so
+a very long session can overflow after the switch; and `/model` saves the
+choice in the box, which is why the watcher puts it back at the reset.
 
 ## Branch protection
 

@@ -15,6 +15,7 @@ import {
 import { getCurrentUser } from '@/lib/session';
 import { fetchPostView, resolvePostUrl } from '@/lib/bsky';
 import { createSpacePost, listSpacePosts } from '@/lib/posts';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -90,6 +91,9 @@ export async function POST(
   try {
     view = await fetchPostView(atUri);
   } catch (err) {
+    // A bad or removed post is often the sharer's doing (a stale link, a
+    // deleted post), not a Rabble bug, so this is a warn rather than error.
+    logger.warn('posts.appview_failed', { err, spaceId: resolved.space.id });
     return NextResponse.json(
       {
         error: 'appview_failed',
@@ -121,6 +125,7 @@ export async function POST(
     );
     return NextResponse.json({ post: stored }, { status: 201 });
   } catch (err) {
+    logger.error('posts.store_failed', { err, spaceId: resolved.space.id });
     return NextResponse.json(
       {
         error: 'store_failed',
@@ -151,6 +156,7 @@ export async function GET(
     const posts = await listSpacePosts(space.id);
     return NextResponse.json({ posts }, { status: 200 });
   } catch (err) {
+    logger.error('posts.list_failed', { err, spaceId: space.id });
     const body: ErrorBody = {
       error: 'list_failed',
       message: err instanceof Error ? err.message : 'Failed to list posts.',

@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   getFollowedHostDids: vi.fn(),
   getFollowedDids: vi.fn(),
   getPresentIdentities: vi.fn(),
+  getTunedInCounts: vi.fn(),
   getUsersByDid: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('@/lib/recording', async () => {
 vi.mock('@/lib/reminders', () => ({ getRemindedSpaceIds: m.getRemindedSpaceIds }));
 vi.mock('@/lib/host-follows', () => ({ getFollowedHostDids: m.getFollowedHostDids }));
 vi.mock('@/lib/follows', () => ({ getFollowedDids: m.getFollowedDids, getPresentIdentities: m.getPresentIdentities }));
+vi.mock('@/lib/metrics', () => ({ getTunedInCounts: m.getTunedInCounts }));
 vi.mock('@/lib/users', () => ({ getUsersByDid: m.getUsersByDid }));
 vi.mock('@/lib/db', () => ({ prisma: {} }));
 vi.mock('@/lib/storage', () => ({
@@ -34,7 +36,7 @@ function space(overrides: Partial<PublicSpace>): PublicSpace {
   return {
     id: 'sp1', slug: 'sp1', title: 'T', description: null, isLive: false, status: 'active',
     scheduledAt: null, expiresAt: null, listenerCount: 0, speakerCount: 0, reactionCount: 0,
-    likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
+    tunedInCount: 0, likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
     tags: [], createdAt: '', updatedAt: '', shareableUrl: '',
     host: { did: 'did:h', handle: 'h', displayName: null, avatarUrl: null },
     replay: null, reminded: false, podcastFeedEnabled: false, podcastFeedUrl: null,
@@ -57,6 +59,7 @@ beforeEach(() => {
   m.getFollowedHostDids.mockResolvedValue(new Set());
   m.getFollowedDids.mockResolvedValue(new Set());
   m.getPresentIdentities.mockResolvedValue(new Map());
+  m.getTunedInCounts.mockResolvedValue(new Map());
   m.getUsersByDid.mockResolvedValue([]);
 });
 
@@ -138,5 +141,29 @@ describe('decoratePublicSpaces', () => {
     expect(m.getFollowedDids).not.toHaveBeenCalled();
     expect('hostFollowed' in out[0]).toBe(false);
     expect(out[0].hostSubscribed).toBe(false);
+  });
+
+  it('overlays the cumulative tuned-in count for live shows only', async () => {
+    m.getTunedInCounts.mockResolvedValue(new Map([['sp2', 7]]));
+    const out = await decoratePublicSpaces(
+      [space({ id: 'sp1', listenerCount: 4, tunedInCount: 4 }), space({ id: 'sp2', isLive: true, status: 'live', listenerCount: 3, tunedInCount: 3 })],
+      null
+    );
+    expect(m.getTunedInCounts).toHaveBeenCalledWith(['sp2']);
+    expect(out[0].tunedInCount).toBe(4);
+    expect(out[1].tunedInCount).toBe(7);
+  });
+
+  it('falls back to the live occupancy count when the lookup throws or omits a show', async () => {
+    m.getTunedInCounts.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const out = await decoratePublicSpaces([space({ id: 'sp2', isLive: true, status: 'live', listenerCount: 3, tunedInCount: 3 })], null);
+    expect(out[0].tunedInCount).toBe(3);
+  });
+
+  it('skips the tuned-in lookup when nothing is live', async () => {
+    await decoratePublicSpaces([space({ id: 'sp1' })], null);
+    expect(m.getTunedInCounts).not.toHaveBeenCalled();
   });
 });

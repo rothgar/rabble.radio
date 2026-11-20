@@ -48,6 +48,7 @@ function makeShow(overrides: Partial<PublicSpace> = {}): PublicSpace {
     listenerCount: 3,
     speakerCount: 1,
     reactionCount: 0,
+    tunedInCount: 3,
     likeCount: 0,
     sessionCount: 0,
     totalListeners: 0,

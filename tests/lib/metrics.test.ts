@@ -81,6 +81,7 @@ import {
   ALL_TOPICS,
   endShowSession,
   getHostLeaderboard,
+  getTunedInCounts,
   likeShow,
   recordJoin,
   recordLeave,
@@ -220,6 +221,45 @@ describe('recordJoin', () => {
       where: { id: 'p1' },
       data: { leftAt: null, role: 'speaker', stageSince: null },
     });
+  });
+});
+
+describe('getTunedInCounts', () => {
+  it('returns an empty map without querying for an empty list', async () => {
+    expect(await getTunedInCounts([])).toEqual(new Map());
+    expect(m.sessionFindMany).not.toHaveBeenCalled();
+  });
+
+  it('counts participants other than the host, per space, only for open sessions', async () => {
+    m.sessionFindMany.mockResolvedValueOnce([
+      { id: 'sess1', spaceId: 'sp1', hostDid: 'did:plc:host1' },
+      { id: 'sess2', spaceId: 'sp2', hostDid: 'did:plc:host2' },
+    ]);
+    m.partCount.mockResolvedValueOnce(5).mockResolvedValueOnce(0);
+    const out = await getTunedInCounts(['sp1', 'sp2', 'sp3']);
+    expect(m.sessionFindMany).toHaveBeenCalledWith({
+      where: { spaceId: { in: ['sp1', 'sp2', 'sp3'] }, endedAt: null },
+      select: { id: true, spaceId: true, hostDid: true },
+    });
+    expect(m.partCount).toHaveBeenCalledWith({
+      where: { sessionId: 'sess1', NOT: { identity: 'did:plc:host1' } },
+    });
+    expect(m.partCount).toHaveBeenCalledWith({
+      where: { sessionId: 'sess2', NOT: { identity: 'did:plc:host2' } },
+    });
+    expect(out.get('sp1')).toBe(5);
+    expect(out.get('sp2')).toBe(0);
+    expect(out.has('sp3')).toBe(false);
+  });
+
+  it('counts a participant who already left (cumulative, not live occupancy)', async () => {
+    m.sessionFindMany.mockResolvedValueOnce([{ id: 'sess1', spaceId: 'sp1', hostDid: 'did:plc:host' }]);
+    m.partCount.mockResolvedValueOnce(3);
+    const out = await getTunedInCounts(['sp1']);
+    expect(m.partCount).toHaveBeenCalledWith({
+      where: { sessionId: 'sess1', NOT: { identity: 'did:plc:host' } },
+    });
+    expect(out.get('sp1')).toBe(3);
   });
 });
 

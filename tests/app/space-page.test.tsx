@@ -65,6 +65,7 @@ function makeSpace(overrides: Partial<PublicSpace> = {}): PublicSpace {
     listenerCount: 0,
     speakerCount: 0,
     reactionCount: 0,
+    tunedInCount: 0,
     likeCount: 0,
     sessionCount: 0,
     totalListeners: 0,

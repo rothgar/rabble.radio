@@ -199,10 +199,14 @@ describe('<SpacePageClient /> onJoinedChange', () => {
     });
     fireEvent.click(screen.getByTestId('join-button'));
 
+    // space-room mounting and the onJoinedChange(true) notification come
+    // from the same joinedHere flip but land in separate effects, so they
+    // must be awaited together — asserting onJoinedChange right after the
+    // first waitFor resolves races the second effect.
     await waitFor(() => {
       expect(screen.getByTestId('space-room')).toBeInTheDocument();
+      expect(onJoinedChange).toHaveBeenLastCalledWith(true);
     });
-    expect(onJoinedChange).toHaveBeenLastCalledWith(true);
   });
 });
 

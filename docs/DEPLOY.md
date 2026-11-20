@@ -1,4 +1,21 @@
-# Deploying rabble.rodeo
+# Deploying rabble.rodeo and rabble.radio
+
+Two environments share one repository and one Cloudflare account:
+
+| | Development | Production |
+|---|---|---|
+| Site | https://rabble.rodeo | https://rabble.radio |
+| Worker | `rabble-dev` (top level of `wrangler.jsonc`) | `rabble-prod` (`env.production`) |
+| D1 | `rabble-dev` | `rabble-prod` (`b3c5287f-9882-4ca7-b1ff-76641f3c1ce6`) |
+| R2 | `rabble-dev-recordings` | `rabble-prod-recordings` |
+| LiveKit | the dev LiveKit Cloud project | its own LiveKit Cloud project |
+| Deployed by | every push to `main` (`deploy.yml`) | a `v*` tag or a manual run (`deploy-production.yml`) |
+| By hand | `pnpm d1:migrate:remote`, `pnpm cf:deploy` | `pnpm d1:migrate:prod`, `pnpm cf:deploy:prod` |
+| Secrets | `wrangler secret put NAME --name rabble-dev` | `wrangler secret put NAME --env production` |
+
+Production setup is at the end of this file.
+
+## Development: every push to main
 
 Every push to `main` runs `.github/workflows/deploy.yml`, which deploys the
 parts whose files changed:
@@ -24,7 +41,7 @@ Repository secrets (Settings, Secrets and variables, Actions):
 
 | Secret | Used by | How to get it |
 |--------|---------|---------------|
-| `CLOUDFLARE_API_TOKEN` | web, android | Cloudflare dashboard, Manage Account, Account API Tokens, Create Token, Create Custom Token with: Account, Workers Scripts, Edit; Account, D1, Edit; Account, Workers R2 Storage, Edit; Account, Account Settings, Read; Zone, Workers Routes, Edit; Zone, Zone, Read. Account resources: this account; zone resources: the `rabble.rodeo` zone. |
+| `CLOUDFLARE_API_TOKEN` | web, android | Cloudflare dashboard, Manage Account, Account API Tokens, Create Token, Create Custom Token with: Account, Workers Scripts, Edit; Account, D1, Edit; Account, Workers R2 Storage, Edit; Account, Account Settings, Read; Zone, Workers Routes, Edit; Zone, Zone, Read. Account resources: this account; zone resources: the `rabble.rodeo` and `rabble.radio` zones (add the second zone to the token once it exists, or the production deploy cannot attach its domain). |
 | `CLOUDFLARE_ACCOUNT_ID` | web, android | The account id shown on the Workers overview page (`0f8fe574f3489eda5a599104efd24d26`). |
 | `ANDROID_DEBUG_KEYSTORE_B64` | android, optional | `base64 -w0 ~/.android/debug.keystore` from the machine whose builds are already installed on phones. Without it each run signs with a fresh key and a phone must uninstall the app before it accepts the new APK. |
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` | ios | The App Store Connect API key already used by `scripts/ios-testflight.sh`: the two ids from `~/.config/rabble/testflight.env` on the Mac mini and the contents of `AuthKey_<id>.p8`. The key must have the **Admin** role; App Manager keys fail cloud signing. |
@@ -66,3 +83,54 @@ gh variable set IOS_TESTFLIGHT --body true
   than the login keychain.
 - iOS build numbers are UTC timestamps, so every upload is newer than the
   last; the marketing version comes from `ios/project.yml`.
+
+## Production: rabble.radio
+
+`deploy-production.yml` runs on a `v*` tag (`git tag v0.1.0 && git push
+origin v0.1.0`) or from Actions, Run workflow. It runs the same checks as the
+development deploy, applies migrations to `rabble-prod`, deploys the
+`rabble-prod` Worker, builds the Android APK against `https://rabble.radio`
+and uploads it to the production bucket (served at
+https://rabble.radio/downloads/rabble-android.apk), then runs
+`scripts/qa-live.mjs --base https://rabble.radio`; a failure opens or
+updates the "QA: production checks failing after deploy" issue. iOS is not
+part of it: TestFlight builds point at `RABBLE_BASE_URL` in
+`ios/project.yml`, still rabble.rodeo; change it there when the apps move.
+
+The D1 database and R2 bucket exist and the environment deploys cleanly in a
+dry run. Before the first real deploy:
+
+1. **DNS.** Add `rabble.radio` to the Cloudflare account (Add a domain, Free
+   plan, nothing to import) and set the two nameservers it shows at the
+   registrar. Wait for the zone to show Active. Do not create an A or CNAME
+   for the apex: the first deploy attaches the Worker custom domain and
+   creates the records and certificate itself. Optional, in the zone: the
+   "www to root" redirect rule, and the no-mail records `TXT rabble.radio
+   "v=spf1 -all"` and `TXT _dmarc.rabble.radio "v=DMARC1; p=reject"`.
+2. **CI token.** Edit the `CLOUDFLARE_API_TOKEN` token in the dashboard and
+   add the `rabble.radio` zone to its zone resources (or create a new token
+   with both zones and `gh secret set CLOUDFLARE_API_TOKEN` again).
+3. **Secrets**, each `printf '%s' "$VALUE" | pnpm exec wrangler secret put
+   NAME --env production` (file-valued ones with `< file`):
+
+   | Secret | Value |
+   |---|---|
+   | `SESSION_SECRET` | `openssl rand -hex 32` |
+   | `JWKS_PRIVATE_KEY`, `JWKS_PUBLIC_KEY` | `pnpm gen:jwks /tmp/prod-jwks`, then `private-key.pem` and the whole `jwks.json` respectively (the kid is read from the JSON; `JWKS_KID` is not needed). Delete the directory afterwards. |
+   | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | A new LiveKit Cloud project for production (so a dev test can never land in a production room): its `wss://` URL and an API key pair. |
+   | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | An R2 API token, Object Read & Write, limited to `rabble-prod-recordings`. LiveKit egress uploads recordings with it. |
+   | `VAPID_PRIVATE_KEY` | `node scripts/gen-vapid.mjs` prints both keys. The private one is the secret; put the public one in `env.production.vars` as `VAPID_PUBLIC_KEY` in `wrangler.jsonc` and commit it. Without it web push is off and everything else works. |
+   | `FEEDBACK_READ_TOKEN` | `openssl rand -hex 32`. The daily feedback intake reads rabble.rodeo only; give the QA box a second discobox secret routed to `GET rabble.radio/api/feedback` when production feedback should be triaged too. |
+
+   `wrangler secret list --env production` shows what is set.
+4. **Music.** The production bucket starts empty. Upload the pre-show tracks
+   with `RECORDING_BUCKET=rabble-prod-recordings node scripts/upload-music.mjs
+   <dir>`; the R2 token in `.env` must cover the production bucket.
+5. **First deploy.** Push a tag or run the workflow. The Worker is deployed
+   first, then the smoke test waits for `/api/health`; the custom domain
+   needs the zone Active, otherwise `wrangler deploy` fails on the route.
+6. **Admins** are the same DIDs as development (`ADMIN_DIDS` and friends in
+   `env.production.vars`); edit them there.
+
+Production starts with an empty database: no demo shows, no seeded data.
+Nothing is copied from rabble.rodeo.

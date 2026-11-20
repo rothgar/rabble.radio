@@ -27,8 +27,10 @@ Always prefix shell commands with `rtk` (see ~/CLAUDE.md).
 - Any `prisma/schema.prisma` change needs a D1 migration in `prisma/d1/<nnnn>_<name>.sql` (apply with `pnpm d1:migrate:local` / `pnpm d1:migrate:remote`) and `pnpm prisma:generate`.
 - Every new lib function or API route gets a test in the matching `tests/` folder.
 - Commit straight to `main` is the repo convention. A push to `main` deploys
-  rabble.rodeo through `.github/workflows/deploy.yml` (`docs/DEPLOY.md`), so
-  the three commands above must pass before pushing.
+  rabble.rodeo (development) through `.github/workflows/deploy.yml`
+  (`docs/DEPLOY.md`), so the three commands above must pass before pushing.
+  Production is rabble.radio, the `production` wrangler environment, deployed
+  only by a `v*` tag or a manual run of `deploy-production.yml`.
 
 ## Working as a team
 

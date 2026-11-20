@@ -1,0 +1,149 @@
+# Deploy rabble.radio (production): the web app and API to the rabble-prod
+# Worker, and the Android APK built against rabble.radio to the production
+# bucket. Runs when a `v*` tag is pushed, or by hand (Actions, Run workflow).
+# Pushes to main never reach production; they deploy rabble.rodeo through
+# deploy.yml. Setup and secrets: docs/DEPLOY.md, "Production".
+name: Deploy production
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      web:
+        description: Deploy the web app and API to rabble.radio
+        type: boolean
+        default: true
+      android:
+        description: Build the Android APK against rabble.radio and publish it
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web and API (rabble.radio)
+    if: github.event_name == 'push' || inputs.web
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - name: Typecheck, lint, test
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+      - name: Apply D1 migrations (rabble-prod)
+        run: pnpm d1:migrate:prod
+      - name: Build and deploy the rabble-prod Worker
+        run: pnpm cf:deploy:prod
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 20 https://rabble.radio/api/health; then exit 0; fi
+            sleep 10
+          done
+          echo "rabble.radio did not answer /api/health after the deploy" >&2
+          exit 1
+
+  android:
+    name: Android APK (rabble.radio)
+    if: github.event_name == 'push' || inputs.android
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Refresh the SDK command-line tools
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --update >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmdline-tools;latest" >/dev/null 2>&1 || true
+      - name: Use the shared debug keystore
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          mkdir -p ~/.android
+          printf '%s' "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+      - name: Build against rabble.radio
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug -PrabbleBaseUrl=https://rabble.radio
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rabble-android-production-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Publish to rabble.radio/downloads/rabble-android.apk
+        run: |
+          pnpm exec wrangler r2 object put rabble-prod-recordings/builds/rabble-android.apk \
+            --remote --file android/app/build/outputs/apk/debug/app-debug.apk \
+            --content-type application/vnd.android.package-archive
+
+  qa:
+    name: Live-site checks (rabble.radio)
+    needs: [web, android]
+    if: always() && needs.web.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check rabble.radio
+        id: qa
+        run: |
+          if node scripts/qa-live.mjs --base https://rabble.radio --json > qa.json; then
+            echo failed=0 >> "$GITHUB_OUTPUT"
+          else
+            echo failed=1 >> "$GITHUB_OUTPUT"
+          fi
+          node scripts/qa-live.mjs --base https://rabble.radio || true
+      - name: Open or update the QA issue
+        if: steps.qa.outputs.failed == '1'
+        run: |
+          title="QA: production checks failing after deploy"
+          {
+            echo "**Where:** https://rabble.radio, checked by \`scripts/qa-live.mjs --base https://rabble.radio\` after deploying ${GITHUB_REF_NAME} (${GITHUB_SHA::7})"
+            echo "**Observed:**"
+            node -e 'for (const c of require("./qa.json").checks) if (!c.ok) console.log(`- ${c.name}: ${c.detail}`)'
+            echo "**Expected:** every check passes (run the script locally with --base to reproduce)"
+            echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > body.md
+          num=$(gh issue list --label qa --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file body.md
+          else
+            gh issue create --title "$title" --label bug --label qa --body-file body.md
+          fi
+          exit 1

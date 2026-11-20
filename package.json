@@ -16,9 +16,11 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:deploy:prod": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --env production",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "d1:migrate:local": "wrangler d1 migrations apply rabble-dev --local",
-    "d1:migrate:remote": "wrangler d1 migrations apply rabble-dev --remote"
+    "d1:migrate:remote": "wrangler d1 migrations apply rabble-dev --remote",
+    "d1:migrate:prod": "wrangler d1 migrations apply rabble-prod --remote --env production"
   },
   "dependencies": {
     "@atproto/api": "^0.30.0",

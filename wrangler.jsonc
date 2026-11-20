@@ -1,7 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Development environment (rabble.rodeo). Production (rabble.radio) will be
-  // a second environment with its own database, bucket, secrets and domain.
+  // Top level is the development environment (rabble.rodeo, Worker
+  // `rabble-dev`). Production (rabble.radio, Worker `rabble-prod`) is the
+  // `production` environment below with its own database, bucket, secrets
+  // and domain: `pnpm cf:deploy:prod`, `pnpm d1:migrate:prod`,
+  // `wrangler secret put NAME --env production`. Bindings and vars are not
+  // inherited by an environment, so every one is repeated there.
   "name": "rabble-dev",
   "main": "custom-worker.ts",
   "compatibility_date": "2026-10-01",
@@ -42,5 +46,43 @@
     // Web Push (VAPID). The private key is the VAPID_PRIVATE_KEY secret.
     "VAPID_PUBLIC_KEY": "BMtZBKmewyV3-_C2qn97wceZqSA-hW5NEGcyhOyDS_AJOFu8OJ00FuMBmZ0XVuSECiOu4AP3BMn_GcwilLz7ulA",
     "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
+  },
+  "env": {
+    "production": {
+      "name": "rabble-prod",
+      "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+      "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "rabble-prod" }],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "rabble-prod",
+          "database_id": "b3c5287f-9882-4ca7-b1ff-76641f3c1ce6",
+          "migrations_dir": "prisma/d1"
+        }
+      ],
+      "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "rabble-prod-recordings" }],
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "routes": [{ "pattern": "rabble.radio", "custom_domain": true }],
+      "observability": { "enabled": true },
+      // Secrets for this environment are separate from rabble-dev's and set
+      // with `wrangler secret put NAME --env production` (docs/DEPLOY.md).
+      // Add "VAPID_PUBLIC_KEY" here once the production key pair exists
+      // (docs/DEPLOY.md); until then web push is off and the rest works.
+      "vars": {
+        "APP_NAME": "Rabble",
+        "PUBLIC_URL": "https://rabble.radio",
+        "NEXT_PUBLIC_APP_URL": "https://rabble.radio",
+        "LOGO_URL": "https://rabble.radio/logo.png",
+        "S3_REGION": "auto",
+        "S3_ENDPOINT": "https://0f8fe574f3489eda5a599104efd24d26.r2.cloudflarestorage.com",
+        "RECORDING_BUCKET": "rabble-prod-recordings",
+        "LOG_LEVEL": "info",
+        "FEEDBACK_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
+        "REPORT_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
+        "ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
+        "SUPPORT_EMAIL": "justin.garrison@siderolabs.com",
+        "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
+      }
+    }
   }
 }

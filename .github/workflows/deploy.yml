@@ -2,7 +2,8 @@
 # Cloudflare Workers, the Android APK to R2 (served at /downloads/), and the
 # iOS build to TestFlight. Each part runs only when its files changed; a
 # manual run (workflow_dispatch) picks parts explicitly. See docs/DEPLOY.md
-# for the secrets and variables this needs.
+# for the secrets and variables this needs. Production (rabble.radio) is
+# deploy-production.yml, on `v*` tags.
 name: Deploy
 
 on:

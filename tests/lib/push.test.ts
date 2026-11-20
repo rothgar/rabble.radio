@@ -12,7 +12,10 @@ const m = vi.hoisted(() => ({
   reminderUpdateMany: vi.fn(),
   hostFollowFindMany: vi.fn(),
   hostFollowUpdateMany: vi.fn(),
+  showFollowFindMany: vi.fn(),
+  showFollowUpdateMany: vi.fn(),
   resetHostFollowNotifications: vi.fn(async () => undefined),
+  resetShowFollowNotifications: vi.fn(async () => undefined),
   buildPushPayload: vi.fn(),
 }));
 
@@ -27,15 +30,18 @@ vi.mock('@/lib/db', () => ({
     },
     showReminder: { findMany: m.reminderFindMany, updateMany: m.reminderUpdateMany },
     hostFollow: { findMany: m.hostFollowFindMany, updateMany: m.hostFollowUpdateMany },
+    showFollow: { findMany: m.showFollowFindMany, updateMany: m.showFollowUpdateMany },
   },
 }));
 vi.mock('@/lib/host-follows', () => ({ resetHostFollowNotifications: m.resetHostFollowNotifications }));
+vi.mock('@/lib/show-follows', () => ({ resetShowFollowNotifications: m.resetShowFollowNotifications }));
 vi.mock('@block65/webcrypto-web-push', () => ({ buildPushPayload: m.buildPushPayload }));
 
 import {
   parseSubscription,
   pushHostFollowersOnAir,
   pushRemindersOnAir,
+  pushShowFollowersOnAir,
   PushValidationError,
   saveSubscription,
   sendPushToUser,
@@ -190,6 +196,47 @@ describe('pushHostFollowersOnAir', () => {
     m.resetHostFollowNotifications.mockRejectedValueOnce(new Error('d1 down'));
     expect(
       await pushHostFollowersOnAir({ id: 'sp1', title: 'T', host: { did: 'did:host', handle: 'h' } }, 'o', ENV)
+    ).toEqual({ users: 0, delivered: 0 });
+  });
+});
+
+describe('pushShowFollowersOnAir', () => {
+  it('resets the notified flag, pushes to followers and marks only the delivered ones notified', async () => {
+    m.showFollowFindMany.mockResolvedValue([{ did: 'did:a' }, { did: 'did:b' }]);
+    m.findMany.mockImplementation(async ({ where }: { where: { did: string } }) =>
+      where.did === 'did:a' ? [SUB] : []
+    );
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 201 })) as unknown as typeof fetch;
+    const out = await pushShowFollowersOnAir(
+      { id: 'sp1', title: 'The Weekly Show', host: { handle: 'h.test', displayName: 'Host' } },
+      'https://rabble.rodeo',
+      ENV,
+      fetchImpl
+    );
+    expect(out).toEqual({ users: 2, delivered: 1 });
+    expect(m.resetShowFollowNotifications).toHaveBeenCalledWith('sp1');
+    expect(m.buildPushPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          title: 'The Weekly Show is on air',
+          body: 'Host just went live on Rabble Radio.',
+          url: 'https://rabble.rodeo/show/sp1',
+          tag: 'rabble-show-sp1',
+        },
+      }),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(m.showFollowUpdateMany).toHaveBeenCalledWith({
+      where: { spaceId: 'sp1', did: { in: ['did:a'] } },
+      data: { notifiedAt: expect.any(Date) },
+    });
+  });
+
+  it('never throws', async () => {
+    m.resetShowFollowNotifications.mockRejectedValueOnce(new Error('d1 down'));
+    expect(
+      await pushShowFollowersOnAir({ id: 'sp1', title: 'T', host: { handle: 'h' } }, 'o', ENV)
     ).toEqual({ users: 0, delivered: 0 });
   });
 });

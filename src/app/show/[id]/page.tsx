@@ -418,6 +418,8 @@ export default function SpacePage(): ReactElement {
           replay={view.replay ?? null}
           reminded={view.reminded ?? false}
           hostSubscribed={view.hostSubscribed ?? false}
+          isNamedShow={view.isNamedShow}
+          showFollowed={view.showFollowed ?? false}
           musicMood={view.musicMood ?? null}
           onJoinedChange={setInRoom}
         />

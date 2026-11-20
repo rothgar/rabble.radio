@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { listReminders, takeDueReminders, type DueReminder } from '@/lib/reminders';
 import { takeDueHostFollows } from '@/lib/host-follows';
+import { takeDueShowFollows } from '@/lib/show-follows';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,12 +18,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   if (request.nextUrl.searchParams.get('due') === '1') {
-    const [showDue, hostDue] = await Promise.all([
+    const [showDue, hostDue, showFollowDue] = await Promise.all([
       takeDueReminders(user.did),
       takeDueHostFollows(user.did),
+      takeDueShowFollows(user.did),
     ]);
     const seen = new Set<string>();
-    const due: DueReminder[] = [...showDue, ...hostDue].filter((item) => {
+    const due: DueReminder[] = [...showDue, ...hostDue, ...showFollowDue].filter((item) => {
       if (seen.has(item.spaceId)) return false;
       seen.add(item.spaceId);
       return true;

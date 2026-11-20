@@ -138,7 +138,7 @@ code, and mistakes already made there.
   at all, so an explicit added border there is also the odd one out, visible
   on one button and not its neighbour.
 
-## src/lib/host-follows.ts and src/lib/push.ts (host-follow due/push race)
+## src/lib/host-follows.ts, src/lib/show-follows.ts and src/lib/push.ts (host-follow / show-follow due/push race)
 
 - `pushHostFollowersOnAir` and `takeDueHostFollows` both do a read-then-write
   over the same `HostFollow.notifiedAt` rows (query where `notifiedAt: null`,
@@ -156,6 +156,10 @@ code, and mistakes already made there.
   Closing it for real needs a single atomic claim (e.g. a parameterized
   `UPDATE ... RETURNING`) shared by both call sites; until that lands, don't
   assume the push and poll paths for `HostFollow` are mutually exclusive.
+  `pushShowFollowersOnAir`/`takeDueShowFollows` (`src/lib/show-follows.ts`,
+  added for `ShowFollow` in issue #36) repeat this exact shape on a third
+  table, `resetShowFollowNotifications` included — the eventual atomic-claim
+  fix needs to cover `ShowFollow` too, not just `HostFollow`.
 - `takeDueHostFollows` (src/lib/host-follows.ts) picks one live space per
   followed host with no ordering when a host is live on two spaces at once,
   and marks the `HostFollow` row notified regardless — so the follower never

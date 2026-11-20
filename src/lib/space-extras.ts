@@ -5,12 +5,14 @@
 //     clients can offer "Replay" instead of a join button.
 //   - `reminded`: whether the viewer set "Notify me" on the show.
 //   - `hostSubscribed`: whether the viewer follows the host (any show).
+//   - `showFollowed`: whether the viewer follows this exact named show.
 // Kept out of `toPublicSpace` so that stays a pure mapper.
 
 import type { PublicHost, PublicReplay, PublicSpace } from '@/types';
 import { getLatestAvailableRecordings, recordingDurationSeconds, type RecordingRow } from '@/lib/recording';
 import { getRemindedSpaceIds } from '@/lib/reminders';
 import { getFollowedHostDids } from '@/lib/host-follows';
+import { getFollowedSpaceIds } from '@/lib/show-follows';
 import { getFollowedDids, getPresentIdentities } from '@/lib/follows';
 import { getTunedInCounts } from '@/lib/metrics';
 import { getUsersByDid } from '@/lib/users';
@@ -36,7 +38,7 @@ export async function decoratePublicSpaces(
   const offAirIds = spaces.filter((s) => !s.isLive).map((s) => s.id);
   const liveIds = spaces.filter((s) => s.isLive).map((s) => s.id);
   // Every lookup is a decoration: if one fails the listing still renders.
-  const [replays, reminded, subscribed, followed, present, tunedIn] = await Promise.all([
+  const [replays, reminded, subscribed, showFollowed, followed, present, tunedIn] = await Promise.all([
     Promise.resolve()
       .then(() => getLatestAvailableRecordings(offAirIds))
       .catch(() => new Map<string, RecordingRow>()),
@@ -45,6 +47,9 @@ export async function decoratePublicSpaces(
       .catch(() => new Set<string>()),
     Promise.resolve()
       .then(() => getFollowedHostDids(viewerDid, spaces.map((s) => s.host.did)))
+      .catch(() => new Set<string>()),
+    Promise.resolve()
+      .then(() => getFollowedSpaceIds(viewerDid, ids))
       .catch(() => new Set<string>()),
     Promise.resolve()
       .then(() => (viewerDid ? getFollowedDids(viewerDid) : new Set<string>()))
@@ -87,6 +92,7 @@ export async function decoratePublicSpaces(
       replay: rec ? toPublicReplay(rec) : null,
       reminded: reminded.has(s.id),
       hostSubscribed: subscribed.has(s.host.did),
+      showFollowed: showFollowed.has(s.id),
       tunedInCount: tunedIn.get(s.id) ?? s.tunedInCount,
       ...(viewerDid
         ? { hostFollowed: followed.has(s.host.did), followedInRoom: inRoom }

@@ -30,6 +30,7 @@ const {
   mockBroadcastRoomData,
   mockPushRemindersOnAir,
   mockPushHostFollowersOnAir,
+  mockPushShowFollowersOnAir,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockResolveSpaceForUser: vi.fn(),
@@ -41,11 +42,13 @@ const {
   mockBroadcastRoomData: vi.fn(async () => true),
   mockPushRemindersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
   mockPushHostFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
+  mockPushShowFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
 }));
 
 vi.mock('@/lib/push', () => ({
   pushRemindersOnAir: mockPushRemindersOnAir,
   pushHostFollowersOnAir: mockPushHostFollowersOnAir,
+  pushShowFollowersOnAir: mockPushShowFollowersOnAir,
 }));
 
 vi.mock('@/lib/livekit', () => ({
@@ -215,6 +218,10 @@ describe('POST /api/spaces/[id]/live', () => {
     );
     expect(mockPushHostFollowersOnAir).toHaveBeenCalledWith(
       { id: 'sp1', title: 'My room', host: { did: 'did:plc:host123', handle: 'alice.bsky.social', displayName: null } },
+      'http://localhost'
+    );
+    expect(mockPushShowFollowersOnAir).toHaveBeenCalledWith(
+      { id: 'sp1', title: 'My room', host: { handle: 'alice.bsky.social', displayName: null } },
       'http://localhost'
     );
   });

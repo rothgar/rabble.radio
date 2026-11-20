@@ -290,6 +290,25 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.queryByTestId('join-button')).toBeNull();
   });
 
+  it('offers a follow-show button for a named show, not for the host default title', () => {
+    const { unmount } = renderPage(
+      <SpacePageClient {...baseProps()} isHost={false} isLive={false} status="active" reminded={false} isNamedShow />
+    );
+    expect(screen.getByTestId('follow-show-button').textContent).toMatch(/follow test space/i);
+    unmount();
+    renderPage(
+      <SpacePageClient
+        {...baseProps()}
+        isHost={false}
+        isLive={false}
+        status="active"
+        reminded={false}
+        isNamedShow={false}
+      />
+    );
+    expect(screen.queryByTestId('follow-show-button')).toBeNull();
+  });
+
   it('skips the follow-host button when the host did is not known', () => {
     renderPage(
       <SpacePageClient

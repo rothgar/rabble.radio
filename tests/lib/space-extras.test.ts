@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   getLatestAvailableRecordings: vi.fn(),
   getRemindedSpaceIds: vi.fn(),
   getFollowedHostDids: vi.fn(),
+  getFollowedSpaceIds: vi.fn(),
   getFollowedDids: vi.fn(),
   getPresentIdentities: vi.fn(),
   getTunedInCounts: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('@/lib/recording', async () => {
 });
 vi.mock('@/lib/reminders', () => ({ getRemindedSpaceIds: m.getRemindedSpaceIds }));
 vi.mock('@/lib/host-follows', () => ({ getFollowedHostDids: m.getFollowedHostDids }));
+vi.mock('@/lib/show-follows', () => ({ getFollowedSpaceIds: m.getFollowedSpaceIds }));
 vi.mock('@/lib/follows', () => ({ getFollowedDids: m.getFollowedDids, getPresentIdentities: m.getPresentIdentities }));
 vi.mock('@/lib/metrics', () => ({ getTunedInCounts: m.getTunedInCounts }));
 vi.mock('@/lib/users', () => ({ getUsersByDid: m.getUsersByDid }));
@@ -39,7 +41,7 @@ function space(overrides: Partial<PublicSpace>): PublicSpace {
     tunedInCount: 0, likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
     tags: [], createdAt: '', updatedAt: '', shareableUrl: '',
     host: { did: 'did:h', handle: 'h', displayName: null, avatarUrl: null },
-    replay: null, reminded: false, podcastFeedEnabled: false, podcastFeedUrl: null,
+    replay: null, reminded: false, isNamedShow: false, podcastFeedEnabled: false, podcastFeedUrl: null,
     ...overrides,
   };
 }
@@ -57,6 +59,7 @@ beforeEach(() => {
   m.getLatestAvailableRecordings.mockResolvedValue(new Map());
   m.getRemindedSpaceIds.mockResolvedValue(new Set());
   m.getFollowedHostDids.mockResolvedValue(new Set());
+  m.getFollowedSpaceIds.mockResolvedValue(new Set());
   m.getFollowedDids.mockResolvedValue(new Set());
   m.getPresentIdentities.mockResolvedValue(new Map());
   m.getTunedInCounts.mockResolvedValue(new Map());
@@ -141,6 +144,15 @@ describe('decoratePublicSpaces', () => {
     expect(m.getFollowedDids).not.toHaveBeenCalled();
     expect('hostFollowed' in out[0]).toBe(false);
     expect(out[0].hostSubscribed).toBe(false);
+    expect(out[0].showFollowed).toBe(false);
+  });
+
+  it('marks shows the viewer follows by name', async () => {
+    m.getFollowedSpaceIds.mockResolvedValue(new Set(['sp1']));
+    const out = await decoratePublicSpaces([space({ id: 'sp1' }), space({ id: 'sp2' })], 'did:v');
+    expect(m.getFollowedSpaceIds).toHaveBeenCalledWith('did:v', ['sp1', 'sp2']);
+    expect(out[0].showFollowed).toBe(true);
+    expect(out[1].showFollowed).toBe(false);
   });
 
   it('overlays the cumulative tuned-in count for live shows only', async () => {

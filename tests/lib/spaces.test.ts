@@ -66,6 +66,7 @@ import {
   defaultShowTitle,
   findDefaultHostedSpace,
   getHostedSpaces,
+  isDefaultShowTitle,
   reopenSpace,
   updateSpace,
   expireStaleSpaces,
@@ -433,6 +434,19 @@ describe('toPublicSpace', () => {
       'https://rabble.example/podcast/alice.bsky.social/show/sp1/feed.xml'
     );
   });
+
+  it('flags a show with a name of its own as named', () => {
+    const space = toPublicSpace(makeSpaceRow({ title: 'My room', tags: [] }) as never, 'https://rabble.example');
+    expect(space.isNamedShow).toBe(true);
+  });
+
+  it('does not flag a host\'s default-titled show as named', () => {
+    const space = toPublicSpace(
+      makeSpaceRow({ title: 'The Alice show', tags: [] }) as never,
+      'https://rabble.example'
+    );
+    expect(space.isNamedShow).toBe(false);
+  });
 });
 
 describe('getHostedSpaces', () => {
@@ -467,6 +481,20 @@ describe('defaultShowTitle', () => {
 
   it('falls back to the handle when the display name is blank', () => {
     expect(defaultShowTitle('alice.bsky.social', '  ')).toBe('The @alice.bsky.social show');
+  });
+});
+
+describe('isDefaultShowTitle', () => {
+  it('matches the current default title shape', () => {
+    expect(isDefaultShowTitle('The Alice Example show', 'alice.bsky.social', 'Alice Example')).toBe(true);
+  });
+
+  it('matches the pre-#23 handle-only shape', () => {
+    expect(isDefaultShowTitle("@alice.bsky.social's show", 'alice.bsky.social', 'Alice Example')).toBe(true);
+  });
+
+  it('does not match a title the host chose', () => {
+    expect(isDefaultShowTitle('The Weekly Deep Dive', 'alice.bsky.social', 'Alice Example')).toBe(false);
   });
 });
 

@@ -374,6 +374,15 @@ export function defaultShowTitle(handle: string, displayName?: string | null): s
 }
 
 /**
+ * Whether this title is one the host never chose: the current default or
+ * its pre-#23 shape. A listener can't usefully "follow this show" by name
+ * when it has no name of its own yet.
+ */
+export function isDefaultShowTitle(title: string, handle: string, displayName?: string | null): boolean {
+  return title === defaultShowTitle(handle, displayName) || title === legacyDefaultShowTitle(handle);
+}
+
+/**
  * List spaces ordered by creation time descending. Includes the host profile.
  */
 export async function getSpaces(): Promise<SpaceWithHost[]> {
@@ -788,6 +797,7 @@ export interface PublicSpaceExtras {
   replay?: PublicReplay | null;
   reminded?: boolean;
   hostSubscribed?: boolean;
+  showFollowed?: boolean;
 }
 
 export function toPublicSpace(
@@ -827,6 +837,8 @@ export function toPublicSpace(
     replay: extras.replay ?? null,
     reminded: extras.reminded ?? false,
     hostSubscribed: extras.hostSubscribed ?? false,
+    isNamedShow: !isDefaultShowTitle(space.title, space.host.handle, space.host.displayName),
+    showFollowed: extras.showFollowed ?? false,
     musicMood: space.musicMood ?? null,
     podcastFeedEnabled,
     podcastFeedUrl,

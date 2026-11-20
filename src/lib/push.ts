@@ -12,6 +12,7 @@ import { buildPushPayload, type PushSubscription as WirePushSubscription } from 
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { resetHostFollowNotifications } from '@/lib/host-follows';
+import { resetShowFollowNotifications } from '@/lib/show-follows';
 
 export type PushPayload = {
   title: string;
@@ -253,6 +254,52 @@ export async function pushHostFollowersOnAir(
   } catch (err) {
     logger.error('push.host_followers_failed', {
       hostDid: space.host.did,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { users: 0, delivered: 0 };
+  }
+}
+
+/**
+ * A show went on air: push to everyone following that exact show (not the
+ * host's other shows) and mark those follows notified. Clears the show's
+ * notified flag first so the same follow fires again for this session.
+ * Best-effort; never throws.
+ */
+export async function pushShowFollowersOnAir(
+  space: { id: string; title: string; host: { handle: string; displayName?: string | null } },
+  origin: string,
+  env: Record<string, string | undefined> = process.env,
+  fetchImpl: typeof fetch = fetch
+): Promise<{ users: number; delivered: number }> {
+  try {
+    await resetShowFollowNotifications(space.id);
+    const follows = await prisma.showFollow.findMany({
+      where: { spaceId: space.id, notifiedAt: null },
+      select: { did: true },
+    });
+    if (follows.length === 0) return { users: 0, delivered: 0 };
+    const hostName = space.host.displayName?.trim() || `@${space.host.handle}`;
+    const payload: PushPayload = {
+      title: `${space.title} is on air`,
+      body: `${hostName} just went live on Rabble Radio.`,
+      url: `${origin}/show/${encodeURIComponent(space.id)}`,
+      tag: `rabble-show-${space.id}`,
+    };
+    const counts = await Promise.all(follows.map((f) => sendPushToUser(f.did, payload, env, fetchImpl)));
+    const notified = follows.filter((_, i) => counts[i] > 0).map((f) => f.did);
+    if (notified.length > 0) {
+      await prisma.showFollow.updateMany({
+        where: { spaceId: space.id, did: { in: notified } },
+        data: { notifiedAt: new Date() },
+      });
+    }
+    const delivered = counts.reduce((a, b) => a + b, 0);
+    logger.info('push.show_followers_sent', { spaceId: space.id, users: follows.length, delivered });
+    return { users: follows.length, delivered };
+  } catch (err) {
+    logger.error('push.show_followers_failed', {
+      spaceId: space.id,
       error: err instanceof Error ? err.message : String(err),
     });
     return { users: 0, delivered: 0 };

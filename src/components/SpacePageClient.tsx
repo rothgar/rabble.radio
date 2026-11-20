@@ -18,6 +18,7 @@ import type { PublicRecording } from '@/components/RoomSidebar';
 import type { PublicReplay } from '@/types';
 import { NotifyMeButton } from '@/components/NotifyMeButton';
 import { FollowHostButton } from '@/components/FollowHostButton';
+import { ShowFollowButton } from '@/components/ShowFollowButton';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
 
 export interface SpacePageClientProps {
@@ -44,6 +45,10 @@ export interface SpacePageClientProps {
   reminded?: boolean;
   /** Whether the viewer already follows this host (any of their shows). */
   hostSubscribed?: boolean;
+  /** True when this show has a name of its own, not the host's default-titled show. */
+  isNamedShow?: boolean;
+  /** Whether the viewer already follows this exact named show. */
+  showFollowed?: boolean;
   /** Pre-show music mood id, null for silence. */
   musicMood?: string | null;
   /**
@@ -92,6 +97,8 @@ export function SpacePageClient({
   replay = null,
   reminded = false,
   hostSubscribed = false,
+  isNamedShow = false,
+  showFollowed = false,
   musicMood = null,
   onJoinedChange,
 }: SpacePageClientProps): ReactElement {
@@ -497,6 +504,17 @@ export function SpacePageClient({
               hostName={host.displayName?.trim() || `@${host.handle}`}
               isAuthenticated={isAuthenticated}
               following={hostSubscribed}
+              loginNext={`/show/${spaceId}`}
+            />
+          </div>
+        ) : null}
+        {isNamedShow ? (
+          <div>
+            <ShowFollowButton
+              spaceId={spaceId}
+              showTitle={details.title}
+              isAuthenticated={isAuthenticated}
+              following={showFollowed}
               loginNext={`/show/${spaceId}`}
             />
           </div>

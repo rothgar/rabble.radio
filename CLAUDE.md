@@ -74,6 +74,10 @@ commands yourself regardless.
 - Issues that change how a screen looks load the `frontend-design` skill
   first (aesthetic direction) and `rabble-design-system` (the tokens and
   layout rules it must respect).
+- An issue labelled `idea` (the "Idea to research" template) is researched,
+  not delivered: a `research-issue` worker posts a go / no-go /
+  needs-decision comment and, on go, files the follow-up issues that are
+  then triaged and delivered as usual (`docs/discobox.md`, Ideas).
 - Extra reviewers for `discobox-review` live in `.discobox/review/`.
 - Harness configs `aperture-triage`, `aperture-deliver` (the default),
   `aperture-qa` and `aperture-design` (Opus, for UI work) run Claude Code

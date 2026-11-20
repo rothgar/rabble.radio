@@ -144,6 +144,48 @@ to apply and commit it. The manager box runs on the same harness: `-H
 aperture-deliver` on the `discobox run` that starts it, or nothing, since it
 is the default.
 
+## Ideas: research before anything is built
+
+An issue opened from the "Idea to research" template (`.github/ISSUE_TEMPLATE/idea.md`),
+or any issue labelled `idea`, is an integration, library, service or
+direction to evaluate, not work to deliver. With the factory's `research`
+job on, the manager starts a `research-issue` worker for it instead of
+triage. The worker reads what the app already does, reads the thing's own
+docs, pricing and licence, checks it runs where the app runs (Workers, D1,
+the two mobile apps), and posts one comment whose first line is
+`**Research:** go|no-go|needs-decision · size …`, with cited findings.
+
+- **go**: it has already filed the follow-up issues, one per deliverable
+  step in order, each `Part of #N`, written as `## Today` / `## Wanted` /
+  `## Done when`. They arrive as new issues, so triage sizes and labels them
+  and delivery starts under the usual `autoReadyMax` gate. The idea becomes
+  their tracking issue (`status/triaged`) and is closed when they are done.
+  An issue that needs an account or a secret says so and keeps the feature
+  off until the owner adds it.
+- **no-go**: the comment says which constraint, cost or risk; the issue is
+  closed once the owner agrees, or the owner overrules on the issue and it
+  is researched again.
+- **needs-decision**: a paid plan, sending user data to a third party, a
+  licence change, or two integrations of equal fit. The issue goes to
+  `status/needs-decision` and the owner decides on it.
+
+The job is not in the factory template yet. `docs/discobox-factory-research-job.patch`
+adds it (the worker skill, the `research` job and `idea` label concept, the
+intake rule and gates; it applies on its own or after the harness-by-job
+patch and was tested against the template's scripts). Apply it in the
+manager's checkout, then in `manager.json` set `jobs.research` to `true`,
+`labels.idea` to `"idea"`, and add `research` to `auto` so ideas are
+researched without asking; send `scripts/request` again. The worker runs
+under the triage role (read, comment, file issues; no labels, no pushes)
+and reaches the web, since no egress level denies by default. To research
+one idea without the manager:
+
+```sh
+discobox run -H aperture-deliver --skills <manager-checkout>/worker-skills \
+  --bind 'github:GH_TOKEN,policy=roles/github-triage.json,owner=rothgar,repo=rabble.radio' \
+  rothgar/rabble.radio -p 'Research issue #N in rothgar/rabble.radio.'
+```
+
 ## QA agent
 
 Two layers watch the deployed site and turn what they find into issues the

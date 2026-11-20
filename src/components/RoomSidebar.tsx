@@ -51,7 +51,7 @@ export function RoomSidebar({
 }: RoomSidebarProps): ReactElement {
   return (
     <div className="flex flex-col gap-4" data-testid="room-sidebar">
-      {isHost ? (
+      {isHost && !isLive ? (
         <ShowDetailsForm
           key={`${title}|${description ?? ''}|${(tags ?? []).join(',')}`}
           spaceId={spaceId}

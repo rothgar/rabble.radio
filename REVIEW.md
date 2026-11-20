@@ -199,6 +199,56 @@ code, and mistakes already made there.
   proof the feature does anything against the live PLC directory — the test
   fixtures invent a log shape the real service doesn't produce.
 
+## src/components/RoomSidebar.tsx (host editing gated on isLive)
+
+- A new `isHost && !isLive` gate on a web editing control (issue #53 hid
+  `ShowDetailsForm` once the show goes live, following the `PreShowMusic`
+  precedent in `SpaceRoom.tsx`) has no Android/iOS counterpart unless someone
+  adds one: `ShowScreen.kt`'s and `ShowView.swift`'s `Edit` buttons gate on
+  `isHost` alone, with no on-air check, since "show details" is a shared
+  flow (`mobile-apps` skill) that predates this gate. Check both apps'
+  gating whenever a host-only editing control on web picks up a new
+  `!isLive`/on-air condition; filed as issue #56 for this one.
+
+## src/components/ShowDetailsForm.tsx (unmount while dirty)
+
+- `ShowDetailsForm` keeps its draft (title/description/tags) as local state
+  with an explicit Save button (`dirty` check, `ShowDetailsForm.tsx`); it is
+  not a controlled, always-synced field. Issue #53 made `RoomSidebar` unmount
+  it the moment `isLive` flips true (driven by the independent "On air"
+  toggle), which would have silently discarded an in-progress, unsaved edit
+  on unmount with no warning. Fixed by flushing a dirty draft in the
+  unmount-cleanup effect (`keepalive: true` PATCH, via a ref so the flush
+  reads the latest values without re-running on every keystroke). Any future
+  code that can unmount this form from outside the user's own save action
+  (another new on-air-style gate, a route change) needs to go through this
+  flush path too, not add a second ad hoc save-before-unmount.
+- That flush effect has to tell "unmounted mid-edit" apart from "unmounted
+  because its own save just succeeded": `RoomSidebar` keys `ShowDetailsForm`
+  on `title|description|tags`, so a successful save changes the key and
+  remounts a fresh instance — and the old instance's `dirty` (computed
+  against its own frozen-at-mount `initialTitle` etc.) is still true at that
+  point, since nothing ever resets its local state back to the saved values.
+  Without the `justSavedRef` guard set at the end of a successful `onSubmit`,
+  every normal explicit Save would fire a second, redundant PATCH (and a
+  second `onSaved` call) from the remount it causes — caught in round 2 of
+  issue #53's review because the standalone component test never triggers
+  that key-driven remount. Any other "skip the flush" condition added here
+  needs to be checked against this same key-remount path, not just the
+  going-live path the issue was about.
+- `justSavedRef` is a one-way latch (set `true` on a successful save, never
+  reset) and is only safe because the one production caller, `RoomSidebar`,
+  is guaranteed to remount a fresh `ShowDetailsForm` (a fresh, `false` ref)
+  right after every successful save — `onSaved` feeds back into the
+  `title|description|tags` key. Any future caller of `ShowDetailsForm` that
+  wires `onSaved` to something that does *not* change that key (or renders
+  it without `onSaved` at all) would let the same instance survive its own
+  save with `justSavedRef` stuck at `true`, silently disabling the
+  flush-on-unmount protection above for every edit made after that point.
+  A new caller must either preserve the remount-on-save contract or make
+  this guard reset itself (e.g. clear `justSavedRef.current` when the
+  `title`/`description`/`tags` props actually change).
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

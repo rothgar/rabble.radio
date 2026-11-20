@@ -7,7 +7,7 @@
 // /api/spaces/[id] and reports the saved values back to the room so the
 // header updates in place.
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { MAX_TAGS_PER_SHOW, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import type { PublicSpace } from '@/types';
 
@@ -64,6 +64,46 @@ export function ShowDetailsForm({
     description.trim() !== (initialDescription ?? '') ||
     tags.join('|') !== (initialTags ?? []).join('|');
 
+  // The host-only form unmounts the moment the show goes live (issue #53).
+  // Flush an unsaved edit on unmount instead of discarding it silently; this
+  // effect only ever reads refs, so it has nothing to do until unmount.
+  //
+  // RoomSidebar keys this component on title|description|tags, so a
+  // *successful* save also unmounts this instance (in favour of a fresh one
+  // keyed on the new values) — without justSavedRef, that remount would
+  // read `dirty` as still true (initialTitle etc. are this instance's own,
+  // frozen-at-mount props) and flush the same save a second time.
+  const justSavedRef = useRef(false);
+  const unmountFlushRef = useRef({ spaceId, title, description, tags, dirty, onSaved });
+  useEffect(() => {
+    unmountFlushRef.current = { spaceId, title, description, tags, dirty, onSaved };
+  });
+  useEffect(() => {
+    return () => {
+      if (justSavedRef.current) return;
+      const { spaceId, title, description, tags, dirty, onSaved } = unmountFlushRef.current;
+      const trimmedTitle = title.trim();
+      if (!dirty || !trimmedTitle) return;
+      void fetch(`/api/spaces/${encodeURIComponent(spaceId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: trimmedTitle, description: description.trim() || null, tags }),
+        keepalive: true,
+      })
+        .then((res) => res.json())
+        .then((body: { space?: PublicSpace }) => {
+          if (body.space) {
+            onSaved?.({
+              title: body.space.title,
+              description: body.space.description,
+              tags: body.space.tags,
+            });
+          }
+        })
+        .catch(() => {});
+    };
+  }, []);
+
   const onSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -94,6 +134,7 @@ export function ShowDetailsForm({
           setError(body.message || body.error || `Save failed (HTTP ${res.status}).`);
           return;
         }
+        justSavedRef.current = true;
         setSavedAt(Date.now());
         onSaved?.({
           title: body.space.title,

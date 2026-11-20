@@ -127,6 +127,11 @@ final class RabbleAPI {
         try await request(RemindResponse.self, path: "/api/spaces/\(showId)/remind", method: "POST", json: ["on": on]).reminded ?? on
     }
 
+    /// "Follow this host" for every show they go live on, not just one. Returns the resulting state.
+    func followHost(hostDid: String, on: Bool) async throws -> Bool {
+        try await request(FollowResponse.self, path: "/api/hosts/\(hostDid)/follow", method: "POST", json: ["on": on]).following ?? on
+    }
+
     /// Reminders whose show just went on air; each is returned once.
     func dueReminders() async throws -> [DueReminder] {
         try await request(DueRemindersResponse.self, path: "/api/me/reminders?due=1").due

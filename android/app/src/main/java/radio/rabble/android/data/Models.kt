@@ -86,6 +86,8 @@ data class Show(
     val reminded: Boolean = false,
     /** Signed-in viewers: the host is someone they follow on Bluesky. */
     val hostFollowed: Boolean = false,
+    /** Signed-in viewers: whether they get notified whenever this host goes live, on any show. */
+    val hostSubscribed: Boolean = false,
     /** Signed-in viewers: people they follow who are in the room right now. */
     val followedInRoom: List<PublicHost> = emptyList(),
     /** Pre-show music mood id (see Music), null for silence. */
@@ -118,6 +120,7 @@ data class Show(
             replay = o.optJSONObject("replay")?.let { Replay.fromJson(it) },
             reminded = o.optBoolean("reminded", false),
             hostFollowed = o.optBoolean("hostFollowed", false),
+            hostSubscribed = o.optBoolean("hostSubscribed", false),
             followedInRoom = o.optJSONArray("followedInRoom")?.let { arr ->
                 (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { PublicHost.fromJson(it) } }
             } ?: emptyList(),

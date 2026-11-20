@@ -303,6 +303,21 @@ private struct RoomPanel: View {
             } else {
                 Button("Sign in to get notified", action: onLogin).buttonStyle(.bordered).wideButton()
             }
+            if model.signedIn {
+                Button {
+                    model.toggleHostFollow()
+                } label: {
+                    Label(model.hostFollowBusy ? "Saving…" : (model.hostFollowing ? "Following \(show.host.label)" : "Follow \(show.host.label)"),
+                          systemImage: model.hostFollowing ? "bell.fill" : "bell")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.hostFollowBusy)
+                .wideButton()
+                Text(model.hostFollowing
+                     ? "We'll tell you whenever \(show.host.label) goes on air, on any show. Tap again to stop."
+                     : "Get notified whenever \(show.host.label) goes on air, on any show, not just this one.")
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
+            }
             if model.signedIn, !scheduled {
                 // Guests the host wants on stage before air can still get in.
                 Button(model.room.isJoining ? "Opening…" : "Invited to the stage? Enter the studio") { model.joinShow() }

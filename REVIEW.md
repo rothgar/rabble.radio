@@ -167,17 +167,22 @@ code, and mistakes already made there.
   Space selection is now ordered (`createdAt` ascending) so which one wins
   is at least deterministic; the second-room gap itself is still open if a
   multi-show host going live twice at once turns out to be reachable.
-- `acceptStageInvite` (src/lib/stage.ts) is a second call site into the same
+- `inviteToStage` (src/lib/stage.ts) is a second call site into the same
   `pushHostFollowersOnAir` read-then-write race described above: it now
-  fires on a stage-accept while the show is already live (`space.isLive`
-  gates it — not on every accept, e.g. not during the pre-show hold), for a
-  guest going on-air as a speaker, not only on a host's own go-live. The same
+  fires when the host brings a guest on stage while the show is already live
+  (`space.isLive` gates it — not during the pre-show hold), for a guest
+  going on-air as a speaker, not only on a host's own go-live. The same
   `GET /api/me/reminders?due=1` poll can land between `markSpeaker` and the
   push path's `resetHostFollowNotifications`/query/`updateMany` cycle and
   double-notify the guest's own follower. Any future caller of
-  `pushHostFollowersOnAir` (host-live or guest-accept) shares this window —
-  don't assume the push and poll paths for `HostFollow` are mutually
-  exclusive from either call site.
+  `pushHostFollowersOnAir` (host-live or guest-promoted-to-stage) shares this
+  window — don't assume the push and poll paths for `HostFollow` are
+  mutually exclusive from either call site. `acceptStageInvite` carries the
+  identical call (issue #37) but is now dormant: issue #55 moved stage
+  promotion to `inviteToStage` (immediate, no accept step), and nothing in
+  this codebase creates a pending invite for `acceptStageInvite` to consume
+  anymore — it's kept only for a client that still calls `accept` on its
+  own. If that path is ever exercised again, it hits this same race.
 
 ## src/lib/atproto-runtime.ts (resolveDidMigrationTarget)
 

@@ -2,26 +2,28 @@
 //
 // Stage management for the Bluesky Spaces MVP.
 //
-// The host of a space can invite audience members on stage. Invited users
-// accept the invite and are re-issued a LiveKit token with publishing
-// permissions. Speakers can leave stage (back to audience) and hosts can
-// remove speakers. Each role transition mints a fresh LiveKit token so the
-// browser can reconnect with the right permissions.
+// The host of a space brings an audience member on stage immediately —
+// there is no pending invite for them to accept. `inviteToStage` marks them
+// a speaker and grants LiveKit publish rights there and then, live, via
+// RoomServiceClient.updateParticipant (the same mechanism `muteSpeaker` and
+// `setAudienceSubscriptions` already use), so their already-connected
+// client needs no new token or reconnect. They stay muted — nothing enables
+// their microphone for them — until they choose to unmute, which is the
+// only moment the browser or app asks for microphone permission.
 //
-// LIMITATION: pending invites are stored in an in-memory Map on globalThis.
-// In a multi-replica deployment the invite state would not be shared between
-// pods. The MVP runs a single replica; production should swap this for Redis
-// or use LiveKit's participant metadata + data messages for signalling.
+// `acceptStageInvite` and the pending-invite table are kept for API
+// back-compat (older mobile clients may still call `accept`) but nothing in
+// this codebase creates a pending invite anymore, so that path is dormant.
 //
 // Real-time signalling: we also publish a LiveKit data message via
 // RoomServiceClient.sendData when possible so connected clients can show a
-// toast. Data messages are best-effort; the in-memory invite is the source
-// of truth for accept/leave/remove operations.
+// toast or refresh their participant list. Data messages are best-effort.
 
 import { getLiveKitClient, generateToken, roomNameForSpace, muteParticipant, removeParticipant, type SpaceRole } from '@/lib/livekit';
 import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { recordLeave, recordStageChange } from '@/lib/metrics';
 import { pushHostFollowersOnAir } from '@/lib/push';
+import { getUserByDid } from '@/lib/users';
 import { prisma } from '@/lib/db';
 
 export interface StageParticipantSummary {
@@ -65,19 +67,6 @@ function toPendingInvite(row: {
   };
 }
 
-async function saveInvite(invite: PendingInvite): Promise<void> {
-  const data = {
-    hostDid: invite.hostDid,
-    roomName: invite.roomName,
-    createdAt: new Date(invite.createdAt),
-  };
-  await prisma.stageInvite.upsert({
-    where: { spaceId_targetIdentity: { spaceId: invite.spaceId, targetIdentity: invite.targetIdentity } },
-    create: { spaceId: invite.spaceId, targetIdentity: invite.targetIdentity, ...data },
-    update: data,
-  });
-}
-
 async function deleteInvite(spaceId: string, identity: string): Promise<void> {
   await prisma.stageInvite.deleteMany({ where: { spaceId, targetIdentity: identity } });
 }
@@ -105,13 +94,20 @@ export interface InviteToStageInput {
   spaceId: string;
   hostDid: string;
   targetIdentity: string;
+  /**
+   * The request origin. When given and the show is already live, the
+   * target's own followers are notified they're on air
+   * (src/lib/push.ts#pushHostFollowersOnAir), same as when a host goes live
+   * or a guest used to accept a stage invite. Omitted in tests that don't
+   * exercise that best-effort path.
+   */
+  origin?: string;
   /** Override for the LiveKit room service (used by tests). */
   liveKitClient?: ReturnType<typeof getLiveKitClient>;
 }
 
 export interface InviteToStageResult {
   ok: true;
-  invite: PendingInvite;
 }
 
 export interface AcceptStageInviteInput {
@@ -255,10 +251,12 @@ async function unmarkSpeaker(spaceId: string, identity: string): Promise<void> {
 }
 
 /**
- * Invite an audience member to stage. The host must own the space. The
+ * Bring an audience member on stage. The host must own the space. The
  * target must currently be in the room as audience (best-effort check via
- * LiveKit). On success a pending invite is recorded and a data message is
- * sent so the audience client can show a toast.
+ * LiveKit). Takes effect immediately: the target is marked a speaker and
+ * granted LiveKit publish rights live, with no invite for them to accept.
+ * They stay muted — the grant only lets them publish if they choose to —
+ * so the browser/app only asks for microphone permission when they unmute.
  */
 export async function inviteToStage(
   input: InviteToStageInput
@@ -295,33 +293,53 @@ export async function inviteToStage(
     }
   }
 
-  const invite: PendingInvite = {
+  await markSpeaker(space.id, input.targetIdentity);
+  await recordStageChange({ spaceId: space.id, identity: input.targetIdentity, onStage: true });
+
+  // Grant publish rights live (same RoomServiceClient.updateParticipant path
+  // as muteSpeaker/setAudienceSubscriptions) so the already-connected
+  // client needs no new token. Passing muted=false here only lifts the
+  // publish gate; their microphone stays off until they turn it on.
+  await muteParticipant(space.roomName, input.targetIdentity, false);
+
+  await broadcastData(space.roomName, {
+    type: 'stage_role_changed',
     spaceId: space.id,
-    roomName: space.roomName,
-    targetIdentity: input.targetIdentity,
-    hostDid: input.hostDid,
-    createdAt: Date.now(),
-  };
-  await saveInvite(invite);
+    identity: input.targetIdentity,
+    role: 'speaker',
+  });
 
-  await broadcastData(
-    space.roomName,
-    {
-      type: 'stage_invite',
-      spaceId: space.id,
-      hostDid: input.hostDid,
-      targetIdentity: input.targetIdentity,
-    },
-    [input.targetIdentity]
-  );
+  // Push to this new speaker's own followers, the same as when a host goes
+  // live: "follow the host" should notify whenever the followed person is
+  // on-air at all, not only when they're that show's Space.hostId. Gated on
+  // isLive: being brought on stage during the pre-show hold, before the host
+  // has gone live, should not notify followers yet.
+  if (input.origin && space.isLive) {
+    const targetUser = await getUserByDid(input.targetIdentity);
+    if (targetUser) {
+      await pushHostFollowersOnAir(
+        {
+          id: space.id,
+          title: space.title,
+          host: { did: input.targetIdentity, handle: targetUser.handle, displayName: targetUser.displayName },
+        },
+        input.origin
+      );
+    }
+  }
 
-  return { ok: true, invite };
+  return { ok: true };
 }
 
 /**
  * Accept a pending stage invite. The caller must have a pending invite
  * keyed by their DID. On success a speaker token is issued and the caller
  * is added to the active speakers set.
+ *
+ * Dormant in practice: `inviteToStage` puts the target on stage directly
+ * and no longer creates a pending invite, so this only fires for a client
+ * (e.g. an unupdated mobile build) that still calls `accept` on its own —
+ * kept for that API back-compat.
  */
 export async function acceptStageInvite(
   input: AcceptStageInviteInput

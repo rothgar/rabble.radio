@@ -3,8 +3,10 @@
 // POST /api/spaces/[id]/stage
 //
 // Stage management endpoint. Accepts the following actions:
-//   - invite:   host invites an audience member to stage (body.targetIdentity)
-//   - accept:   audience member accepts a pending invite (returns speaker token)
+//   - invite:   host brings an audience member on stage immediately, muted
+//               (body.targetIdentity)
+//   - accept:   dormant back-compat for a client that still calls it after
+//               a prior pending invite (there is no accept step anymore)
 //   - leave:    speaker leaves stage (returns audience token)
 //   - remove:   host removes a speaker (body.targetIdentity, returns audience token)
 //
@@ -14,10 +16,11 @@
 //
 // GET /api/spaces/[id]/stage
 //
-// The caller's own stage status: whether a stage invite is waiting for them,
-// whether they currently hold a speaker slot, and whether the show is on
-// air. Clients that cannot rely on LiveKit data messages (the mobile apps,
-// and the web room as a fallback) poll this while in the room.
+// The caller's own stage status: whether they currently hold a speaker
+// slot, whether the show is on air, and (always null in practice now —
+// kept for API back-compat) a stage invite waiting for them. Clients that
+// cannot rely on LiveKit data messages (the mobile apps, and the web room
+// as a fallback) poll this while in the room.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
@@ -168,6 +171,7 @@ export async function POST(
           spaceId: id,
           hostDid: user.did,
           targetIdentity,
+          origin: originFromRequest(request),
         });
         return NextResponse.json({ ok: true }, { status: 200 });
       }

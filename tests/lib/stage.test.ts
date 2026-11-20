@@ -4,19 +4,24 @@
 // can focus on permission checks, in-memory state, and token re-issuance.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { UserSummary } from '@/lib/users';
 
 const {
   mockGetLiveKitClient,
   mockGenerateToken,
+  mockMuteParticipant,
   mockGetSpaceById,
   mockGetSpaceBySlug,
   mockPushHostFollowersOnAir,
+  mockGetUserByDid,
 } = vi.hoisted(() => ({
   mockGetLiveKitClient: vi.fn(),
   mockGenerateToken: vi.fn(),
+  mockMuteParticipant: vi.fn(async () => true),
   mockGetSpaceById: vi.fn(),
   mockGetSpaceBySlug: vi.fn(),
   mockPushHostFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
+  mockGetUserByDid: vi.fn(async (): Promise<UserSummary | null> => null),
 }));
 
 vi.mock('@/lib/metrics', () => ({
@@ -30,6 +35,10 @@ vi.mock('@/lib/metrics', () => ({
 
 vi.mock('@/lib/push', () => ({
   pushHostFollowersOnAir: mockPushHostFollowersOnAir,
+}));
+
+vi.mock('@/lib/users', () => ({
+  getUserByDid: mockGetUserByDid,
 }));
 
 
@@ -79,6 +88,7 @@ vi.mock('@/lib/db', () => ({ prisma: fakeDb.prisma }));
 vi.mock('@/lib/livekit', () => ({
   getLiveKitClient: mockGetLiveKitClient,
   generateToken: mockGenerateToken,
+  muteParticipant: mockMuteParticipant,
   roomNameForSpace: (id: string) => `space-${id}`,
 }));
 
@@ -123,7 +133,7 @@ beforeEach(() => {
 });
 
 describe('inviteToStage', () => {
-  it('creates a pending invite when the caller is the host', async () => {
+  it('puts the target on stage immediately, muted, when the caller is the host', async () => {
     const stage = await import('@/lib/stage');
     fakeDb.reset();
 
@@ -133,8 +143,78 @@ describe('inviteToStage', () => {
       targetIdentity: 'did:plc:listener',
     });
     expect(result.ok).toBe(true);
-    expect(result.invite.targetIdentity).toBe('did:plc:listener');
-    expect(await stage.getPendingInvite('sp1', 'did:plc:listener')).not.toBeNull();
+    // No accept step: they're a speaker right away, with no pending invite.
+    expect(await stage.listActiveSpeakers('sp1')).toContain('did:plc:listener');
+    expect(await stage.getPendingInvite('sp1', 'did:plc:listener')).toBeNull();
+    // Granted publish rights live so their already-connected client can
+    // unmute without a new token; muted=false here only lifts the gate —
+    // it does not turn their microphone on.
+    expect(mockMuteParticipant).toHaveBeenCalledWith('space-sp1', 'did:plc:listener', false);
+    // No origin given, so the best-effort push to the new speaker's own
+    // followers is skipped, same as the equivalent acceptStageInvite tests.
+    expect(mockPushHostFollowersOnAir).not.toHaveBeenCalled();
+  });
+
+  it("notifies the invited guest's own followers that they are on air, not just the host's", async () => {
+    const stage = await import('@/lib/stage');
+    fakeDb.reset();
+    mockGetSpaceById.mockImplementation(async (id: string) => makeSpace({ id, isLive: true }));
+    mockGetUserByDid.mockResolvedValueOnce({
+      did: 'did:plc:listener',
+      handle: 'listener.bsky.social',
+      displayName: 'Listener',
+      avatarUrl: null,
+    });
+
+    await stage.inviteToStage({
+      spaceId: 'sp1',
+      hostDid: 'did:plc:host123',
+      targetIdentity: 'did:plc:listener',
+      origin: 'https://rabble.rodeo',
+    });
+
+    expect(mockGetUserByDid).toHaveBeenCalledWith('did:plc:listener');
+    expect(mockPushHostFollowersOnAir).toHaveBeenCalledWith(
+      {
+        id: 'sp1',
+        title: 'My room',
+        host: { did: 'did:plc:listener', handle: 'listener.bsky.social', displayName: 'Listener' },
+      },
+      'https://rabble.rodeo'
+    );
+  });
+
+  it('does not push when the guest is invited before the show is live (pre-show hold)', async () => {
+    const stage = await import('@/lib/stage');
+    fakeDb.reset();
+    // Default makeSpace() fixture is isLive: false — a host can bring a
+    // guest on stage during the pre-show hold, before going live. isLive
+    // gates the lookup itself, so getUserByDid should not even be called.
+    await stage.inviteToStage({
+      spaceId: 'sp1',
+      hostDid: 'did:plc:host123',
+      targetIdentity: 'did:plc:listener',
+      origin: 'https://rabble.rodeo',
+    });
+
+    expect(mockGetUserByDid).not.toHaveBeenCalled();
+    expect(mockPushHostFollowersOnAir).not.toHaveBeenCalled();
+  });
+
+  it('does not push when the target has never signed into Rabble', async () => {
+    const stage = await import('@/lib/stage');
+    fakeDb.reset();
+    mockGetSpaceById.mockImplementation(async (id: string) => makeSpace({ id, isLive: true }));
+    mockGetUserByDid.mockResolvedValueOnce(null);
+
+    await stage.inviteToStage({
+      spaceId: 'sp1',
+      hostDid: 'did:plc:host123',
+      targetIdentity: 'did:plc:listener',
+      origin: 'https://rabble.rodeo',
+    });
+
+    expect(mockPushHostFollowersOnAir).not.toHaveBeenCalled();
   });
 
   it('throws 403 when the caller is not the host', async () => {
@@ -179,15 +259,32 @@ describe('inviteToStage', () => {
   });
 });
 
+// acceptStageInvite is dormant now that inviteToStage puts the target on
+// stage directly: nothing in this codebase creates a pending invite
+// anymore. These tests seed one straight into the fake D1 table (bypassing
+// inviteToStage) to cover the back-compat path an unupdated client might
+// still hit.
+async function seedPendingInvite(overrides: Record<string, unknown> = {}): Promise<void> {
+  const row = {
+    spaceId: 'sp1',
+    targetIdentity: 'did:plc:listener',
+    hostDid: 'did:plc:host123',
+    roomName: 'space-sp1',
+    createdAt: new Date(),
+    ...overrides,
+  };
+  await fakeDb.prisma.stageInvite.upsert({
+    where: { spaceId_targetIdentity: { spaceId: row.spaceId, targetIdentity: row.targetIdentity } },
+    create: row,
+    update: row,
+  });
+}
+
 describe('acceptStageInvite', () => {
   it('mints a speaker token when there is a pending invite', async () => {
     const stage = await import('@/lib/stage');
     fakeDb.reset();
-    await stage.inviteToStage({
-      spaceId: 'sp1',
-      hostDid: 'did:plc:host123',
-      targetIdentity: 'did:plc:listener',
-    });
+    await seedPendingInvite();
 
     const result = await stage.acceptStageInvite({
       spaceId: 'sp1',
@@ -212,11 +309,7 @@ describe('acceptStageInvite', () => {
     const stage = await import('@/lib/stage');
     fakeDb.reset();
     mockGetSpaceById.mockImplementation(async (id: string) => makeSpace({ id, isLive: true }));
-    await stage.inviteToStage({
-      spaceId: 'sp1',
-      hostDid: 'did:plc:host123',
-      targetIdentity: 'did:plc:listener',
-    });
+    await seedPendingInvite();
 
     await stage.acceptStageInvite({
       spaceId: 'sp1',
@@ -241,11 +334,7 @@ describe('acceptStageInvite', () => {
     fakeDb.reset();
     // Default makeSpace() fixture is isLive: false — a guest can accept an
     // invite during the pre-show hold, before the host has gone live.
-    await stage.inviteToStage({
-      spaceId: 'sp1',
-      hostDid: 'did:plc:host123',
-      targetIdentity: 'did:plc:listener',
-    });
+    await seedPendingInvite();
 
     await stage.acceptStageInvite({
       spaceId: 'sp1',
@@ -281,10 +370,6 @@ describe('leaveStage', () => {
       hostDid: 'did:plc:host123',
       targetIdentity: 'did:plc:listener',
     });
-    await stage.acceptStageInvite({
-      spaceId: 'sp1',
-      userDid: 'did:plc:listener',
-    });
     mockGenerateToken.mockClear();
 
     const result = await stage.leaveStage({
@@ -319,10 +404,6 @@ describe('removeFromStage', () => {
       spaceId: 'sp1',
       hostDid: 'did:plc:host123',
       targetIdentity: 'did:plc:listener',
-    });
-    await stage.acceptStageInvite({
-      spaceId: 'sp1',
-      userDid: 'did:plc:listener',
     });
     mockGenerateToken.mockClear();
 
@@ -368,19 +449,9 @@ describe('listPendingInvites', () => {
   it('returns invites for the requested space only', async () => {
     const stage = await import('@/lib/stage');
     fakeDb.reset();
-    // Second space.
-    mockGetSpaceById.mockImplementation(async (id: string) => makeSpace({ id }));
 
-    await stage.inviteToStage({
-      spaceId: 'sp1',
-      hostDid: 'did:plc:host123',
-      targetIdentity: 'did:plc:listener1',
-    });
-    await stage.inviteToStage({
-      spaceId: 'sp2',
-      hostDid: 'did:plc:host123',
-      targetIdentity: 'did:plc:listener2',
-    });
+    await seedPendingInvite({ targetIdentity: 'did:plc:listener1' });
+    await seedPendingInvite({ spaceId: 'sp2', targetIdentity: 'did:plc:listener2', roomName: 'space-sp2' });
 
     const sp1Invites = await stage.listPendingInvites('sp1');
     expect(sp1Invites).toHaveLength(1);

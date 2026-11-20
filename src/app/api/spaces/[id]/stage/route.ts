@@ -43,6 +43,32 @@ interface StageBody {
   targetIdentity?: unknown;
 }
 
+function originFromRequest(request: Request): string {
+  try {
+    const url = new URL(request.url);
+    const host = url.host.toLowerCase();
+    if (
+      host === '0.0.0.0:3000' ||
+      host === '127.0.0.1:3000' ||
+      host === '0.0.0.0' ||
+      host === '127.0.0.1'
+    ) {
+      return (
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.PUBLIC_URL ||
+        'https://rabble.invalid'
+      );
+    }
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return (
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.PUBLIC_URL ||
+      'https://rabble.invalid'
+    );
+  }
+}
+
 interface SuccessTokenBody {
   token: string;
   wsUrl: string;
@@ -150,6 +176,9 @@ export async function POST(
           spaceId: id,
           userDid: user.did,
           displayName: user.handle,
+          handle: user.handle,
+          profileDisplayName: user.displayName,
+          origin: originFromRequest(request),
         });
         return NextResponse.json(result, { status: 200 });
       }

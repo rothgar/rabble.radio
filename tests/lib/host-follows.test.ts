@@ -9,12 +9,14 @@ const m = vi.hoisted(() => ({
   findMany: vi.fn(),
   updateMany: vi.fn(),
   spaceFindMany: vi.fn(),
+  userFindMany: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
   prisma: {
     hostFollow: m,
     space: { findMany: m.spaceFindMany },
+    user: { findMany: m.userFindMany },
   },
 }));
 
@@ -82,18 +84,56 @@ describe('takeDueHostFollows', () => {
         title: 'Live now',
         hostId: 'did:h',
         host: { did: 'did:h', handle: 'h.test', displayName: null, avatarUrl: null },
+        speakers: [],
       },
     ]);
     const due = await takeDueHostFollows('did:a', NOW);
     expect(m.findMany).toHaveBeenCalledWith({ where: { did: 'did:a', notifiedAt: null }, select: { hostDid: true } });
     expect(m.spaceFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { isLive: true, hostId: { in: ['did:h'] } } })
+      expect.objectContaining({
+        where: { isLive: true, OR: [{ hostId: { in: ['did:h'] } }, { speakers: { some: { identity: { in: ['did:h'] } } } }] },
+      })
     );
     expect(due).toEqual([
       { spaceId: 'sp1', title: 'Live now', host: { did: 'did:h', handle: 'h.test', displayName: null, avatarUrl: null } },
     ]);
     expect(m.updateMany).toHaveBeenCalledWith({
       where: { did: 'did:a', hostDid: { in: ['did:h'] } },
+      data: { notifiedAt: NOW },
+    });
+    expect(m.userFindMany).not.toHaveBeenCalled();
+  });
+
+  // Issue #37: "follow the host" should also fire when the followed person
+  // is on-air as a guest speaker on someone else's show, not only when they
+  // are that show's Space.hostId.
+  it('notifies when the followed person is on-air as a guest speaker, not just as host', async () => {
+    const NOW = new Date('2026-11-20T00:00:00Z');
+    // did:a follows did:guest. did:guest is live right now as a speaker on
+    // did:owner's show, so did:guest never matches Space.hostId.
+    m.findMany.mockResolvedValueOnce([{ hostDid: 'did:guest' }]);
+    m.spaceFindMany.mockResolvedValueOnce([
+      {
+        id: 'sp1',
+        title: 'Live now',
+        hostId: 'did:owner',
+        host: { did: 'did:owner', handle: 'owner.test', displayName: null, avatarUrl: null },
+        speakers: [{ identity: 'did:guest' }],
+      },
+    ]);
+    m.userFindMany.mockResolvedValueOnce([
+      { did: 'did:guest', handle: 'guest.test', displayName: null, avatarUrl: null },
+    ]);
+    const due = await takeDueHostFollows('did:a', NOW);
+    expect(due).toEqual([
+      {
+        spaceId: 'sp1',
+        title: 'Live now',
+        host: { did: 'did:guest', handle: 'guest.test', displayName: null, avatarUrl: null },
+      },
+    ]);
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { did: 'did:a', hostDid: { in: ['did:guest'] } },
       data: { notifiedAt: NOW },
     });
   });

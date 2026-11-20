@@ -237,9 +237,6 @@ describe('<SpacePage />', () => {
         if (url === '/api/spaces/sp1/recording') {
           return Promise.resolve(jsonResponse({ recording: null }));
         }
-        if (url === '/api/spaces/sp1/posts') {
-          return Promise.resolve(jsonResponse({ posts: [] }));
-        }
         return Promise.reject(new Error(`unexpected url ${url}`));
       });
     vi.stubGlobal('fetch', fetchMock);

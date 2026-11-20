@@ -3,10 +3,7 @@
 import type { ReactElement } from 'react';
 import { DeleteSpaceButton } from '@/components/DeleteSpaceButton';
 import { ShowDetailsForm, type ShowDetails } from '@/components/ShowDetailsForm';
-import { AddPostForm } from '@/components/AddPostForm';
-import { PostCarousel } from '@/components/PostCarousel';
 import { RecordingDownload } from '@/components/RecordingDownload';
-import type { PublicSpacePost } from '@/lib/posts';
 
 export interface PublicRecording {
   id: string;
@@ -30,9 +27,6 @@ export interface RoomSidebarProps {
   description?: string | null;
   tags?: string[];
   onSpaceUpdated?: (details: ShowDetails) => void;
-  posts: PublicSpacePost[];
-  postsError: string | null;
-  onPostAdded: () => void;
   recording: PublicRecording | null;
 }
 
@@ -44,9 +38,6 @@ export function RoomSidebar({
   description,
   tags,
   onSpaceUpdated,
-  posts,
-  postsError,
-  onPostAdded,
   recording,
 }: RoomSidebarProps): ReactElement {
   return (
@@ -69,30 +60,6 @@ export function RoomSidebar({
       {isHost && recording ? (
         <RecordingDownload spaceId={spaceId} initial={recording} compact />
       ) : null}
-
-      <section
-        className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-divider)] bg-[var(--color-surface)] p-4"
-        data-testid="room-sidebar-posts"
-      >
-        <header className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[var(--color-text)]">
-            Pinned from Bluesky
-          </h3>
-        </header>
-        {isHost ? (
-          <AddPostForm spaceId={spaceId} onAdded={onPostAdded} />
-        ) : null}
-        {postsError ? (
-          <p
-            role="alert"
-            className="rounded-md border border-[var(--color-error)] bg-[var(--color-error-muted)] px-2 py-1 text-xs text-[var(--color-error-text)]"
-            data-testid="room-sidebar-posts-error"
-          >
-            {postsError}
-          </p>
-        ) : null}
-        <PostCarousel posts={posts} />
-      </section>
     </div>
   );
 }

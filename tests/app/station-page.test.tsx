@@ -7,12 +7,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { PublicSpace } from '@/types';
 
-const { mockGetSpacesForUser, mockGetCurrentUser, mockCountPostsBySpace } =
-  vi.hoisted(() => ({
-    mockGetSpacesForUser: vi.fn(),
-    mockGetCurrentUser: vi.fn(),
-    mockCountPostsBySpace: vi.fn(),
-  }));
+const { mockGetSpacesForUser, mockGetCurrentUser } = vi.hoisted(() => ({
+  mockGetSpacesForUser: vi.fn(),
+  mockGetCurrentUser: vi.fn(),
+}));
 
 vi.mock('@/lib/spaces', () => ({
   getSpacesForUser: mockGetSpacesForUser,
@@ -22,10 +20,6 @@ vi.mock('@/lib/spaces', () => ({
 
 vi.mock('@/lib/session', () => ({
   getCurrentUser: mockGetCurrentUser,
-}));
-
-vi.mock('@/lib/posts', () => ({
-  countPostsBySpace: mockCountPostsBySpace,
 }));
 
 vi.mock('@/components/SiteHeader', () => ({
@@ -78,7 +72,6 @@ async function renderStation(tag: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentUser.mockResolvedValue(null);
-  mockCountPostsBySpace.mockResolvedValue({});
 });
 
 describe('/station/[tag] page', () => {
@@ -98,8 +91,6 @@ describe('/station/[tag] page', () => {
       }),
       makeShow({ id: 'sp3', title: 'Game night', tags: ['Gaming'] }),
     ]);
-    mockCountPostsBySpace.mockResolvedValue({ sp1: 4 });
-
     await renderStation('Music');
 
     const shows = screen.getAllByTestId('station-show');
@@ -109,9 +100,7 @@ describe('/station/[tag] page', () => {
     // listeners are part of listenerCount from the occupancy sweep).
     expect(screen.getByTestId('station-listeners')).toHaveTextContent('6 listening');
     expect(screen.getAllByTestId('station-host-avatar')).toHaveLength(2);
-    expect(shows[0]).toHaveTextContent('4 posts');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Music');
-    expect(mockCountPostsBySpace).toHaveBeenCalledWith(['sp1', 'sp2']);
   });
 
   it('renders the empty state for a valid station with no shows', async () => {

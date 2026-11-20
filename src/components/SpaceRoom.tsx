@@ -48,7 +48,6 @@ import { FeedbackButton } from '@/components/FeedbackButton';
 import { setRoomSnapshot } from '@/lib/diagnostics';
 import { ShowEndedFollowPopup } from '@/components/ShowEndedFollowPopup';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
-import type { PublicSpacePost } from '@/lib/posts';
 import { isAnonymousIdentity } from '@/lib/anonymous';
 
 export type { SpaceRole };
@@ -107,9 +106,6 @@ export interface SpaceRoomProps {
   hostSubscribed?: boolean;
   /** Public shareable URL for the room. */
   shareableUrl: string;
-  posts: PublicSpacePost[];
-  postsError: string | null;
-  onPostAdded: () => void;
   isLive: boolean;
   onLiveChange: (next: boolean) => void;
   spaceId: string;
@@ -360,9 +356,6 @@ interface InnerProps {
   host: SpaceRoomProps['host'];
   hostSubscribed: boolean;
   shareableUrl: string;
-  posts: PublicSpacePost[];
-  postsError: string | null;
-  onPostAdded: () => void;
   isLive: boolean;
   onLiveChange: (next: boolean) => void;
   description: string | null;
@@ -398,9 +391,6 @@ function Inner({
   host,
   hostSubscribed,
   shareableUrl,
-  posts,
-  postsError,
-  onPostAdded,
   isLive,
   onLiveChange,
   description,
@@ -854,9 +844,6 @@ function Inner({
             description={description}
             tags={tags}
             onSpaceUpdated={onSpaceUpdated}
-            posts={posts}
-            postsError={postsError}
-            onPostAdded={onPostAdded}
             recording={recording}
           />
         }
@@ -918,9 +905,6 @@ export function SpaceRoom({
   host,
   hostSubscribed = false,
   shareableUrl,
-  posts,
-  postsError,
-  onPostAdded,
   isLive,
   onLiveChange,
   description = null,
@@ -1148,9 +1132,6 @@ export function SpaceRoom({
         host={host}
         hostSubscribed={hostSubscribed}
         shareableUrl={shareableUrl}
-        posts={posts}
-        postsError={postsError}
-        onPostAdded={onPostAdded}
         isLive={isLive}
         onLiveChange={onLiveChange}
         description={description}

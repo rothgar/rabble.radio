@@ -2,8 +2,8 @@
 //
 // A single show on a station detail page. The main area is clickable and
 // navigates to the show. Shows the host's profile picture, a stacked cluster
-// of listener avatars, and metrics for posts and reactions. Tag chips are
-// rendered outside the clickable link to avoid nested interactive elements.
+// of listener avatars, and a reaction metric. Tag chips are rendered outside
+// the clickable link to avoid nested interactive elements.
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
@@ -12,8 +12,6 @@ import { TagChip } from '@/components/TagChip';
 
 interface StationShowCardProps {
   show: PublicSpace;
-  /** Number of posts shared in the show (SpacePost rows). */
-  postCount: number;
   /** The station's tag — highlighted on this show's chips. */
   activeTag: string;
 }
@@ -66,7 +64,6 @@ function ListenerStack({ count }: { count: number }): ReactElement {
 
 export function StationShowCard({
   show,
-  postCount,
   activeTag,
 }: StationShowCardProps): ReactElement {
   return (
@@ -91,7 +88,6 @@ export function StationShowCard({
           className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-secondary)]"
           data-testid="station-show-metrics"
         >
-          <span title="Posts shared">💬 {postCount} posts</span>
           <span title="Reactions">💛 {show.reactionCount} reactions</span>
           <span title="Speakers">🎙️ {show.speakerCount}</span>
         </div>

@@ -77,7 +77,6 @@ model Space {
 
   host       User          @relation(fields: [hostId], references: [did], onDelete: Cascade)
   tags       SpaceTag[]
-  posts      SpacePost[]
   recordings Recording[]
   sessions   ShowSession[]
   reactions  ShowReaction[]
@@ -138,25 +137,6 @@ model Recording {
   @@index([expiresAt])
   @@index([status])
   @@index([hostDid, published])
-}
-
-model SpacePost {
-  id        String   @id @default(cuid())
-  spaceId   String
-  atUri     String
-  cid       String
-  indexedAt DateTime
-  authorDid String
-  /// JSON text of the Bluesky embed, if any.
-  embed     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-
-  @@unique([spaceId, atUri])
-  @@index([spaceId])
-  @@index([createdAt])
 }
 
 /// Bluesky OAuth session, keyed by DID. `data` is the serialized session.

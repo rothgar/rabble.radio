@@ -148,3 +148,11 @@ describe('/stations start-a-show call to action', () => {
     expect(screen.queryByTestId('start-show-button')).toBeNull();
   });
 });
+
+describe('/stations metadata (#78)', () => {
+  it('exports static Open Graph metadata naming every category', async () => {
+    const pageModule = await import('@/app/stations/page');
+    expect(pageModule.metadata?.title).toBe('Stations — Rabble');
+    expect(pageModule.metadata?.openGraph?.description).toBeTruthy();
+  });
+});

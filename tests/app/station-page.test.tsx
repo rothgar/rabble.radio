@@ -130,4 +130,43 @@ describe('/station/[tag] page', () => {
     );
     expect(mockGetSpacesForUser).not.toHaveBeenCalled();
   });
+
+  it('renders not-found instead of throwing for a malformed percent-encoded tag', async () => {
+    await renderStation('%');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Station not found'
+    );
+    expect(mockGetSpacesForUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('/station/[tag] metadata', () => {
+  it('generates category-specific Open Graph metadata (#78)', async () => {
+    const pageModule = await import('@/app/station/[tag]/page');
+    expect(typeof pageModule.generateMetadata).toBe('function');
+
+    const meta = await pageModule.generateMetadata!({
+      params: Promise.resolve({ tag: 'Music' }),
+    });
+    expect(meta.title).toContain('Music');
+    expect(meta.openGraph?.description).toBeTruthy();
+  });
+
+  it('does not throw generating metadata for an unrecognized tag (#78)', async () => {
+    const pageModule = await import('@/app/station/[tag]/page');
+    await expect(
+      pageModule.generateMetadata!({
+        params: Promise.resolve({ tag: 'Not A Category' }),
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it('does not throw generating metadata for a malformed percent-encoded tag (#78)', async () => {
+    const pageModule = await import('@/app/station/[tag]/page');
+    await expect(
+      pageModule.generateMetadata!({
+        params: Promise.resolve({ tag: '%' }),
+      })
+    ).resolves.not.toThrow();
+  });
 });

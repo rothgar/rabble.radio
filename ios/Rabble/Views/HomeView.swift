@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var shows: [Show]?
     @State private var error: String?
     @State private var me: Me?
+    @State private var hosted: [Show] = []
     @State private var showLogin = false
     @State private var starting = false
     @State private var startError: String?
@@ -79,9 +80,10 @@ struct HomeView: View {
 
     private func load() async {
         // Keep the current list on screen while it refreshes (after sign-in,
-        // say); only the very first load shows the spinner. Profile and
-        // listing are independent requests, so they run together.
+        // say); only the very first load shows the spinner. Profile, hosted
+        // shows and listing are independent requests, so they run together.
         async let profile: Me? = env.session.hasSession ? (try? await env.api.me()) : nil
+        async let mine: [Show] = env.session.hasSession ? ((try? await env.api.myShows())?.hosted ?? []) : []
         do {
             shows = try await env.api.listShows()
             error = nil
@@ -89,15 +91,16 @@ struct HomeView: View {
             if shows == nil { self.error = error.localizedDescription }
         }
         me = await profile
+        hosted = await mine
     }
 
-    private func startShow() {
+    private func startShow(_ showId: String? = nil) {
         if starting { return }
         starting = true
         startError = nil
         Task {
             do {
-                let show = try await env.api.startShow()
+                let show = try await env.api.startShow(showId: showId)
                 nav.push(.show(id: show.id, autoJoin: true))
             } catch {
                 startError = error.localizedDescription
@@ -187,7 +190,37 @@ struct HomeView: View {
                  : "Sign in with Bluesky to host a show. Listening never needs an account.")
                 .font(RabbleFont.style(.caption))
                 .foregroundStyle(RabbleColors.textSecondary)
-            if me != nil {
+            if me != nil, hosted.count > 1 {
+                HStack(spacing: 1) {
+                    Button(starting ? "Starting…" : "Start a show") { startShow() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(starting)
+                        .wideButton()
+                    Menu {
+                        Text("Your recent shows")
+                        ForEach(hosted.prefix(maxRecentShows)) { show in
+                            Button {
+                                startShow(show.id)
+                            } label: {
+                                if show.isLive {
+                                    Label(show.title, systemImage: "dot.radiowaves.left.and.right")
+                                } else {
+                                    Text(show.title)
+                                }
+                                if !show.tags.isEmpty {
+                                    Text(show.tags.joined(separator: " · "))
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .frame(width: 48, height: 48)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(starting)
+                    .accessibilityLabel("Pick a recent show to start")
+                }
+            } else if me != nil {
                 Button(starting ? "Starting…" : "Start a show") { startShow() }
                     .buttonStyle(.borderedProminent)
                     .disabled(starting)
@@ -207,3 +240,6 @@ struct HomeView: View {
     private func score(_ s: Show) -> Int { s.listenerCount * 3 + s.speakerCount * 5 + s.reactionCount }
     private func lifetime(_ s: Show) -> Int { s.totalListeners * 3 + s.likeCount * 4 + s.reactionCount }
 }
+
+/// How many recent shows the picker lists.
+private let maxRecentShows = 8

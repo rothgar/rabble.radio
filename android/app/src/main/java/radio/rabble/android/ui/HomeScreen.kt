@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -37,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.outlined.LightMode
@@ -81,6 +85,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
     var me by remember { mutableStateOf<Me?>(null) }
+    var hostedShows by remember { mutableStateOf<List<Show>>(emptyList()) }
     var reload by remember { mutableStateOf(0) }
     var starting by remember { mutableStateOf(false) }
     var startError by remember { mutableStateOf<String?>(null) }
@@ -90,23 +95,25 @@ fun HomeScreen(
         // Keep the current list on screen while it refreshes (after sign-in,
         // say); only the very first load shows the spinner.
         if (state !is HomeState.Ready) state = HomeState.Loading
-        // Profile and listing are independent requests; fetch them together.
+        // Profile, hosted shows and listing are independent requests; fetch them together.
         val meDeferred = async { if (session.hasSession()) runCatching { api.me() }.getOrNull() else null }
+        val myShowsDeferred = async { if (session.hasSession()) runCatching { api.myShows() }.getOrNull() else null }
         state = try {
             HomeState.Ready(api.listShows())
         } catch (e: Exception) {
             if (state is HomeState.Ready) state else HomeState.Failed(e.message ?: "Could not load shows.")
         }
         me = meDeferred.await()
+        hostedShows = myShowsDeferred.await()?.hosted ?: emptyList()
     }
 
-    fun startShow() {
+    fun startShow(showId: String? = null) {
         if (starting) return
         starting = true
         startError = null
         scope.launch {
             try {
-                val show = api.startShow()
+                val show = api.startShow(showId)
                 onStartedShow(show.id)
             } catch (e: Exception) {
                 startError = e.message ?: "Could not start a show."
@@ -145,6 +152,7 @@ fun HomeScreen(
             is HomeState.Ready -> HomeContent(
                 shows = s.shows,
                 signedIn = me != null,
+                hostedShows = hostedShows,
                 starting = starting,
                 startError = startError,
                 padding = padding,
@@ -161,12 +169,13 @@ fun HomeScreen(
 private fun HomeContent(
     shows: List<Show>,
     signedIn: Boolean,
+    hostedShows: List<Show>,
     starting: Boolean,
     startError: String?,
     padding: PaddingValues,
     onOpenShow: (String) -> Unit,
     onOpenStation: (String) -> Unit,
-    onStartShow: () -> Unit,
+    onStartShow: (String?) -> Unit,
     onLogin: () -> Unit,
 ) {
     val forYou = shows.filter { it.forYou }.sortedWith(compareByDescending<Show> { it.isLive }.thenByDescending { it.listenerCount })
@@ -199,7 +208,7 @@ private fun HomeContent(
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            StartShowCard(signedIn, starting, startError, onStartShow, onLogin)
+            StartShowCard(signedIn, hostedShows, starting, startError, onStartShow, onLogin)
         }
         if (shows.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -256,8 +265,19 @@ private fun SectionLabel(text: String) {
     Text(text, style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
 }
 
+/** How many recent shows the picker lists. */
+private const val MAX_RECENT_SHOWS = 8
+
 @Composable
-private fun StartShowCard(signedIn: Boolean, starting: Boolean, error: String?, onStart: () -> Unit, onLogin: () -> Unit) {
+private fun StartShowCard(
+    signedIn: Boolean,
+    hostedShows: List<Show>,
+    starting: Boolean,
+    error: String?,
+    onStart: (String?) -> Unit,
+    onLogin: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Go live from your phone", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -267,8 +287,65 @@ private fun StartShowCard(signedIn: Boolean, starting: Boolean, error: String?, 
                 color = RabbleColors.TextSecondary,
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (signedIn) {
-                Button(onClick = onStart, enabled = !starting, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+            if (signedIn && hostedShows.size > 1) {
+                Row(Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { onStart(null) },
+                        enabled = !starting,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                    ) {
+                        Text(if (starting) "Starting…" else "Start a show")
+                    }
+                    Box {
+                        OutlinedButton(
+                            onClick = { menuOpen = true },
+                            enabled = !starting,
+                            modifier = Modifier
+                                .width(48.dp).height(48.dp).padding(start = 1.dp)
+                                .semantics { contentDescription = "Pick a recent show to start" },
+                        ) {
+                            Text("▾")
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            Text(
+                                "Your recent shows",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = RabbleColors.TextSecondary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            hostedShows.take(MAX_RECENT_SHOWS).forEach { show ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(show.title, maxLines = 1)
+                                                if (show.isLive) {
+                                                    Spacer(Modifier.width(6.dp))
+                                                    LiveBadge()
+                                                }
+                                            }
+                                            if (show.tags.isNotEmpty()) {
+                                                Text(
+                                                    show.tags.joinToString(" · "),
+                                                    color = RabbleColors.TextSecondary,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    maxLines = 1,
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        onStart(show.id)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (signedIn) {
+                Button(onClick = { onStart(null) }, enabled = !starting, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                     Text(if (starting) "Starting…" else "Start a show")
                 }
             } else {

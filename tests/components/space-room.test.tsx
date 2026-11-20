@@ -255,7 +255,7 @@ describe('<SpaceRoom /> leave dialog warns the last one on stage', () => {
   });
 });
 
-describe('<SpaceRoom /> pre-show music follows on-air state', () => {
+describe('<SpaceRoom /> music tile follows on-air state', () => {
   it("mutes a solo host's own pre-show music the moment their mic goes live (issue #5)", async () => {
     // Only the local participant (the host) is publishing a mic track; the
     // music must stop on this device too, not just for remote listeners.
@@ -265,7 +265,7 @@ describe('<SpaceRoom /> pre-show music follows on-air state', () => {
       <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: true, musicMood: 'lounge' })} />
     );
 
-    const music = await findByTestId('pre-show-music');
+    const music = await findByTestId('music-card');
     expect(music.getAttribute('data-playing')).toBe('false');
   });
 
@@ -276,7 +276,7 @@ describe('<SpaceRoom /> pre-show music follows on-air state', () => {
       <SpaceRoom {...baseProps({ role: 'audience', isHost: false, isLive: true, musicMood: 'lounge' })} />
     );
 
-    const music = await findByTestId('pre-show-music');
+    const music = await findByTestId('music-card');
     expect(music.getAttribute('data-playing')).toBe('true');
   });
 
@@ -287,8 +287,50 @@ describe('<SpaceRoom /> pre-show music follows on-air state', () => {
       <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: false, musicMood: 'lounge' })} />
     );
 
-    const music = await findByTestId('pre-show-music');
+    const music = await findByTestId('music-card');
     expect(music.getAttribute('data-playing')).toBe('true');
+  });
+
+  it('shows no music tile to a listener while live with no mood set', () => {
+    const { queryByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'audience', isHost: false, isLive: true, musicMood: null })} />
+    );
+
+    expect(queryByTestId('music-card')).toBeNull();
+  });
+
+  it("gives the host a picker tile pre-show even before a mood is chosen", () => {
+    const { getByTestId } = render(
+      <SpaceRoom
+        {...baseProps({
+          role: 'host',
+          isHost: true,
+          isLive: false,
+          musicMood: null,
+          onMusicMoodChange: vi.fn(),
+        })}
+      />
+    );
+
+    expect(getByTestId('music-card')).toBeTruthy();
+    expect(getByTestId('music-menu-trigger')).toBeTruthy();
+  });
+
+  it("hides the host's mood-change menu once the show is live (issue #69)", () => {
+    const { getByTestId, queryByTestId } = render(
+      <SpaceRoom
+        {...baseProps({
+          role: 'host',
+          isHost: true,
+          isLive: true,
+          musicMood: 'lounge',
+          onMusicMoodChange: vi.fn(),
+        })}
+      />
+    );
+
+    expect(getByTestId('music-card')).toBeTruthy();
+    expect(queryByTestId('music-menu-trigger')).toBeNull();
   });
 });
 

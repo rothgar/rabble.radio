@@ -454,9 +454,19 @@ describe('getHostedSpaces', () => {
 });
 
 describe('defaultShowTitle', () => {
-  it('builds a title from the handle', () => {
-    expect(defaultShowTitle('alice.bsky.social')).toBe("@alice.bsky.social's show");
-    expect(defaultShowTitle('@bob')).toBe("@bob's show");
+  it('builds a title from the handle when there is no display name', () => {
+    expect(defaultShowTitle('alice.bsky.social')).toBe('The @alice.bsky.social show');
+    expect(defaultShowTitle('@bob')).toBe('The @bob show');
+  });
+
+  it('prefers the display name over the handle when one is set (issue #23)', () => {
+    expect(defaultShowTitle('alice.bsky.social', 'Alice Example')).toBe(
+      'The Alice Example show'
+    );
+  });
+
+  it('falls back to the handle when the display name is blank', () => {
+    expect(defaultShowTitle('alice.bsky.social', '  ')).toBe('The @alice.bsky.social show');
   });
 });
 
@@ -470,10 +480,22 @@ describe('findDefaultHostedSpace', () => {
       expect.objectContaining({
         where: {
           hostId: 'did:plc:host',
-          title: "@alice.bsky.social's show",
+          title: { in: ['The @alice.bsky.social show', "@alice.bsky.social's show"] },
           status: { not: 'scheduled' },
         },
         orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
+      })
+    );
+  });
+
+  it('matches on the display-name title when the host has one', async () => {
+    mockSpaceFindFirst.mockResolvedValueOnce(makeSpaceRow({ id: 'd1', tags: [] }));
+    await findDefaultHostedSpace('did:plc:host', 'alice.bsky.social', 'Alice Example');
+    expect(mockSpaceFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          title: { in: ['The Alice Example show', "@alice.bsky.social's show"] },
+        }),
       })
     );
   });

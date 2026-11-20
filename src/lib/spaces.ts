@@ -304,21 +304,33 @@ export async function getHostedSpaces(hostDid: string): Promise<SpaceWithHost[]>
  * The show a host's untitled "Start a show" lands in: their existing show
  * with the default title, if they have one. Scheduled rows are skipped so a
  * planned show keeps its date. Null when the host has never started one.
+ *
+ * Matches both the current default title and the pre-#23 handle-only shape,
+ * so a show created before defaultShowTitle started preferring the display
+ * name still gets reopened instead of duplicated.
  */
 export async function findDefaultHostedSpace(
   hostDid: string,
-  handle: string
+  handle: string,
+  displayName?: string | null
 ): Promise<SpaceWithHost | null> {
   const row = await prisma.space.findFirst({
     where: {
       hostId: hostDid,
-      title: defaultShowTitle(handle),
+      title: { in: [defaultShowTitle(handle, displayName), legacyDefaultShowTitle(handle)] },
       status: { not: SPACE_STATUS.SCHEDULED },
     },
     orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
     include: spaceInclude,
   });
   return row ? withTags(row) : null;
+}
+
+/** The default title's shape before issue #23: handle only, no display name. */
+function legacyDefaultShowTitle(handle: string): string {
+  const trimmedHandle = handle.trim() || 'new host';
+  const fallback = trimmedHandle.startsWith('@') ? trimmedHandle : `@${trimmedHandle}`;
+  return `${fallback}'s show`;
 }
 
 /**
@@ -351,11 +363,14 @@ export async function reopenSpace(
 }
 
 /**
- * The default title for a show started without one.
+ * The default title for a show started without one: the host's display
+ * name when they have one, falling back to their handle.
  */
-export function defaultShowTitle(handle: string): string {
-  const name = handle.trim() || 'A new';
-  return `${name.startsWith('@') ? name : `@${name}`}'s show`;
+export function defaultShowTitle(handle: string, displayName?: string | null): string {
+  const trimmedHandle = handle.trim() || 'new host';
+  const fallback = trimmedHandle.startsWith('@') ? trimmedHandle : `@${trimmedHandle}`;
+  const name = displayName?.trim() || fallback;
+  return `The ${name} show`;
 }
 
 /**

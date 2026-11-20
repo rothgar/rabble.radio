@@ -385,6 +385,13 @@ export function isDefaultShowTitle(title: string, handle: string, displayName?: 
   return title === defaultShowTitle(handle, displayName) || title === legacyDefaultShowTitle(handle);
 }
 
+/** The default title's shape before issue #23: handle only, no display name. */
+function legacyDefaultShowTitle(handle: string): string {
+  const trimmedHandle = handle.trim() || 'new host';
+  const fallback = trimmedHandle.startsWith('@') ? trimmedHandle : `@${trimmedHandle}`;
+  return `${fallback}'s show`;
+}
+
 /**
  * List spaces ordered by creation time descending. Includes the host profile.
  */

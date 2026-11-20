@@ -327,6 +327,21 @@ private struct RoomPanel: View {
                      : "Get notified whenever \(show.host.label) goes on air, on any show, not just this one.")
                     .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
             }
+            if model.signedIn, show.isNamedShow {
+                Button {
+                    model.toggleShowFollow()
+                } label: {
+                    Label(model.showFollowBusy ? "Saving…" : (model.showFollowing ? "Following \(show.title)" : "Follow \(show.title)"),
+                          systemImage: model.showFollowing ? "bell.fill" : "bell")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.showFollowBusy)
+                .wideButton()
+                Text(model.showFollowing
+                     ? "We'll tell you whenever \(show.title) goes on air. Tap again to stop."
+                     : "Get notified whenever \(show.title) goes on air.")
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
+            }
             if model.signedIn, !scheduled {
                 // Guests the host wants on stage before air can still get in.
                 Button(model.room.isJoining ? "Opening…" : "Invited to the stage? Enter the studio") { model.joinShow() }

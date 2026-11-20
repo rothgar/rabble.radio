@@ -117,6 +117,10 @@ struct Show: Codable, Identifiable, Hashable {
     var hostFollowed: Bool = false
     /// Signed-in viewers: whether they get notified whenever this host goes live, on any show.
     var hostSubscribed: Bool = false
+    /// Whether this show has its own title, rather than the host's default.
+    var isNamedShow: Bool = false
+    /// Signed-in viewers: whether they get notified whenever this exact show goes live.
+    var showFollowed: Bool = false
     /// Signed-in viewers: people they follow who are in the room right now.
     var followedInRoom: [PublicHost] = []
     /// Pre-show music mood id (see Music), nil for silence.
@@ -128,7 +132,8 @@ struct Show: Codable, Identifiable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, slug, title, description, isLive, status, scheduledAt, expiresAt
         case listenerCount, speakerCount, reactionCount, likeCount, sessionCount, totalListeners
-        case tags, createdAt, updatedAt, host, shareableUrl, replay, reminded, hostFollowed, hostSubscribed, followedInRoom, musicMood
+        case tags, createdAt, updatedAt, host, shareableUrl, replay, reminded, hostFollowed, hostSubscribed
+        case isNamedShow, showFollowed, followedInRoom, musicMood
     }
 
     init(from decoder: Decoder) throws {
@@ -156,6 +161,8 @@ struct Show: Codable, Identifiable, Hashable {
         reminded = c.opt(.reminded, false)
         hostFollowed = c.opt(.hostFollowed, false)
         hostSubscribed = c.opt(.hostSubscribed, false)
+        isNamedShow = c.opt(.isNamedShow, false)
+        showFollowed = c.opt(.showFollowed, false)
         followedInRoom = c.opt(.followedInRoom, [])
         musicMood = c.optional(.musicMood)
     }

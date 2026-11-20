@@ -92,6 +92,8 @@ final class ShowModel: ObservableObject {
     @Published var remindBusy = false
     @Published var hostFollowing = false
     @Published var hostFollowBusy = false
+    @Published var showFollowing = false
+    @Published var showFollowBusy = false
     @Published var moodBusy = false
     @Published var editing = false
     @Published var confirmLeave = false
@@ -127,6 +129,7 @@ final class ShowModel: ObservableObject {
             show = loaded
             reminded = loaded.reminded
             hostFollowing = loaded.hostSubscribed
+            showFollowing = loaded.showFollowed
             loadError = nil
         } catch {
             if show == nil { loadError = error.localizedDescription }
@@ -356,6 +359,25 @@ final class ShowModel: ObservableObject {
                 Diagnostics.event("host_follow_failed", error.localizedDescription)
             }
             hostFollowBusy = false
+        }
+    }
+
+    /// "Follow this show": notified only when this exact named show goes live.
+    func toggleShowFollow() {
+        if showFollowBusy { return }
+        showFollowBusy = true
+        let next = !showFollowing
+        Task {
+            do {
+                showFollowing = try await env.api.followShow(showId: showId, on: next)
+                if showFollowing {
+                    if !(await Reminders.canPost()) { _ = await Reminders.requestPermission() }
+                    Reminders.schedule()
+                }
+            } catch {
+                Diagnostics.event("show_follow_failed", error.localizedDescription)
+            }
+            showFollowBusy = false
         }
     }
 

@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   getSpacesForUser: vi.fn(),
   decoratePublicSpaces: vi.fn(),
   getTopHosts: vi.fn(),
+  getBlockedDids: vi.fn(),
 }));
 
 vi.mock('@/lib/session', () => ({ getCurrentUser: m.getCurrentUser }));
@@ -19,6 +20,7 @@ vi.mock('@/lib/spaces', () => ({
 }));
 vi.mock('@/lib/space-extras', () => ({ decoratePublicSpaces: m.decoratePublicSpaces }));
 vi.mock('@/lib/hosts', () => ({ getTopHosts: m.getTopHosts }));
+vi.mock('@/lib/blocks', () => ({ getBlockedDids: m.getBlockedDids }));
 vi.mock('@/components/SiteHeader', () => ({ SiteHeader: () => <header data-testid="site-header" /> }));
 vi.mock('@/components/StartShowMenu', () => ({
   StartShowMenu: () => <button data-testid="start-show-button">Start a show</button>,
@@ -47,6 +49,7 @@ beforeEach(() => {
   cleanup();
   m.getSpacesForUser.mockResolvedValue([SMALL, LIVE, SCHEDULED]);
   m.decoratePublicSpaces.mockImplementation(async (s: PublicSpace[]) => s);
+  m.getBlockedDids.mockResolvedValue(new Set());
   m.getTopHosts.mockResolvedValue([
     { host: { did: 'did:h', handle: 'host.test', displayName: 'Host', avatarUrl: null }, popularity: 9, upcoming: [] },
   ]);
@@ -98,6 +101,25 @@ describe('HomePage signed in', () => {
     m.getSpacesForUser.mockResolvedValue([SCHEDULED]);
     render(await HomeBody());
     expect(screen.getByTestId('home-on-air-empty')).toBeTruthy();
+  });
+
+  it('hides the viewer\'s own show and a blocked host\'s show from Popular, and the blocked host from the strip', async () => {
+    const mine = show({ id: 'mine', title: 'My Replay', totalListeners: 100, host: { did: 'did:v', handle: 'viewer.test', displayName: null, avatarUrl: null } });
+    const blockedShow = show({ id: 'blocked-show', title: 'Blocked Replay', totalListeners: 100, host: { did: 'did:blocked', handle: 'blocked.test', displayName: null, avatarUrl: null } });
+    m.getSpacesForUser.mockResolvedValue([mine, blockedShow, SCHEDULED]);
+    m.getBlockedDids.mockResolvedValue(new Set(['did:blocked']));
+    m.getTopHosts.mockResolvedValue([
+      { host: { did: 'did:h', handle: 'host.test', displayName: 'Host', avatarUrl: null }, popularity: 9, upcoming: [] },
+      { host: { did: 'did:blocked', handle: 'blocked.test', displayName: null, avatarUrl: null }, popularity: 5, upcoming: [] },
+    ]);
+    render(await HomeBody());
+    expect(m.getBlockedDids).toHaveBeenCalledWith('did:v');
+    expect(m.getTopHosts).toHaveBeenCalledWith(18, undefined, { excludeDid: 'did:v' });
+    expect(screen.queryByTestId('show-list-card-mine')).toBeNull();
+    expect(screen.queryByTestId('show-list-card-blocked-show')).toBeNull();
+    expect(screen.getByTestId('show-list-card-sch1')).toBeTruthy();
+    expect(screen.getByTestId('home-host-host.test')).toBeTruthy();
+    expect(screen.queryByTestId('home-host-blocked.test')).toBeNull();
   });
 });
 

@@ -120,4 +120,22 @@ describe('getTopHosts', () => {
     const hosts = await getTopHosts(10, NOW);
     expect(hosts.length).toBe(10);
   });
+
+  it('excludes the viewer themself', async () => {
+    mockSpaceFindMany.mockResolvedValueOnce([
+      space({ id: 'a1', hostId: 'did:plc:hostA', host: host('did:plc:hostA', 'alice.bsky.social'), listenerCount: 100, status: 'live' }),
+      space({ id: 'b1', hostId: 'did:plc:hostB', host: host('did:plc:hostB', 'bob.bsky.social'), listenerCount: 1, status: 'live' }),
+    ]);
+    const hosts = await getTopHosts(10, NOW, { excludeDid: 'did:plc:hostA' });
+    expect(hosts.map((h) => h.host.did)).toEqual(['did:plc:hostB']);
+  });
+
+  it('excludes blocked hosts', async () => {
+    mockSpaceFindMany.mockResolvedValueOnce([
+      space({ id: 'a1', hostId: 'did:plc:hostA', host: host('did:plc:hostA', 'alice.bsky.social'), listenerCount: 100, status: 'live' }),
+      space({ id: 'b1', hostId: 'did:plc:hostB', host: host('did:plc:hostB', 'bob.bsky.social'), listenerCount: 1, status: 'live' }),
+    ]);
+    const hosts = await getTopHosts(10, NOW, { blockedDids: new Set(['did:plc:hostA']) });
+    expect(hosts.map((h) => h.host.did)).toEqual(['did:plc:hostB']);
+  });
 });

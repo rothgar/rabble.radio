@@ -11,6 +11,7 @@ import { getOAuthClient } from '@/lib/auth';
 import { getSession, setSession, getAndClearLoginRedirect } from '@/lib/session';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 import { warmFollowCache } from '@/lib/follows';
+import { warmBlockCache } from '@/lib/blocks';
 import { findMigratedHostDid, reassignHostIdentity } from '@/lib/users';
 
 export const dynamic = 'force-dynamic';
@@ -131,9 +132,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Fill the follows cache while the browser follows the redirect, so the
-  // home page's "For you" section is ready on the first load.
+  // Fill the follows and blocks caches while the browser follows the
+  // redirect, so the home and hosts pages are ready on the first load.
   warmFollowCache(did);
+  warmBlockCache(did);
 
   const loginRedirect = await getAndClearLoginRedirect();
   await setSession({ did, handle });

@@ -21,6 +21,13 @@ export interface TopHost {
   upcoming: SpaceWithHost[];
 }
 
+export interface GetTopHostsOptions {
+  /** Never rank this host — used to hide the viewer from their own list. */
+  excludeDid?: string | null;
+  /** Never rank these hosts — the viewer's Bluesky blocks. */
+  blockedDids?: Set<string>;
+}
+
 /**
  * Rank the top space hosts. Hosts with upcoming scheduled spaces are boosted
  * to the top (so people can set reminders), then hosts are ranked by the total
@@ -28,7 +35,8 @@ export interface TopHost {
  */
 export async function getTopHosts(
   limit = 10,
-  now: Date = new Date()
+  now: Date = new Date(),
+  opts: GetTopHostsOptions = {}
 ): Promise<TopHost[]> {
   const rows = await prisma.space.findMany({
     where: { status: { not: SPACE_STATUS.EXPIRED } },
@@ -38,6 +46,7 @@ export async function getTopHosts(
 
   const byHost = new Map<string, TopHost>();
   for (const s of spaces) {
+    if (s.hostId === opts.excludeDid || opts.blockedDids?.has(s.hostId)) continue;
     let entry = byHost.get(s.hostId);
     if (!entry) {
       entry = {

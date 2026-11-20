@@ -15,6 +15,7 @@ import { getCurrentUser } from '@/lib/session';
 import { decoratePublicSpaces } from '@/lib/space-extras';
 import { buildHomeSections } from '@/lib/home';
 import { getTopHosts, type TopHost } from '@/lib/hosts';
+import { getBlockedDids } from '@/lib/blocks';
 import { primaryTagOf, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { SiteHeader } from '@/components/SiteHeader';
 import { StartShowMenu } from '@/components/StartShowMenu';
@@ -120,14 +121,25 @@ export default function HomePage(): ReactElement {
   );
 }
 
+// Extra hosts fetched above the home strip's limit so filtering out blocked
+// hosts (known only once getBlockedDids resolves) rarely leaves it short,
+// without serializing that fetch behind the others.
+const HOME_HOSTS_LIMIT = 8;
+const BLOCK_FILTER_BUFFER = 10;
+
 export async function HomeBody(): Promise<ReactElement> {
   const user = await getCurrentUser();
-  const [rows, hosts] = await Promise.all([
+  const [rows, candidateHosts, blockedDids] = await Promise.all([
     getSpacesForUser(user?.did ?? null),
-    getTopHosts(8).catch(() => [] as TopHost[]),
+    getTopHosts(HOME_HOSTS_LIMIT + BLOCK_FILTER_BUFFER, undefined, { excludeDid: user?.did ?? null }).catch(() => [] as TopHost[]),
+    getBlockedDids(user?.did ?? null),
   ]);
+  const hosts = candidateHosts.filter((h) => !blockedDids.has(h.host.did)).slice(0, HOME_HOSTS_LIMIT);
   const shows = await decoratePublicSpaces(rows.map((s) => toPublicSpace(s)), user?.did ?? null);
-  const { forYou, onAir, popular } = buildHomeSections(shows);
+  const { forYou, onAir, popular } = buildHomeSections(shows, undefined, {
+    viewerDid: user?.did ?? null,
+    blockedDids,
+  });
   const stations = YOUTUBE_CATEGORIES.filter((tag) => shows.some((s) => primaryTagOf(s.tags) === tag));
   const firstLive = onAir[0] ?? null;
 

@@ -453,3 +453,14 @@ model FollowCache {
   count     Int      @default(0)
   fetchedAt DateTime @default(now())
 }
+
+/// Cached Bluesky block list for a signed-in user (DIDs as a JSON array).
+/// Unlike follows, `app.bsky.graph.getBlocks` is scoped to the caller and
+/// needs an authenticated request, so this is only ever filled for the
+/// viewer themself. Used to hide blocked hosts and shows from them.
+model BlockCache {
+  did       String   @id
+  blocks    String   @default("[]")
+  count     Int      @default(0)
+  fetchedAt DateTime @default(now())
+}

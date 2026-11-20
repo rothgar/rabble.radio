@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
+import { ShareEntry } from '@/components/ShareEntry';
 
 export interface AudienceMember {
   identity: string;
@@ -19,6 +20,8 @@ export interface AudienceBubblesProps {
   localHandle?: string;
   localAvatarUrl?: string | null;
   localAvatarRef?: RefObject<HTMLDivElement | null>;
+  shareableUrl: string;
+  title: string;
 }
 
 function initialsFor(name: string): string {
@@ -118,6 +121,8 @@ export function AudienceBubbles({
   localHandle,
   localAvatarUrl,
   localAvatarRef,
+  shareableUrl,
+  title,
 }: AudienceBubblesProps): ReactElement {
   return (
     <div
@@ -125,6 +130,7 @@ export function AudienceBubbles({
       data-testid="audience-bubbles"
       data-count={audience.length + 1}
     >
+      <ShareEntry variant="bubble" shareableUrl={shareableUrl} title={title} />
       <Bubble
         identity={localIdentity}
         name={localName}

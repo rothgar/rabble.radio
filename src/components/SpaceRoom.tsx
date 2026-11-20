@@ -43,7 +43,6 @@ import { AudienceBubbles, type AudienceMember } from '@/components/AudienceBubbl
 import { AudienceRows } from '@/components/AudienceRows';
 import { RoomSidebar, type PublicRecording } from '@/components/RoomSidebar';
 import { BottomControlBar } from '@/components/BottomControlBar';
-import { ShareButtons } from '@/components/ShareButtons';
 import { FloatingReaction } from '@/components/FloatingReaction';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { setRoomSnapshot } from '@/lib/diagnostics';
@@ -723,6 +722,8 @@ function Inner({
           avatarUrl: avatarFor(p) ?? null,
           handRaised: handFor(p),
         }))}
+        shareableUrl={shareableUrl}
+        title={title}
         invitedSet={invitedSet}
         onInvite={async (target) => {
           setInvitedSet((prev) => {
@@ -759,6 +760,8 @@ function Inner({
         localHandle={localHandle}
         localAvatarUrl={localAvatar ?? null}
         localAvatarRef={localAvatarRef}
+        shareableUrl={shareableUrl}
+        title={title}
         audience={audience.map<AudienceMember>((p) => ({
           identity: resolveIdentity(p),
           name: displayFor(p),
@@ -861,15 +864,6 @@ function Inner({
                 onMoodChange={onMusicMoodChange}
               />
             ) : null}
-            <div
-              className="flex flex-col gap-3 rounded-lg border border-[var(--color-divider)] bg-[var(--color-surface)] p-4 sm:p-6"
-              data-testid="room-share-card"
-            >
-              <p className="text-sm font-semibold text-[var(--color-text-tertiary)]">
-                {isHost && !isLive ? 'Invite people' : 'Share this show'}
-              </p>
-              <ShareButtons shareableUrl={shareableUrl} title={title} />
-            </div>
           </div>
         }
         sidebar={

@@ -337,3 +337,21 @@ describe('<SpaceRoom /> show-ended follow popup (issue #22)', () => {
     expect(() => getByTestId('show-ended-follow-dialog')).toThrow();
   });
 });
+
+describe('<SpaceRoom /> show details editing while live (issue #53)', () => {
+  it('hides the editable show details from the host once the show is live', () => {
+    const { queryByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: true })} />
+    );
+
+    expect(queryByTestId('show-details-form')).toBeNull();
+  });
+
+  it('still lets the host edit show details before the show goes live', () => {
+    const { getByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: false })} />
+    );
+
+    expect(getByTestId('show-details-form')).toBeTruthy();
+  });
+});

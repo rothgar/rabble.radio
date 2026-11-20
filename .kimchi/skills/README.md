@@ -12,6 +12,7 @@ skills: [rabble-design-system, frontend-design]
 (shared with Claude Code) and then `.kimchi/skills/<name>` (Kimchi only) and
 appends the SKILL.md bodies to the persona's system prompt.
 
-- `frontend-design/` is vendored from Anthropic's `frontend-design` Claude Code
-  plugin (Apache-2.0, see LICENSE.txt) so Kimchi personas get the same design
-  guidance Claude Code loads from the plugin.
+- Anthropic's `frontend-design` skill (Apache-2.0) is vendored in
+  `.discobox/skills/frontend-design/` and linked from `.claude/skills/`, so
+  Claude Code, discobox workers and Kimchi personas all resolve the same copy.
+  This directory holds nothing else at the moment.

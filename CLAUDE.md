@@ -40,7 +40,7 @@ Agent teams are enabled in `.claude/settings.json`. Claude is the lead and the `
 - Wrappers verify with typecheck, lint, and test before marking a task complete, then message the `reviewer` with the branch and diff summary.
 - The reviewer never edits. It reports findings to the task owner by name and to the lead.
 - To run a persona by hand: `scripts/kimchi-agent.sh dev "Add a GET /api/health/db route that pings Prisma"`.
-- Skills: project skills live in `.claude/skills/<name>/SKILL.md` (Claude Code loads them; `rabble-design-system` covers tokens, layout rules and Tailwind gotchas). A persona lists `skills: [...]` in its frontmatter and `scripts/kimchi-agent.sh` appends those bodies to its system prompt, resolving `.claude/skills/` first and then `.kimchi/skills/` (Kimchi-only, e.g. the vendored `frontend-design`). `KIMCHI_AGENT_PRINT_PROMPT=1 scripts/kimchi-agent.sh frontend-dev x` prints the assembled prompt.
+- Skills: project skills live in `.claude/skills/<name>/SKILL.md` (Claude Code loads them; `rabble-design-system` covers tokens, layout rules and Tailwind gotchas). A persona lists `skills: [...]` in its frontmatter and `scripts/kimchi-agent.sh` appends those bodies to its system prompt, resolving `.claude/skills/` first and then `.kimchi/skills/` (Kimchi-only; `frontend-design` now lives in `.discobox/skills/` and is linked from `.claude/skills/`). `KIMCHI_AGENT_PRINT_PROMPT=1 scripts/kimchi-agent.sh frontend-dev x` prints the assembled prompt.
 
 ## Working in a discobox (issue-driven workers)
 
@@ -67,9 +67,15 @@ commands yourself regardless.
   to the reviewer, it goes in one PR comment.
 - A web change to a flow the Android or iOS app also implements (reactions,
   raised hands, stage, theme) names that in the PR and files a follow-up issue.
+  The `mobile-apps` skill lists those flows, their wire contract and the
+  apps' screen conventions; load it before touching `android/` or `ios/`.
+- Issues that change how a screen looks load the `frontend-design` skill
+  first (aesthetic direction) and `rabble-design-system` (the tokens and
+  layout rules it must respect).
 - Extra reviewers for `discobox-review` live in `.discobox/review/`.
-- Harness configs `aperture-triage`, `aperture-deliver` (the default) and
-  `aperture-qa` run Claude Code through the metered tailnet gateway;
+- Harness configs `aperture-triage`, `aperture-deliver` (the default),
+  `aperture-qa` and `aperture-design` (Opus, for UI work) run Claude Code
+  through the metered tailnet gateway;
   `scripts/discobox-gateway-harness.sh SLUG MODEL` creates one or changes
   its model (`docs/discobox.md`).
 - QA of the live site: `scripts/qa-live.mjs` (deterministic, run after

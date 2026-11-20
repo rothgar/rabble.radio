@@ -21,6 +21,8 @@ rabble.radio on its own.
 | `.discobox/hooks/` | Hook declarations (typecheck and lint on save, Prisma regenerate plus migration check, vitest at review) in the `discobox-ai/hooks` format. Boxes on v0.19.5 ship no hook runner yet, so they are inert until one does; workers run the checks themselves. |
 | `.discobox/skills/verify-recipes/` | How to drive the running app, take screenshots, join a room anonymously, and what cannot run in a box. The generic `verify` skill reads it. Linked into `.claude/skills/`. |
 | `.discobox/skills/rabble-design-system` | Link to the design-system skill so non-Claude harnesses get it too. |
+| `.discobox/skills/frontend-design/` | Anthropic's `frontend-design` skill (Apache-2.0, vendored): aesthetic direction for new or reshaped UI. Workers load it for issues that change how a screen looks. |
+| `.discobox/skills/mobile-apps/` | The Android and iOS clients: screens, the flows they share with the web and their wire contract, screen conventions, how to build and verify each. Loaded before touching `android/`, `ios/` or a shared flow. |
 | `.discobox/review/*.md` | Two extra reviewers for `discobox-review`: `design-system` and `security`. |
 | `CLAUDE.md`, "Working in a discobox" | The rules a worker keeps (PR from `discobox/issue-<N>`, no deploys). |
 
@@ -107,7 +109,8 @@ discobox secret create --name anthropic --type token \
   --ttl forever --max-binding-ttl forever --token "$TOKEN"
 
 scripts/discobox-gateway-harness.sh aperture-triage  claude-sonnet-5 claude-haiku-4-5
-scripts/discobox-gateway-harness.sh aperture-deliver claude-opus-5   claude-haiku-4-5
+scripts/discobox-gateway-harness.sh aperture-deliver claude-sonnet-5 claude-haiku-4-5
+scripts/discobox-gateway-harness.sh aperture-design  claude-opus-5   claude-haiku-4-5
 ```
 
 Each run writes the config's `.claude/settings.json` (`model`,
@@ -131,7 +134,11 @@ files, tested against the template's `scripts/launch --dry-run`) adds
 ```
 
 Jobs not listed fall back to `workers.harness`, and `scripts/launch
---harness SLUG` overrides both for one launch. Apply the patch in your fork
+--harness SLUG` overrides both for one launch. The manager cannot pick a
+harness per issue, so `aperture-design` (Opus, for work that changes how a
+screen looks) is used by setting `workers.harness` to it for a batch of UI
+issues, or by starting the box yourself: `discobox run -H aperture-design
+-p 'Load /frontend-design and /mobile-apps, then work issue #N'`. Apply the patch in your fork
 of the manager, or paste it to the manager in `discobox console` and ask it
 to apply and commit it. The manager box runs on the same harness: `-H
 aperture-deliver` on the `discobox run` that starts it, or nothing, since it

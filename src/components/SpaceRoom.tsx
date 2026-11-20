@@ -876,6 +876,7 @@ function Inner({
           <RoomSidebar
             spaceId={spaceId}
             isHost={isHost}
+            isLive={isLive}
             title={title}
             description={description}
             tags={tags}

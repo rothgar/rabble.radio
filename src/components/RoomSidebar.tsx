@@ -25,6 +25,7 @@ export interface PublicRecording {
 export interface RoomSidebarProps {
   spaceId: string;
   isHost: boolean;
+  isLive: boolean;
   title: string;
   description?: string | null;
   tags?: string[];
@@ -38,6 +39,7 @@ export interface RoomSidebarProps {
 export function RoomSidebar({
   spaceId,
   isHost,
+  isLive,
   title,
   description,
   tags,
@@ -60,7 +62,7 @@ export function RoomSidebar({
         />
       ) : null}
 
-      {isHost ? (
+      {isHost && !isLive ? (
         <DeleteSpaceButton spaceId={spaceId} />
       ) : null}
 

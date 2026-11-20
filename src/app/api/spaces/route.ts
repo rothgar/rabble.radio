@@ -265,6 +265,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (startNow) {
     const spaceId = typeof body.spaceId === 'string' ? body.spaceId.trim() : '';
     let existing = null;
+    // Only the untitled-default lookup refreshes the title on reopen: a show
+    // picked by spaceId was chosen deliberately and keeps whatever title it
+    // has (issue #44).
+    let refreshDefaultTitle = false;
     if (spaceId) {
       const resolved = await resolveSpaceForUser(spaceId, user.did);
       if (!resolved || !resolved.isHost) {
@@ -273,10 +277,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       existing = resolved.space;
     } else if (!rawTitle) {
       existing = await findDefaultHostedSpace(user.did);
+      refreshDefaultTitle = true;
     }
     if (existing) {
       try {
-        space = await reopenSpace(existing.id);
+        const refreshedTitle =
+          refreshDefaultTitle && existing.title !== title ? title : undefined;
+        space = refreshedTitle
+          ? await reopenSpace(existing.id, undefined, refreshedTitle)
+          : await reopenSpace(existing.id);
         reopened = true;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to reopen show.';

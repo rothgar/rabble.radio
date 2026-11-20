@@ -340,10 +340,15 @@ export async function findDefaultHostedSpace(
  * Put an existing show back in the off-air, joinable state for a new
  * session: active, not live, empty countdown restarted. Ended and expired
  * shows come back; a live one is left live.
+ *
+ * `newTitle`, when given, also refreshes the row's title (used to resync a
+ * default-titled show's rendered name with the host's handle/display name as
+ * of their last login, on reopen; issue #44).
  */
 export async function reopenSpace(
   id: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  newTitle?: string
 ): Promise<SpaceWithHost> {
   const current = await prisma.space.findUnique({ where: { id }, select: { status: true } });
   if (current?.status === SPACE_STATUS.LIVE) {
@@ -351,15 +356,19 @@ export async function reopenSpace(
     if (!live) throw new Error(`Space not found: ${id}`);
     return live;
   }
+  const data: Record<string, unknown> = {
+    status: SPACE_STATUS.ACTIVE,
+    isLive: false,
+    scheduledAt: null,
+    emptySince: now,
+    expiresAt: new Date(now.getTime() + EMPTY_SPACE_TTL_MS),
+  };
+  if (newTitle) {
+    data.title = newTitle;
+  }
   const row = await prisma.space.update({
     where: { id },
-    data: {
-      status: SPACE_STATUS.ACTIVE,
-      isLive: false,
-      scheduledAt: null,
-      emptySince: now,
-      expiresAt: new Date(now.getTime() + EMPTY_SPACE_TTL_MS),
-    },
+    data,
     include: spaceInclude,
   });
   return withTags(row);

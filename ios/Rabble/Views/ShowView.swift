@@ -23,6 +23,10 @@ struct ShowView: View {
         self.autoJoin = autoJoin
     }
 
+    private var onAir: Bool {
+        model.room.connected?.onAir ?? model.show?.isLive ?? false
+    }
+
     /// Copy for the leave-confirmation alert: audience leaves quietly, stage
     /// members are warned when they are the last one and leaving ends the show.
     private var leaveMessage: String {
@@ -70,7 +74,7 @@ struct ShowView: View {
                 .accessibilityLabel("Back")
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if model.isHost { Button("Edit") { model.editing = true } }
+                if model.isHost && !onAir { Button("Edit") { model.editing = true } }
                 FeedbackButton(showId: model.showId)
             }
         }

@@ -681,7 +681,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
                 actions = {
-                    if (isHost) TextButton(onClick = { editing = true }) { Text("Edit") }
+                    if (isHost && connectedRoom?.onAir != true) TextButton(onClick = { editing = true }) { Text("Edit") }
                     FeedbackAction(app.api, showId)
                 },
                 navigationIcon = {

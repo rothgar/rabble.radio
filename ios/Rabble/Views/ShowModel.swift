@@ -53,6 +53,8 @@ struct ConnectedRoom {
     var onStage: Bool { join.onStage }
     var listening: Int { members.filter { !$0.onStage }.count + anonymousListeners }
     var raisedHands: [RoomMember] { members.filter { !$0.onStage && $0.handRaised } }
+    /// We are on stage, on air, and the only one left — leaving would end the show.
+    var lastOnStage: Bool { onAir && onStage && members.filter { $0.onStage }.count <= 1 }
 }
 
 enum RoomState {

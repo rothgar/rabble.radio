@@ -73,7 +73,7 @@ const LISTENER = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockInviteToStage.mockResolvedValue({ ok: true, invite: {} });
+  mockInviteToStage.mockResolvedValue({ ok: true });
   mockAcceptStageInvite.mockResolvedValue({
     token: 'speaker.jwt',
     wsUrl: 'ws://livekit:7880',
@@ -144,6 +144,7 @@ describe('POST /api/spaces/[id]/stage', () => {
       spaceId: 'sp1',
       hostDid: HOST.did,
       targetIdentity: 'did:plc:listener',
+      origin: 'http://localhost',
     });
   });
 

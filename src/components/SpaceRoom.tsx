@@ -47,9 +47,7 @@ import { ShareButtons } from '@/components/ShareButtons';
 import { FloatingReaction } from '@/components/FloatingReaction';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { setRoomSnapshot } from '@/lib/diagnostics';
-import { StageInviteToast } from '@/components/StageInviteToast';
 import { ShowEndedFollowPopup } from '@/components/ShowEndedFollowPopup';
-import { StageControls, type StageControlsProps, getStageControlsBus } from '@/components/StageControls';
 import type { ShowDetails } from '@/components/ShowDetailsForm';
 import type { PublicSpacePost } from '@/lib/posts';
 import { isAnonymousIdentity } from '@/lib/anonymous';
@@ -382,12 +380,7 @@ interface InnerProps {
   onRemoteReaction: (reaction: RemoteReaction) => void;
   floatingReactions: FloatingReactionState[];
   removeFloatingReaction: (id: string) => void;
-  pendingInvite: { hostName?: string } | null;
-  inviteBusy: boolean;
-  onAcceptInvite: () => void;
-  onDeclineInvite: () => void;
   stageSlot?: ReactNode;
-  stageControlsProps: StageControlsProps;
   onMicError?: (err: Error) => void;
   musicMood: string | null;
   onMusicMoodChange?: (mood: string | null) => Promise<void> | void;
@@ -425,12 +418,7 @@ function Inner({
   onRemoteReaction,
   floatingReactions,
   removeFloatingReaction,
-  pendingInvite,
-  inviteBusy,
-  onAcceptInvite,
-  onDeclineInvite,
   stageSlot,
-  stageControlsProps,
   onMicError,
   musicMood,
   onMusicMoodChange,
@@ -809,7 +797,6 @@ function Inner({
   return (
     <>
       <HostAutoUnmute role={role} onError={onMicError} />
-      <StageControls {...stageControlsProps} />
       <RoomSync
         spaceId={spaceId}
         isHost={isHost}
@@ -842,14 +829,6 @@ function Inner({
               </p>
             ) : null}
             {preShowBanner}
-            {pendingInvite ? (
-              <StageInviteToast
-                hostName={pendingInvite.hostName}
-                busy={inviteBusy}
-                onAccept={onAcceptInvite}
-                onDecline={onDeclineInvite}
-              />
-            ) : null}
             {onStageSection}
             {audienceSection}
             {musicMood || (isHost && !isLive) ? (
@@ -971,10 +950,6 @@ export function SpaceRoom({
   const [floatingReactions, setFloatingReactions] = useState<
     FloatingReactionState[]
   >([]);
-  const [pendingInvite, setPendingInvite] = useState<{
-    hostName?: string;
-  } | null>(null);
-  const [inviteBusy, setInviteBusy] = useState(false);
 
   /**
    * The raised hand is a LiveKit participant attribute (`hand: "1"`), so
@@ -1146,48 +1121,6 @@ export function SpaceRoom({
     [identity, spawnReaction]
   );
 
-  // StageControls renders no visible DOM but bridges useSpaceState to the
-  // parent via callbacks. The pending-invite toast is owned by StageControls
-  // (rendered via React portal to document.body) so SpaceRoom itself stays
-  // free of accept/decline logic.
-  const stageControlsProps: StageControlsProps = useMemo(
-    () => ({
-      spaceId,
-      identity,
-      displayName: displayName ?? (handle ? `@${handle}` : identity),
-      role: isHost || role === 'host' ? 'host' : 'audience',
-      onTokenRefresh: () => {
-        // No-op at the SpaceRoom level. The parent (SpacePageClient) owns
-        // the join token; if promotion requires a token rotation it
-        // should re-issue the token via its own pipeline.
-      },
-      onInvitePending: (hostName) => {
-        setPendingInvite((prev) => prev ?? { hostName });
-      },
-      onInviteResolved: () => {
-        setPendingInvite(null);
-        setInviteBusy(false);
-      },
-    }),
-    [displayName, handle, identity, isHost, role, spaceId]
-  );
-
-  const handleAcceptInvite = useCallback(async () => {
-    setInviteBusy(true);
-    const bus = getStageControlsBus();
-    if (bus) await bus.accept();
-    setHand(false);
-    setPendingInvite(null);
-    setInviteBusy(false);
-  }, [setHand]);
-
-  const handleDeclineInvite = useCallback(async () => {
-    const bus = getStageControlsBus();
-    if (bus) await bus.decline();
-    setPendingInvite(null);
-    setInviteBusy(false);
-  }, []);
-
   return (
     <div
       className="flex flex-col"
@@ -1242,12 +1175,7 @@ export function SpaceRoom({
         onRemoteReaction={handleRemoteReaction}
         floatingReactions={floatingReactions}
         removeFloatingReaction={removeFloatingReaction}
-        pendingInvite={pendingInvite}
-        inviteBusy={inviteBusy}
-        onAcceptInvite={handleAcceptInvite}
-        onDeclineInvite={handleDeclineInvite}
         stageSlot={stageSlot}
-        stageControlsProps={stageControlsProps}
         onMicError={handleError}
       />
     </div>

@@ -67,6 +67,11 @@ model Space {
   /// True once the host has turned this show into its own podcast feed,
   /// scoped to just its published recordings (/podcast/[handle]/show/[id]/feed.xml).
   podcastFeedEnabled Boolean @default(false)
+  /// True for a show whose title is the auto-generated "Start a show"
+  /// default (handle/display name derived), so findDefaultHostedSpace can
+  /// look it up directly instead of recomputing and matching that title.
+  /// Cleared the moment a host edits the title themselves.
+  isDefaultTitled Boolean @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

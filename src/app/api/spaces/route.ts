@@ -272,7 +272,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
       existing = resolved.space;
     } else if (!rawTitle) {
-      existing = await findDefaultHostedSpace(user.did, user.handle, user.displayName);
+      existing = await findDefaultHostedSpace(user.did);
     }
     if (existing) {
       try {
@@ -296,6 +296,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // startNow always creates a row with no scheduledAt; the scheduledAt
         // path keeps whatever the caller validated.
         scheduledAt: startNow ? null : scheduledAt,
+        // Untitled startNow fills `title` in from the handle/display name
+        // above; mark the row so it's findable even after that changes.
+        isDefaultTitled: startNow && !rawTitle,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create space.';

@@ -35,6 +35,8 @@ export interface SpaceModel {
   musicMood?: string | null;
   /** True once the host has turned this show into its own podcast feed. */
   podcastFeedEnabled: boolean;
+  /** True for the auto-titled default show from an untitled "Start a show". */
+  isDefaultTitled: boolean;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -78,6 +80,12 @@ export interface CreateSpaceInput {
    * and `expiresAt` is left null until after the scheduled time passes.
    */
   scheduledAt?: Date | string | null;
+  /**
+   * True when `title` is the auto-generated default ("Start a show" with no
+   * title typed), so `findDefaultHostedSpace` can find this row later no
+   * matter how the host's handle or display name changes afterward.
+   */
+  isDefaultTitled?: boolean;
 }
 
 export interface CreateSpaceOptions {
@@ -235,6 +243,7 @@ export async function createSpace(
       expiresAt,
       emptySince,
       status,
+      isDefaultTitled: input.isDefaultTitled ?? false,
     },
     include: spaceInclude,
   });
@@ -263,6 +272,9 @@ export async function updateSpace(
     const title = input.title.trim();
     if (!title) throw new Error('Title is required.');
     data.title = title;
+    // A host-supplied title is never the auto-generated default, even if it
+    // happens to read the same, so it stops matching findDefaultHostedSpace.
+    data.isDefaultTitled = false;
   }
   if (input.description !== undefined) {
     const description = input.description?.trim() ?? '';
@@ -301,36 +313,27 @@ export async function getHostedSpaces(hostDid: string): Promise<SpaceWithHost[]>
 }
 
 /**
- * The show a host's untitled "Start a show" lands in: their existing show
- * with the default title, if they have one. Scheduled rows are skipped so a
- * planned show keeps its date. Null when the host has never started one.
+ * The show a host's untitled "Start a show" lands in: their existing
+ * auto-titled default show, if they have one. Scheduled rows are skipped so
+ * a planned show keeps its date. Null when the host has never started one.
  *
- * Matches both the current default title and the pre-#23 handle-only shape,
- * so a show created before defaultShowTitle started preferring the display
- * name still gets reopened instead of duplicated.
+ * Looks up the `isDefaultTitled` marker directly rather than recomputing and
+ * matching the rendered title, so this keeps finding the same show after the
+ * host's handle or Bluesky display name changes (issue #33).
  */
 export async function findDefaultHostedSpace(
-  hostDid: string,
-  handle: string,
-  displayName?: string | null
+  hostDid: string
 ): Promise<SpaceWithHost | null> {
   const row = await prisma.space.findFirst({
     where: {
       hostId: hostDid,
-      title: { in: [defaultShowTitle(handle, displayName), legacyDefaultShowTitle(handle)] },
+      isDefaultTitled: true,
       status: { not: SPACE_STATUS.SCHEDULED },
     },
     orderBy: [{ lastLiveAt: 'desc' }, { createdAt: 'desc' }],
     include: spaceInclude,
   });
   return row ? withTags(row) : null;
-}
-
-/** The default title's shape before issue #23: handle only, no display name. */
-function legacyDefaultShowTitle(handle: string): string {
-  const trimmedHandle = handle.trim() || 'new host';
-  const fallback = trimmedHandle.startsWith('@') ? trimmedHandle : `@${trimmedHandle}`;
-  return `${fallback}'s show`;
 }
 
 /**

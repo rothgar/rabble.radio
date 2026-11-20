@@ -132,6 +132,38 @@ describe('leave confirmation', () => {
     expect(screen.queryByTestId('leave-dialog')).not.toBeInTheDocument();
   });
 
+  it('warns a host that leaving will end the show when they are the last one on stage', () => {
+    render(<BottomControlBar role="host" {...baseProps()} lastOnStage />);
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    expect(screen.getByTestId('leave-dialog')).toHaveTextContent(
+      "You're the last one on stage. Leaving will take the show off air."
+    );
+  });
+
+  it('warns a speaker that leaving will end the show when they are the last one on stage', () => {
+    render(<BottomControlBar role="speaker" {...baseProps()} lastOnStage />);
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    expect(screen.getByTestId('leave-dialog')).toHaveTextContent(
+      "You're the last one on stage. Leaving will take the show off air."
+    );
+  });
+
+  it('tells a host the show stays open when other hosts remain on stage', () => {
+    render(<BottomControlBar role="host" {...baseProps()} lastOnStage={false} />);
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    expect(screen.getByTestId('leave-dialog')).toHaveTextContent(
+      'The show stays open and you can come back from your shows list.'
+    );
+  });
+
+  it('tells a speaker the show stays open when another speaker remains on stage', () => {
+    render(<BottomControlBar role="speaker" {...baseProps()} lastOnStage={false} />);
+    fireEvent.click(screen.getByTestId('bottom-bar-leave'));
+    expect(screen.getByTestId('leave-dialog')).toHaveTextContent(
+      'The show stays open and you can come back from your shows list.'
+    );
+  });
+
   it('does not nest the fixed leave dialog inside the backdrop-blur footer', () => {
     render(
       <NocturneShell

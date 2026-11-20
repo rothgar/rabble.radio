@@ -12,7 +12,7 @@
 // participant is asked to do.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor, act } from '@testing-library/react';
+import { render, waitFor, act, fireEvent } from '@testing-library/react';
 
 /**
  * Everything the mocked LiveKit boundary needs, hoisted so the `vi.mock`
@@ -94,6 +94,9 @@ let activeFakeRoom: FakeRoom | null = null;
 /** Mic tracks the room currently has published; set per test. */
 let activeMicTracks: unknown[] = [];
 
+/** Remote participants `useParticipants()` returns; set per test. */
+let activeParticipants: unknown[] = [];
+
 vi.mock('@livekit/components-react', () => ({
   useRoomContext: (): FakeRoom => {
     if (!activeFakeRoom) throw new Error('No room provided in this test.');
@@ -102,7 +105,7 @@ vi.mock('@livekit/components-react', () => ({
   useLocalParticipant: (): { localParticipant: unknown } => ({
     localParticipant: activeFakeRoom?.localParticipant ?? null,
   }),
-  useParticipants: (): unknown[] => [],
+  useParticipants: (): unknown[] => activeParticipants,
   useTracks: (): unknown[] => activeMicTracks,
 }));
 
@@ -147,6 +150,7 @@ beforeEach(() => {
   boundary.reset();
   activeFakeRoom = new boundary.FakeRoom();
   activeMicTracks = [];
+  activeParticipants = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({
@@ -204,6 +208,53 @@ describe('<SpaceRoom /> microphone on join', () => {
     });
 
     expect(boundary.micCalls).not.toContain(true);
+  });
+});
+
+describe('<SpaceRoom /> leave dialog warns the last one on stage', () => {
+  it('warns a solo live host that leaving will take the show off air', async () => {
+    activeParticipants = [];
+
+    const { getByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: true })} />
+    );
+
+    fireEvent.click(getByTestId('bottom-bar-leave'));
+    expect(getByTestId('leave-dialog')).toHaveTextContent(
+      "You're the last one on stage. Leaving will take the show off air."
+    );
+  });
+
+  it('does not warn a live host when a co-host is still on stage', async () => {
+    activeParticipants = [
+      {
+        identity: 'did:plc:cohost',
+        isLocal: false,
+        permissions: { canPublish: true },
+      },
+    ];
+
+    const { getByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: true })} />
+    );
+
+    fireEvent.click(getByTestId('bottom-bar-leave'));
+    expect(getByTestId('leave-dialog')).toHaveTextContent(
+      'The show stays open and you can come back from your shows list.'
+    );
+  });
+
+  it('does not warn when the show is already off air', async () => {
+    activeParticipants = [];
+
+    const { getByTestId } = render(
+      <SpaceRoom {...baseProps({ role: 'host', isHost: true, isLive: false })} />
+    );
+
+    fireEvent.click(getByTestId('bottom-bar-leave'));
+    expect(getByTestId('leave-dialog')).toHaveTextContent(
+      'The show stays open and you can come back from your shows list.'
+    );
   });
 });
 

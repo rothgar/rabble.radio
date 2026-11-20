@@ -67,6 +67,32 @@ code, and mistakes already made there.
   which is worse than the display bug it would have avoided (issue #3).
   Check any new reader of `permission.canPublish` against which failure mode
   it can cause before picking a default.
+- `getRoomParticipantSummary`'s documented undercount was only ever safe
+  because its one caller at the time, the metrics sweep, self-corrects on
+  the next pass. `src/app/api/livekit/webhook/route.ts`'s auto-end-show path
+  (issue #21) is a caller that cannot tolerate that: acting on a false
+  zero-speakers reading ends the show, deletes the host's live bsky status,
+  and stops recording for a host who never left. It re-checks once after
+  `SPEAKER_RECHECK_DELAY_MS` and only acts if both readings agree. Any new
+  caller of this function must decide for itself whether a brief undercount
+  is tolerable, not assume the sweep's tolerance carries over.
+
+## src/app/api/livekit/webhook/route.ts (participant_left ordering)
+
+- `getRoomParticipantSummary` (`listParticipants`) called synchronously
+  inside a `participant_left` handler does not race the departure it is
+  reacting to: verified against a real LiveKit dev server (not the mocked
+  unit tests) that `listParticipants` excludes a participant within one
+  poll interval (~25ms) of that participant's own `disconnect()` resolving
+  client-side — before any webhook notification about the departure could
+  plausibly be dispatched, since a webhook is a side effect of the same
+  internal state change. An ungraceful disconnect (network drop, no clean
+  close) is detected by the server's own heartbeat timeout first, which
+  delays the webhook and the room's participant list by the same amount —
+  so this ordering holds for both disconnect paths, not just a clean leave.
+  Any future code reacting to a `*_left`/`*_disconnected` webhook with an
+  immediate room-state query can rely on this; it does not need to
+  re-verify it.
 
 ## src/lib/session.ts (getCurrentUser)
 

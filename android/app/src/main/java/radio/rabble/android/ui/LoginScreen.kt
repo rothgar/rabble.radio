@@ -1,7 +1,13 @@
 package radio.rabble.android.ui
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Message
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -50,8 +56,43 @@ fun LoginScreen(baseUrl: String, session: SessionStore, onDone: () -> Unit) {
                 WebView(context).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    settings.setSupportMultipleWindows(true)
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    // The login page's "create an account" links are target="_blank". Without
+                    // a WebChromeClient, WebView has nowhere to open them and treats them as a
+                    // same-view navigation, stranding the OAuth flow. Route them to a throwaway
+                    // WebView whose only job is to hand the URL to an external app.
+                    //
+                    // javaScriptCanOpenWindowsAutomatically is left at its default (false) and
+                    // isUserGesture is checked below so a script running on a page loaded in
+                    // this flow (e.g. a PDS or authorization-server page reached mid-OAuth)
+                    // can't pop an unprompted external browser window itself; only an actual
+                    // tap on a target="_blank" link reaches openExternally.
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onCreateWindow(
+                            view: WebView,
+                            isDialog: Boolean,
+                            isUserGesture: Boolean,
+                            resultMsg: Message,
+                        ): Boolean {
+                            if (!isUserGesture) return false
+                            val popup = WebView(context)
+                            popup.webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(
+                                    popupView: WebView,
+                                    request: WebResourceRequest,
+                                ): Boolean {
+                                    openExternally(context, request.url)
+                                    popupView.post { popupView.destroy() }
+                                    return true
+                                }
+                            }
+                            (resultMsg.obj as WebView.WebViewTransport).webView = popup
+                            resultMsg.sendToTarget()
+                            return true
+                        }
+                    }
                     webViewClient = object : WebViewClient() {
                         private var done = false
 
@@ -81,5 +122,13 @@ fun LoginScreen(baseUrl: String, session: SessionStore, onDone: () -> Unit) {
                 }
             },
         )
+    }
+}
+
+private fun openExternally(context: Context, url: Uri) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, url))
+    } catch (e: ActivityNotFoundException) {
+        // No app can handle it (no browser installed); nothing more to do.
     }
 }

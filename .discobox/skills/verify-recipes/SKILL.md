@@ -183,7 +183,14 @@ PR's Evidence says so.
   -verify app/build/outputs/bundle/release/app-release.aab` (expect "jar
   verified", ignore the self-signed/no-timestamp warnings — that's the
   throwaway key). Clean up `android/build` and `android/app/build`
-  afterwards; they're large. Say what was and was not built.
+  afterwards; they're large. Say what was and was not built. If an earlier
+  `gradle` run in the same tree failed partway (plugin resolution, a
+  dropped proxy connection) the next `assembleDebug` can fail at
+  `:app:packageDebug` with `FileNotFoundException: ...app-debug.apk (No
+  such file or directory)` or a Kotlin incremental-cache "Storage is
+  already registered" error, even though the APK was actually written:
+  `rm -rf android/app/build android/build android/.gradle` and rebuild
+  clean rather than trusting that failure.
 - **iOS** (`ios/`): macOS only. Unverifiable here; say so.
 - **Push notifications, recordings to R2, Bluesky posting**: external
   services with no dev-mode stand-in. Covered by tests only.

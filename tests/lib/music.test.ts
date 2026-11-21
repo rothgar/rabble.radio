@@ -1,7 +1,7 @@
 // tests/lib/music.test.ts
 
 import { describe, expect, it } from 'vitest';
-import { attribution, getMood, isValidMood, MOODS, musicUrl, playlistFor, trackByFile } from '@/lib/music';
+import { attribution, getMood, guestName, isValidMood, MOODS, musicUrl, playlistFor, trackByFile } from '@/lib/music';
 
 describe('music catalog', () => {
   it('has distinct moods, each with attributed tracks and unique files', () => {
@@ -15,6 +15,7 @@ describe('music catalog', () => {
       for (const t of m.tracks) {
         expect(t.file).toMatch(/^[a-z0-9-]+\.mp3$/);
         expect(t.artist).toContain('Kevin MacLeod');
+        expect(t.artistName).toBe('Kevin MacLeod');
         expect(t.licenseUrl).toMatch(/^https:\/\/creativecommons\.org\//);
         expect(t.durationSeconds).toBeGreaterThan(60);
       }
@@ -46,5 +47,9 @@ describe('music catalog', () => {
 
   it('formats attribution', () => {
     expect(attribution(trackByFile('wallpaper.mp3')!)).toBe('Wallpaper by Kevin MacLeod (incompetech.com), CC BY 4.0');
+  });
+
+  it('formats a guest name standing in for the track', () => {
+    expect(guestName(trackByFile('wallpaper.mp3')!)).toBe('Wallpaper by Kevin MacLeod');
   });
 });

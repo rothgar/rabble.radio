@@ -15,10 +15,19 @@
 // link, say) a Play control is offered on the tile instead.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { MusicNotes, Play, SpeakerSimpleSlash } from '@phosphor-icons/react';
-import { getMood, MOODS, musicUrl, playlistFor } from '@/lib/music';
+import { Brain, Martini, MusicNotes, Play, Sparkle, SpeakerSimpleSlash, VinylRecord } from '@phosphor-icons/react';
+import { attribution, getMood, guestName, MOODS, musicUrl, playlistFor } from '@/lib/music';
 
 export const MUSIC_VOLUME = 0.35;
+
+// One glyph per mood so a guest's tile is recognizable at a glance; moods
+// without a listed icon (or no mood picked) fall back to MusicNotes.
+const MOOD_ICONS: Record<string, typeof MusicNotes> = {
+  lounge: Martini,
+  upbeat: Sparkle,
+  focus: Brain,
+  groove: VinylRecord,
+};
 
 export interface MusicCardProps {
   spaceId: string;
@@ -120,13 +129,15 @@ export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange }: Mus
     [blocked, resume]
   );
 
+  const MoodIcon = mood ? (MOOD_ICONS[mood.id] ?? MusicNotes) : MusicNotes;
+
   const avatarInner = (
     <div
       className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-[var(--color-ink)] sm:h-20 sm:w-20"
       style={{ boxShadow: '0 0 0 2px var(--color-neutral-800)' }}
       data-testid="music-avatar"
     >
-      <MusicNotes size={28} weight="fill" className="text-[var(--color-text-on-ink)]" />
+      <MoodIcon size={28} weight="fill" className="text-[var(--color-text-on-ink)]" />
     </div>
   );
 
@@ -188,7 +199,7 @@ export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange }: Mus
         {avatar}
         <div className="flex min-w-0 max-w-full flex-col items-center text-center">
           <span className="truncate text-sm font-medium text-[var(--color-text)]" data-testid="music-name">
-            Music
+            {track ? guestName(track) : 'Music'}
           </span>
           <span className="truncate text-xs text-[var(--color-text-secondary)]" data-testid="music-mood-label">
             {mood ? mood.label : 'No music'}
@@ -197,7 +208,7 @@ export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange }: Mus
       </div>
       {track && mood ? (
         <p className="text-center text-caption text-[var(--color-text-tertiary)]" data-testid="music-track">
-          {playing ? 'Now playing' : 'Next up'}: {track.title} by {track.artist},{' '}
+          {playing ? 'Now playing' : 'Next up'} —{' '}
           <a
             href={track.licenseUrl}
             target="_blank"
@@ -253,6 +264,20 @@ export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange }: Mus
           {error ? (
             <p role="alert" className="px-2 pt-1 text-xs text-[var(--color-live)]" data-testid="music-error">
               {error}
+            </p>
+          ) : null}
+          {track ? (
+            <p className="px-2 pt-1 text-xs text-[var(--color-text-tertiary)]" data-testid="music-copyright">
+              {attribution(track)} —{' '}
+              <a
+                href={track.licenseUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="underline-offset-2 hover:underline"
+              >
+                licence
+              </a>
             </p>
           ) : null}
         </div>

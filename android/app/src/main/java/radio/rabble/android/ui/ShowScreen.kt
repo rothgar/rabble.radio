@@ -92,9 +92,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -1495,6 +1501,23 @@ private fun MusicTile(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
+        if (track != null) {
+            Text(
+                buildAnnotatedString {
+                    append(if (playing) "Now playing — " else "Next up — ")
+                    withLink(LinkAnnotation.Url(track.licenseUrl)) {
+                        withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
+                            append(track.license)
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = RabbleColors.TextTertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
         error?.let {
             Text(it, color = RabbleColors.Live, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
         }

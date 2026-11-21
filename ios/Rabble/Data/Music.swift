@@ -13,6 +13,7 @@ struct MusicTrack: Hashable {
     var artistName: String { "Kevin MacLeod" }
     var artist: String { "Kevin MacLeod (incompetech.com)" }
     var license: String { "CC BY 4.0" }
+    var licenseUrl: String { "https://creativecommons.org/licenses/by/4.0/" }
     var attribution: String { "\(title) by \(artist), \(license)" }
 
     /// The track's title and artist, standing in for a guest's name on the tile.

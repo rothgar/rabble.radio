@@ -276,6 +276,20 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.queryByTestId('join-button')).toBeNull();
   });
 
+  it('offers an add-to-calendar link on a scheduled show (issue #72)', () => {
+    renderPage(
+      <SpacePageClient
+        {...baseProps()}
+        isHost={false}
+        isLive={false}
+        status="scheduled"
+        scheduledAt="2026-11-08T10:00:00.000Z"
+        reminded={false}
+      />
+    );
+    expect(screen.getByTestId('add-to-calendar')).toBeTruthy();
+  });
+
   it('offers Notify me and a quiet studio link instead of Join on an off-air show', () => {
     const { unmount } = renderPage(
       <SpacePageClient {...baseProps()} isHost={false} isLive={false} status="active" reminded={false} />
@@ -285,6 +299,7 @@ describe('SpacePageClient scheduled and replay branches', () => {
     expect(screen.getByTestId('follow-host-button')).toBeTruthy();
     expect(screen.queryByTestId('join-button')).toBeNull();
     expect(screen.getByTestId('enter-studio').textContent).toMatch(/enter the studio/i);
+    expect(screen.queryByTestId('add-to-calendar')).toBeNull();
     unmount();
     renderPage(
       <SpacePageClient {...baseProps()} isAuthenticated={false} isHost={false} isLive={false} status="ended" reminded={false} />

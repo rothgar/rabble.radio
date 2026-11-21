@@ -78,6 +78,8 @@ interface PatchBody {
   tags?: unknown;
   /** Pre-show music mood id, or null for silence. */
   musicMood?: unknown;
+  /** Host only: move music on/off the stage without changing the mood. */
+  musicOnStage?: unknown;
   /** Turn this show's own podcast feed on or off. */
   podcastFeedEnabled?: unknown;
 }
@@ -110,6 +112,7 @@ export async function PATCH(
     description?: string | null;
     tags?: string[];
     musicMood?: string | null;
+    musicOnStage?: boolean;
     podcastFeedEnabled?: boolean;
   } = {};
   if (body.title !== undefined) {
@@ -170,6 +173,15 @@ export async function PATCH(
     }
     patch.musicMood = body.musicMood;
   }
+  if (body.musicOnStage !== undefined) {
+    if (typeof body.musicOnStage !== 'boolean') {
+      return NextResponse.json(
+        { error: 'validation_error', message: 'musicOnStage must be a boolean.' },
+        { status: 400 }
+      );
+    }
+    patch.musicOnStage = body.musicOnStage;
+  }
   if (body.podcastFeedEnabled !== undefined) {
     if (typeof body.podcastFeedEnabled !== 'boolean') {
       return NextResponse.json(
@@ -220,6 +232,7 @@ export async function PATCH(
       description: updated.description,
       tags: updated.tags,
       musicMood: updated.musicMood ?? null,
+      musicOnStage: updated.musicOnStage ?? true,
     });
 
     return NextResponse.json({ space: toPublicSpace(updated, origin) }, { status: 200 });

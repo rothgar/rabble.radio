@@ -216,23 +216,62 @@ code, and mistakes already made there.
   control on web picks up a new `!isLive`/on-air condition; filed as issue
   #56 for this one.
 
-## src/components/MusicCard.tsx (host editing gated on isLive)
+## src/components/MusicCard.tsx (host editing, on stage vs. audience while live)
 
-- `MusicCard`'s host-only mood-change/remove menu is gated by
-  `isHost && !isLive`, passed into its `isHost` prop from `SpaceRoom.tsx`
-  (`isHost={isHost && !isLive}`) rather than inside the component itself —
-  the same `isHost && !isLive` precedent as `RoomSidebar.tsx`'s
-  `ShowDetailsForm` gate, above. Issue #69's refactor (moving this control
-  from a standalone `PreShowMusic` section into a stage-grid tile) dropped
-  this gate once already (passed `isHost={isHost}` unconditionally) before
-  review caught it against this exact note. The
-  tile itself (`showMusicCard`) stays visible while live once a mood is
-  set — only the menu that lets the host change it is off-air-only. Any
-  future refactor of this call site must keep the `!isLive` term in the
-  prop it passes, not just in `showMusicCard`'s own visibility formula.
-  Android's `ShowScreen` and iOS's `ShowView.swift`
-  (`canPick: model.isHostOfShow && !connected.onAir`) gate their own music
-  picker the same off-air-only way — keep that in step if this changes.
+- Issue #111 deliberately reversed the precedent this note used to
+  describe: `MusicCard`'s host-only menu was gated `isHost && !isLive`
+  (passed into its `isHost` prop from `SpaceRoom.tsx`) from issue #69 until
+  #111, which opens it on air too so the host can pull music off stage
+  while live. `SpaceRoom.tsx` now passes `isHost` unconditionally and an
+  `isLive` prop (copy only, not gating). Before touching this call site,
+  understand `musicOnStage` (schema field, `UpdateSpaceInput`,
+  `PublicSpace`): it is a second, independent flag from `musicMood` —
+  `musicMood` is which mood is chosen, `musicOnStage` is whether it is
+  currently rendered on stage or has been removed to the audience/listening
+  list while live. `showMusicCard`/`musicInAudience` in `SpaceRoom.tsx`'s
+  `Inner` derive the tile's placement from both; `musicOnStage` is ignored
+  off air (the tile is always on stage there once a mood is set, same as
+  before #111).
+- The stage tile's "Remove from stage" button always calls `onMoodChange`
+  with `null` (unchanged in `MusicCard.tsx` itself). `SpaceRoom.tsx`'s
+  `handleMusicMoodChange` wrapper is what gives that `null` a different
+  meaning depending on `isLive`: off air it still clears `musicMood`
+  outright (as issue #69 built it); on air it calls
+  `onMusicOnStageChange(false)` instead, keeping `musicMood` so an "Invite"
+  from the audience list (`AudienceRows`'s `musicGuest` prop,
+  `AudienceBubbles`'s `musicGuest` prop) can restore the exact same mood
+  automatically via `onMusicOnStageChange(true)`, with no picker. Any
+  change to that wrapper that lets a live "remove" fall through to
+  `onMusicMoodChange(null)` would silently lose the mood instead of parking
+  it in the audience — check it is still intercepted whenever `isLive &&
+  musicOnStage`.
+- Android's `ShowScreen` and iOS's `ShowView.swift`
+  (`canPick: model.isHostOfShow && !connected.onAir`) still gate their own
+  music picker off-air only, and neither has the `musicOnStage` field or an
+  audience-list placement for removed-while-live music: issue #111 only
+  shipped on web. Filed as issue #119 for Android/iOS parity — check it
+  before assuming this flow behaves the same on every platform.
+- The two actions this issue added are asymmetric in how a failure reaches
+  the host, and should stay in step: "Remove from stage" runs through
+  `MusicCard`'s own `pick()`, which awaits `onMoodChange` and shows a failed
+  save inline in the menu (`music-error`). "Invite" from the audience list
+  (`SpaceRoom.tsx`'s `inviteMusicToStage`) has no such surface — the
+  audience row is not inside `MusicCard` — so it only logs a failure to the
+  console instead. If a later change gives the audience list its own error
+  UI, move `inviteMusicToStage`'s handling there instead of leaving it
+  console-only.
+
+## src/components/AudienceRows.tsx (invite chip touch target)
+
+- `MusicRow`'s "Invite" button (issue #111) is a second hand-rolled copy of
+  `Row`'s own Invite chip (`rounded-full bg-[var(--color-accent)] px-3
+  py-1 text-xs…`), which is itself under the 44px touch-target minimum
+  (`DESIGN.md`: "at least 44px tall and wide … on every tappable thing,
+  including chips and icon buttons"). `MusicRow`'s copy was fixed to add
+  `min-h-touch min-w-touch` when review caught it; `Row`'s original was left
+  as is, same as the `AddToCalendar.tsx` precedent above. Check both before
+  a third Invite-chip copy appears — route all of them through
+  `<Button size="sm">` rather than hand-rolling a fourth one.
 
 ## src/components/MusicCard.tsx (CC BY attribution visibility)
 

@@ -104,4 +104,11 @@ describe('MusicCard', () => {
     fireEvent.click(screen.getByTestId('music-mood-groove'));
     await waitFor(() => expect(screen.getByTestId('music-error').textContent).toBe('offline'));
   });
+
+  it('still offers the host a menu while live, with copy that drops "until you go on air" (issue #111)', () => {
+    render(<MusicCard spaceId="sp1" moodId="lounge" active isHost isLive onMoodChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('music-menu-trigger'));
+    expect(screen.getByTestId('music-menu-panel').textContent).toContain('Plays for everyone in the room.');
+    expect(screen.getByTestId('music-menu-panel').textContent).not.toContain('until you go on air');
+  });
 });

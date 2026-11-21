@@ -415,6 +415,18 @@ describe('updateSpace', () => {
     const args = mockSpaceUpdate.mock.calls[0][0];
     expect(args.data).toEqual({ title: 'My real show', isDefaultTitled: false });
   });
+
+  it('puts music back on stage whenever the mood changes (issue #111)', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
+    await updateSpace('sp1', { musicMood: 'lounge' });
+    expect(mockSpaceUpdate.mock.calls[0][0].data).toEqual({ musicMood: 'lounge', musicOnStage: true });
+  });
+
+  it('moves music off stage without losing the mood', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
+    await updateSpace('sp1', { musicOnStage: false });
+    expect(mockSpaceUpdate.mock.calls[0][0].data).toEqual({ musicOnStage: false });
+  });
 });
 
 describe('toPublicSpace', () => {
@@ -449,6 +461,11 @@ describe('toPublicSpace', () => {
       'https://rabble.example'
     );
     expect(space.isNamedShow).toBe(false);
+  });
+
+  it('defaults musicOnStage to true for rows that predate the column', () => {
+    const space = toPublicSpace(makeSpaceRow({ tags: [] }) as never, 'https://rabble.example');
+    expect(space.musicOnStage).toBe(true);
   });
 });
 

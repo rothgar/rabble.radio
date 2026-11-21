@@ -17,6 +17,8 @@ export interface ShowDetails {
   tags: string[];
   /** Pre-show music mood id; undefined when a message did not carry it. */
   musicMood?: string | null;
+  /** On stage vs. removed to the audience while live; undefined when a message did not carry it. */
+  musicOnStage?: boolean;
 }
 
 export interface ShowDetailsFormProps {

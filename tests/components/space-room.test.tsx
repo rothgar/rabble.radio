@@ -316,8 +316,8 @@ describe('<SpaceRoom /> music tile follows on-air state', () => {
     expect(getByTestId('music-menu-trigger')).toBeTruthy();
   });
 
-  it("hides the host's mood-change menu once the show is live (issue #69)", () => {
-    const { getByTestId, queryByTestId } = render(
+  it("gives the host the mood-change menu while live too (issue #111)", () => {
+    const { getByTestId } = render(
       <SpaceRoom
         {...baseProps({
           role: 'host',
@@ -325,12 +325,77 @@ describe('<SpaceRoom /> music tile follows on-air state', () => {
           isLive: true,
           musicMood: 'lounge',
           onMusicMoodChange: vi.fn(),
+          onMusicOnStageChange: vi.fn(),
         })}
       />
     );
 
     expect(getByTestId('music-card')).toBeTruthy();
-    expect(queryByTestId('music-menu-trigger')).toBeNull();
+    expect(getByTestId('music-menu-trigger')).toBeTruthy();
+  });
+
+  it('moves music to the audience list instead of clearing the mood when removed while live (issue #111)', async () => {
+    const onMusicOnStageChange = vi.fn().mockResolvedValue(undefined);
+    const onMusicMoodChange = vi.fn().mockResolvedValue(undefined);
+    const props = {
+      role: 'host' as const,
+      isHost: true,
+      isLive: true,
+      musicMood: 'lounge',
+      onMusicMoodChange,
+      onMusicOnStageChange,
+    };
+    const { getByTestId, queryByTestId, rerender } = render(
+      <SpaceRoom {...baseProps({ ...props, musicOnStage: true })} />
+    );
+
+    fireEvent.click(getByTestId('music-menu-trigger'));
+    fireEvent.click(getByTestId('music-mood-remove'));
+    await waitFor(() => expect(onMusicOnStageChange).toHaveBeenCalledWith(false));
+    // The mood itself is untouched: only onMusicOnStageChange is called.
+    expect(onMusicMoodChange).not.toHaveBeenCalled();
+
+    // Once the server reports musicOnStage: false, the tile leaves the
+    // stage grid and a host-only "Invite" row for music appears instead.
+    rerender(<SpaceRoom {...baseProps({ ...props, musicOnStage: false })} />);
+    expect(queryByTestId('music-card')).toBeNull();
+    expect(getByTestId('audience-row-music')).toBeTruthy();
+
+    fireEvent.click(getByTestId('audience-invite-music'));
+    await waitFor(() => expect(onMusicOnStageChange).toHaveBeenLastCalledWith(true));
+  });
+
+  it('shows the removed-while-live music to a listener too, without an invite action', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SpaceRoom
+        {...baseProps({
+          role: 'audience',
+          isHost: false,
+          isLive: true,
+          musicMood: 'lounge',
+          musicOnStage: false,
+        })}
+      />
+    );
+    expect(queryByTestId('music-card')).toBeNull();
+    expect(getByTestId('audience-bubble-music')).toBeTruthy();
+    expect(queryByTestId('audience-invite-music')).toBeNull();
+  });
+
+  it('keeps music on stage off air regardless of musicOnStage', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SpaceRoom
+        {...baseProps({
+          role: 'host',
+          isHost: true,
+          isLive: false,
+          musicMood: 'lounge',
+          musicOnStage: false,
+        })}
+      />
+    );
+    expect(getByTestId('music-card')).toBeTruthy();
+    expect(queryByTestId('audience-row-music')).toBeNull();
   });
 });
 

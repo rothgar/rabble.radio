@@ -431,6 +431,7 @@ export default function SpacePage(): ReactElement {
           isNamedShow={view.isNamedShow}
           showFollowed={view.showFollowed ?? false}
           musicMood={view.musicMood ?? null}
+          musicOnStage={view.musicOnStage ?? true}
           onJoinedChange={setInRoom}
         />
 

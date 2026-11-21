@@ -77,6 +77,8 @@ export interface PublicSpace {
   reminded: boolean;
   /** Pre-show music mood id (src/lib/music.ts), null for silence. */
   musicMood?: string | null;
+  /** True while music sits on stage; false once removed while on air. Ignored off air. */
+  musicOnStage?: boolean;
   /** True once the host has turned this show into its own podcast feed. */
   podcastFeedEnabled: boolean;
   /** This show's own feed URL, scoped to just its published recordings; null when disabled. */

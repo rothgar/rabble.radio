@@ -113,6 +113,7 @@ describe('PATCH /api/spaces/[id]', () => {
       description: 'Coffee talk',
       tags: ['Music', 'Comedy'],
       musicMood: null,
+      musicOnStage: true,
     });
     // Off air: nothing is republished to Bluesky.
     expect(m.publishLiveStatus).not.toHaveBeenCalled();
@@ -133,6 +134,21 @@ describe('PATCH /api/spaces/[id]', () => {
     const bad = await PATCH(patch({ musicMood: 'death-metal' }), ctx);
     expect(bad.status).toBe(400);
     expect((await bad.json()).message).toMatch(/mood/i);
+  });
+
+  it('moves music on or off the stage without touching the mood, and rejects a non-boolean', async () => {
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const ok = await PATCH(patch({ musicOnStage: false }), ctx);
+    expect(ok.status).toBe(200);
+    expect(m.updateSpace).toHaveBeenCalledWith('sp1', { musicOnStage: false });
+    expect(m.broadcastRoomData).toHaveBeenLastCalledWith(
+      'space-sp1',
+      expect.objectContaining({ musicOnStage: false })
+    );
+
+    const bad = await PATCH(patch({ musicOnStage: 'nope' }), ctx);
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).message).toMatch(/musicOnStage/i);
   });
 
   it('turns the show podcast feed on or off, and rejects a non-boolean', async () => {

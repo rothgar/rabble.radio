@@ -7,8 +7,11 @@
 // client plays the room's mood locally, so music never enters the mix or
 // the recording. The host taps the tile to open the same action-menu
 // pattern as a speaker card, pick a different mood (standing in for
-// "invite a different guest"), or remove music from the stage entirely
-// (sets the mood to null).
+// "invite a different guest"), or remove music from the stage. The caller
+// decides what "remove" means: off air it clears the mood outright (passes
+// null through); on air (issue #111) it instead moves music to the
+// audience/listening list without losing the mood, the same way removing a
+// speaker from the stage returns them to the audience.
 //
 // Browsers block audio that starts without a user gesture. Joining is a
 // click, so this normally just plays; when it is blocked (auto-join from a
@@ -38,9 +41,11 @@ export interface MusicCardProps {
   isHost: boolean;
   /** Host only: persist a new mood (null removes music from the stage). */
   onMoodChange?: (mood: string | null) => Promise<void> | void;
+  /** Whether the show is on air; only changes the menu's helper copy. */
+  isLive?: boolean;
 }
 
-export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange }: MusicCardProps): ReactElement {
+export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange, isLive = false }: MusicCardProps): ReactElement {
   const mood = getMood(moodId);
   const playlist = useMemo(() => (mood ? playlistFor(mood, spaceId) : []), [mood, spaceId]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -228,7 +233,9 @@ export function MusicCard({ spaceId, moodId, active, isHost, onMoodChange }: Mus
           data-testid="music-menu-panel"
         >
           <p className="px-2 pb-1 text-xs text-[var(--color-text-tertiary)]">
-            Plays for everyone waiting in the room until you go on air. It is not recorded.
+            {isLive
+              ? 'Plays for everyone in the room. It is not recorded.'
+              : 'Plays for everyone waiting in the room until you go on air. It is not recorded.'}
           </p>
           {MOODS.map((m) => {
             const selected = m.id === mood?.id;

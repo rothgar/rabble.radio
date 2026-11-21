@@ -12,6 +12,7 @@ data class MusicTrack(val file: String, val title: String, val durationSeconds: 
     val artistName: String get() = "Kevin MacLeod"
     val artist: String get() = "Kevin MacLeod (incompetech.com)"
     val license: String get() = "CC BY 4.0"
+    val licenseUrl: String get() = "https://creativecommons.org/licenses/by/4.0/"
     val attribution: String get() = "$title by $artist, $license"
 
     /** The track's title and artist, standing in for a guest's name on the tile. */

@@ -652,6 +652,15 @@ private struct MusicTile: View {
             Text(track?.guestName ?? "Music").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.text).lineLimit(1)
             Text(mood?.label ?? "No music")
                 .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).lineLimit(1)
+            if let track, let licenseUrl = URL(string: track.licenseUrl) {
+                HStack(spacing: 0) {
+                    Text(playing ? "Now playing — " : "Next up — ")
+                        .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
+                    Link(track.license, destination: licenseUrl)
+                        .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
+                }
+                .lineLimit(1)
+            }
             if let error = player.error {
                 Text(error)
                     .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)

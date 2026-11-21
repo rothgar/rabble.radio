@@ -643,6 +643,25 @@ export async function listActiveSpeakers(spaceId: string): Promise<string[]> {
   return rows.map((r) => r.identity);
 }
 
+/**
+ * Bulk form of `listActiveSpeakers`, one query for many spaces (listing
+ * pages decorating many spaces at once).
+ */
+export async function listActiveSpeakersForSpaces(spaceIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (spaceIds.length === 0) return out;
+  const rows = await prisma.stageSpeaker.findMany({
+    where: { spaceId: { in: spaceIds } },
+    select: { spaceId: true, identity: true },
+  });
+  for (const r of rows) {
+    const list = out.get(r.spaceId) ?? [];
+    list.push(r.identity);
+    out.set(r.spaceId, list);
+  }
+  return out;
+}
+
 // ---------- Test helpers ----------
 
 /**

@@ -12,6 +12,7 @@ const m = vi.hoisted(() => ({
   getPresentIdentities: vi.fn(),
   getTunedInCounts: vi.fn(),
   getUsersByDid: vi.fn(),
+  listActiveSpeakersForSpaces: vi.fn(),
 }));
 
 vi.mock('@/lib/recording', async () => {
@@ -24,6 +25,7 @@ vi.mock('@/lib/show-follows', () => ({ getFollowedSpaceIds: m.getFollowedSpaceId
 vi.mock('@/lib/follows', () => ({ getFollowedDids: m.getFollowedDids, getPresentIdentities: m.getPresentIdentities }));
 vi.mock('@/lib/metrics', () => ({ getTunedInCounts: m.getTunedInCounts }));
 vi.mock('@/lib/users', () => ({ getUsersByDid: m.getUsersByDid }));
+vi.mock('@/lib/stage', () => ({ listActiveSpeakersForSpaces: m.listActiveSpeakersForSpaces }));
 vi.mock('@/lib/db', () => ({ prisma: {} }));
 vi.mock('@/lib/storage', () => ({
   deleteObject: vi.fn(),
@@ -41,6 +43,7 @@ function space(overrides: Partial<PublicSpace>): PublicSpace {
     tunedInCount: 0, likeCount: 0, sessionCount: 0, totalListeners: 0, hostedSeconds: 0, lastLiveAt: null,
     tags: [], createdAt: '', updatedAt: '', shareableUrl: '',
     host: { did: 'did:h', handle: 'h', displayName: null, avatarUrl: null },
+    onStageHosts: [{ did: 'did:h', handle: 'h', displayName: null, avatarUrl: null }],
     replay: null, reminded: false, isNamedShow: false, podcastFeedEnabled: false, podcastFeedUrl: null,
     ...overrides,
   };
@@ -64,6 +67,7 @@ beforeEach(() => {
   m.getPresentIdentities.mockResolvedValue(new Map());
   m.getTunedInCounts.mockResolvedValue(new Map());
   m.getUsersByDid.mockResolvedValue([]);
+  m.listActiveSpeakersForSpaces.mockResolvedValue(new Map());
 });
 
 describe('toPublicReplay', () => {
@@ -177,5 +181,33 @@ describe('decoratePublicSpaces', () => {
   it('skips the tuned-in lookup when nothing is live', async () => {
     await decoratePublicSpaces([space({ id: 'sp1' })], null);
     expect(m.getTunedInCounts).not.toHaveBeenCalled();
+  });
+
+  it('is just the host when a show is off air, even with stale stage rows', async () => {
+    m.listActiveSpeakersForSpaces.mockResolvedValue(new Map([['sp1', ['did:stale']]]));
+    const out = await decoratePublicSpaces([space({ id: 'sp1' })], null);
+    expect(m.listActiveSpeakersForSpaces).not.toHaveBeenCalled();
+    expect(out[0].onStageHosts).toEqual([{ did: 'did:h', handle: 'h', displayName: null, avatarUrl: null }]);
+  });
+
+  it('adds live on-stage speakers after the host, capped at 4, deduped', async () => {
+    m.listActiveSpeakersForSpaces.mockResolvedValue(
+      new Map([['sp1', ['did:a', 'did:b', 'did:a', 'did:c', 'did:d', 'did:h']]])
+    );
+    m.getUsersByDid.mockResolvedValue([
+      { did: 'did:a', handle: 'a', displayName: 'A', avatarUrl: null },
+      { did: 'did:b', handle: 'b', displayName: 'B', avatarUrl: null },
+      { did: 'did:c', handle: 'c', displayName: 'C', avatarUrl: null },
+      { did: 'did:d', handle: 'd', displayName: 'D', avatarUrl: null },
+    ]);
+    const out = await decoratePublicSpaces([space({ id: 'sp1', isLive: true, status: 'live' })], null);
+    expect(m.listActiveSpeakersForSpaces).toHaveBeenCalledWith(['sp1']);
+    expect(m.getUsersByDid).toHaveBeenCalledWith(expect.arrayContaining(['did:a', 'did:b', 'did:c', 'did:d']));
+    expect(out[0].onStageHosts).toEqual([
+      { did: 'did:h', handle: 'h', displayName: null, avatarUrl: null },
+      { did: 'did:a', handle: 'a', displayName: 'A', avatarUrl: null },
+      { did: 'did:b', handle: 'b', displayName: 'B', avatarUrl: null },
+      { did: 'did:c', handle: 'c', displayName: 'C', avatarUrl: null },
+    ]);
   });
 });

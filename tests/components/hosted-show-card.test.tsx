@@ -32,6 +32,7 @@ function space(overrides: Partial<PublicSpace> = {}): PublicSpace {
     createdAt: '2026-11-01T00:00:00.000Z',
     updatedAt: '2026-11-01T00:00:00.000Z',
     host: { did: 'did:plc:me', handle: 'me.bsky.social', displayName: null, avatarUrl: null },
+    onStageHosts: [{ did: 'did:plc:me', handle: 'me.bsky.social', displayName: null, avatarUrl: null }],
     shareableUrl: 'https://rabble.rodeo/show/sp1',
     replay: null,
     reminded: false,

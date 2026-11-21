@@ -799,6 +799,7 @@ export interface PublicSpaceExtras {
   reminded?: boolean;
   hostSubscribed?: boolean;
   showFollowed?: boolean;
+  onStageHosts?: PublicHost[];
 }
 
 export function toPublicSpace(
@@ -834,6 +835,7 @@ export function toPublicSpace(
     createdAt: space.createdAt.toISOString(),
     updatedAt: space.updatedAt.toISOString(),
     host: toPublicHost(space.host),
+    onStageHosts: extras.onStageHosts ?? [toPublicHost(space.host)],
     shareableUrl,
     replay: extras.replay ?? null,
     reminded: extras.reminded ?? false,

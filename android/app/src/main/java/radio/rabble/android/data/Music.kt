@@ -9,9 +9,13 @@ package radio.rabble.android.data
  * All tracks: Kevin MacLeod (incompetech.com), CC BY 4.0.
  */
 data class MusicTrack(val file: String, val title: String, val durationSeconds: Int) {
+    val artistName: String get() = "Kevin MacLeod"
     val artist: String get() = "Kevin MacLeod (incompetech.com)"
     val license: String get() = "CC BY 4.0"
     val attribution: String get() = "$title by $artist, $license"
+
+    /** The track's title and artist, standing in for a guest's name on the tile. */
+    val guestName: String get() = "$title by $artistName"
 }
 
 data class MusicMood(val id: String, val label: String, val description: String, val tracks: List<MusicTrack>)

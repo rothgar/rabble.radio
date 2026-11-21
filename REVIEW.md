@@ -251,6 +251,18 @@ code, and mistakes already made there.
   at least title, artist and licence visible to every viewer, not just the
   host.
 
+## android/.../ui/ShowScreen.kt + ios/Rabble/Views/ShowView.swift (licence text missing from the music tile)
+
+- The web rule above — every viewer sees at least title, artist and licence
+  on the music tile, not just the host — was never carried to the apps.
+  `MusicTrack` on both platforms already has `license`/`attribution`
+  getters, but neither `MusicTile` composable/view renders them anywhere:
+  not on the tile, not in the host's mood menu. Issue #114 (mood icon +
+  guest name parity) added title+artist to both tiles without adding the
+  licence, since that was outside its scope; caught in its review. Filed as
+  #116 rather than fixed there. A future change to either app's music tile
+  should close this gap, not just preserve it.
+
 ## src/components/ShowDetailsForm.tsx (unmount while dirty)
 
 - `ShowDetailsForm` keeps its draft (title/description/tags) as local state

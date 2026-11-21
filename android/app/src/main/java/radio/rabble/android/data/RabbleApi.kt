@@ -77,6 +77,12 @@ class RabbleApi(
         return Show.fromJson(request(patch("/api/spaces/$showId", body)).getJSONObject("space"))
     }
 
+    /** Host only: move music on/off the stage while live, without changing the mood. */
+    suspend fun setMusicOnStage(showId: String, onStage: Boolean): Show {
+        val body = JSONObject().put("musicOnStage", onStage)
+        return Show.fromJson(request(patch("/api/spaces/$showId", body)).getJSONObject("space"))
+    }
+
     /** Returns null when there is no valid session. */
     suspend fun me(): Me? = try {
         Me.fromJson(request(get("/api/me")))

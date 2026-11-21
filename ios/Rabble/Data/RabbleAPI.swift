@@ -73,6 +73,11 @@ final class RabbleAPI {
         return try await request(ShowEnvelope.self, path: "/api/spaces/\(showId)", method: "PATCH", json: body).space
     }
 
+    /// Host only: move music on/off the stage while live, without changing the mood.
+    func setMusicOnStage(showId: String, onStage: Bool) async throws -> Show {
+        try await request(ShowEnvelope.self, path: "/api/spaces/\(showId)", method: "PATCH", json: ["musicOnStage": onStage]).space
+    }
+
     /// nil when there is no valid session.
     func me() async throws -> Me? {
         do {

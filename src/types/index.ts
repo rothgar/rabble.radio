@@ -66,6 +66,10 @@ export interface PublicSpace {
   createdAt: string;
   updatedAt: string;
   host: PublicHost;
+  /** The host plus up to 3 currently on-stage speakers, capped at 4 total.
+   *  Off air (or no extra speakers), this is just the host. Drives the
+   *  per-show opengraph image (src/app/show/[id]/opengraph-image.tsx). */
+  onStageHosts: PublicHost[];
   shareableUrl: string;
   /** Latest playable recording when the show is off air; null otherwise. */
   replay: PublicReplay | null;

@@ -80,6 +80,14 @@ function makeSpace(overrides: Partial<PublicSpace> = {}): PublicSpace {
       displayName: 'Host',
       avatarUrl: null,
     },
+    onStageHosts: [
+      {
+        did: 'did:plc:host',
+        handle: 'host.bsky.social',
+        displayName: 'Host',
+        avatarUrl: null,
+      },
+    ],
     shareableUrl: 'https://rabble.example/space/sp1',
     replay: null,
     reminded: false,

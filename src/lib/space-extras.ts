@@ -6,6 +6,8 @@
 //   - `reminded`: whether the viewer set "Notify me" on the show.
 //   - `hostSubscribed`: whether the viewer follows the host (any show).
 //   - `showFollowed`: whether the viewer follows this exact named show.
+//   - `onStageHosts`: the host plus up to 3 current on-stage speakers, for
+//     live shows; just the host otherwise.
 // Kept out of `toPublicSpace` so that stays a pure mapper.
 
 import type { PublicHost, PublicReplay, PublicSpace } from '@/types';
@@ -16,6 +18,7 @@ import { getFollowedSpaceIds } from '@/lib/show-follows';
 import { getFollowedDids, getPresentIdentities } from '@/lib/follows';
 import { getTunedInCounts } from '@/lib/metrics';
 import { getUsersByDid } from '@/lib/users';
+import { listActiveSpeakersForSpaces } from '@/lib/stage';
 
 export function toPublicReplay(row: RecordingRow): PublicReplay {
   return {
@@ -38,7 +41,7 @@ export async function decoratePublicSpaces(
   const offAirIds = spaces.filter((s) => !s.isLive).map((s) => s.id);
   const liveIds = spaces.filter((s) => s.isLive).map((s) => s.id);
   // Every lookup is a decoration: if one fails the listing still renders.
-  const [replays, reminded, subscribed, showFollowed, followed, present, tunedIn] = await Promise.all([
+  const [replays, reminded, subscribed, showFollowed, followed, present, tunedIn, speakers] = await Promise.all([
     Promise.resolve()
       .then(() => getLatestAvailableRecordings(offAirIds))
       .catch(() => new Map<string, RecordingRow>()),
@@ -60,9 +63,13 @@ export async function decoratePublicSpaces(
     Promise.resolve()
       .then(() => (liveIds.length > 0 ? getTunedInCounts(liveIds) : new Map<string, number>()))
       .catch(() => new Map<string, number>()),
+    Promise.resolve()
+      .then(() => (liveIds.length > 0 ? listActiveSpeakersForSpaces(liveIds) : new Map<string, string[]>()))
+      .catch(() => new Map<string, string[]>()),
   ]);
 
-  // Profiles for followed people in rooms, one lookup for all shows.
+  // Profiles for followed people in rooms and on-stage speakers, one lookup
+  // for all shows.
   const followedPresent = new Map<string, string[]>();
   const needProfiles = new Set<string>();
   for (const [spaceId, identities] of present) {
@@ -70,6 +77,11 @@ export async function decoratePublicSpaces(
     if (hits.length > 0) {
       followedPresent.set(spaceId, hits);
       hits.forEach((d) => needProfiles.add(d));
+    }
+  }
+  for (const s of spaces) {
+    for (const d of speakers.get(s.id) ?? []) {
+      if (d !== s.host.did) needProfiles.add(d);
     }
   }
   const profiles = new Map<string, PublicHost>();
@@ -87,10 +99,15 @@ export async function decoratePublicSpaces(
     const inRoom = (followedPresent.get(s.id) ?? [])
       .map((d) => profiles.get(d))
       .filter((p): p is PublicHost => Boolean(p));
+    const extraHosts = [...new Set(speakers.get(s.id) ?? [])]
+      .filter((d) => d !== s.host.did)
+      .map((d) => profiles.get(d))
+      .filter((p): p is PublicHost => Boolean(p));
     return {
       ...s,
       replay: rec ? toPublicReplay(rec) : null,
       reminded: reminded.has(s.id),
+      onStageHosts: [s.host, ...extraHosts].slice(0, 4),
       hostSubscribed: subscribed.has(s.host.did),
       showFollowed: showFollowed.has(s.id),
       tunedInCount: tunedIn.get(s.id) ?? s.tunedInCount,

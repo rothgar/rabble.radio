@@ -288,6 +288,38 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
         }
     }
 
+    var musicStageBusy by remember { mutableStateOf(false) }
+    /** Host only: move music on/off the stage while live, without changing the mood (issue #111). */
+    fun setMusicOnStage(onStage: Boolean) {
+        if (musicStageBusy) return
+        musicStageBusy = true
+        scope.launch {
+            try {
+                state = ShowState.Ready(app.api.setMusicOnStage(showId, onStage))
+            } catch (e: Exception) {
+                Diagnostics.event("music_stage_failed", e.message ?: "")
+            } finally {
+                musicStageBusy = false
+            }
+        }
+    }
+
+    /**
+     * The stage tile's "Remove from stage" action always asks for mood =
+     * null; while live that must not erase the mood (so inviting it back
+     * can restore the exact mood automatically), only move it to the
+     * audience. Mirrors SpaceRoom.tsx's handleMusicMoodChange.
+     */
+    fun pickMusicMood(mood: String?) {
+        val onAirNow = (room as? RoomState.Connected)?.onAir ?: false
+        val onStageNow = (state as? ShowState.Ready)?.show?.musicOnStage ?: true
+        if (mood == null && onAirNow && onStageNow) {
+            setMusicOnStage(false)
+        } else {
+            setMusicMood(mood)
+        }
+    }
+
     /** Centre of each member's avatar (root px), kept fresh by MemberTile. */
     val avatarCentres = remember { mutableStateMapOf<String, Offset>() }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -429,6 +461,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                                         msg.isNull("musicMood") -> null
                                         else -> msg.optString("musicMood")
                                     },
+                                    musicOnStage = if (msg.has("musicOnStage")) msg.optBoolean("musicOnStage", ready.show.musicOnStage) else ready.show.musicOnStage,
                                 )
                             )
                         }
@@ -727,8 +760,8 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                             avatarCentres = avatarCentres,
                             baseUrl = app.baseUrl,
                             isHost = isHostOfShow,
-                            moodBusy = moodBusy,
-                            onMusicPick = ::setMusicMood,
+                            moodBusy = moodBusy || musicStageBusy,
+                            onMusicPick = ::pickMusicMood,
                         )
                         if (showReplay && replay != null) {
                             // Off air with a recording: play it instead of opening an empty stage.
@@ -765,7 +798,13 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     val bottom: @Composable () -> Unit = {
                         if (connected != null) {
                             if (isHostOfShow) RaisedHandsPanel(connected, onInvite = ::invite)
-                            AudiencePanel(connected, avatarCentres)
+                            AudiencePanel(
+                                connected,
+                                avatarCentres,
+                                musicGuest = s.show.musicMood != null && connected.onAir && !s.show.musicOnStage,
+                                isHost = isHostOfShow,
+                                onInviteMusic = { setMusicOnStage(true) },
+                            )
                         } else if (isWideScreen()) {
                             Card {
                                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -853,16 +892,21 @@ private fun ShowHeader(
             Text("ON STAGE", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
             val stage = room?.members?.filter { it.onStage } ?: emptyList()
             val musicTile: (@Composable () -> Unit)? = room?.let { r ->
-                if (show.musicMood != null || (isHost && !r.onAir)) {
+                // musicOnStage only matters while live: off air, music is always on
+                // stage once a mood is set (there is no audience placement to fall
+                // back to). Mirrors SpaceRoom.tsx's Inner.
+                val musicStaysOnStage = !r.onAir || show.musicOnStage
+                if ((show.musicMood != null && musicStaysOnStage) || (isHost && !r.onAir)) {
                     {
                         MusicTile(
                             baseUrl = baseUrl,
                             spaceId = show.id,
                             moodId = show.musicMood,
-                            active = show.musicMood != null && (!r.onAir || !r.remoteAudio),
-                            canPick = isHost && !r.onAir,
+                            active = show.musicMood != null && musicStaysOnStage && (!r.onAir || !r.remoteAudio),
+                            canPick = isHost,
                             busy = moodBusy,
                             onPick = onMusicPick,
+                            isLive = r.onAir,
                         )
                     }
                 } else null
@@ -1102,13 +1146,20 @@ private fun RaisedHandsPanel(room: RoomState.Connected, onInvite: (String) -> Un
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun AudiencePanel(room: RoomState.Connected, avatarCentres: MutableMap<String, Offset>) {
+private fun AudiencePanel(
+    room: RoomState.Connected,
+    avatarCentres: MutableMap<String, Offset>,
+    /** Music removed from stage while live (issue #111); shown last, like a listener. */
+    musicGuest: Boolean,
+    isHost: Boolean,
+    onInviteMusic: () -> Unit,
+) {
     val audience = room.members.filter { !it.onStage }
     val listening = audience.size + room.anonymousListeners
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("LISTENING · $listening", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
-            if (audience.isEmpty()) {
+            if (audience.isEmpty() && !musicGuest) {
                 Text(
                     if (room.anonymousListeners > 0) "${room.anonymousListeners} listening without an account." else "Nobody in the audience yet.",
                     color = RabbleColors.TextSecondary,
@@ -1116,12 +1167,47 @@ private fun AudiencePanel(room: RoomState.Connected, avatarCentres: MutableMap<S
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     audience.forEach { m -> MemberTile(m, large = false, onAvatarCentre = { c -> avatarCentres[m.identity] = c }) }
+                    if (musicGuest) MusicListenerTile(isHost = isHost, onInvite = onInviteMusic)
                 }
                 if (room.anonymousListeners > 0) {
                     Text("+${room.anonymousListeners} listening without an account", color = RabbleColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
+    }
+}
+
+/**
+ * Music parked in the audience/listening list after the host removes it
+ * from the stage while live (issue #111/#119). Visible to everyone; only
+ * the host gets the Invite control that puts it back on stage with the
+ * same mood automatically.
+ */
+@Composable
+private fun MusicListenerTile(isHost: Boolean, onInvite: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(60.dp)
+            .then(if (isHost) Modifier.clickable(onClick = onInvite) else Modifier)
+            .semantics { contentDescription = if (isHost) "Invite music back to the stage" else "Music" },
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(RabbleColors.Ink),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = RabbleColors.TextOnInk)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (isHost) "Invite" else "Music",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isHost) RabbleColors.Accent else RabbleColors.Text,
+            fontWeight = if (isHost) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -1387,6 +1473,7 @@ private fun MusicTile(
     canPick: Boolean,
     busy: Boolean,
     onPick: (String?) -> Unit,
+    isLive: Boolean = false,
 ) {
     val mood = Music.mood(moodId)
     val playlist = remember(moodId, spaceId) { mood?.let { Music.playlist(it, spaceId) } ?: emptyList() }
@@ -1461,7 +1548,7 @@ private fun MusicTile(
             if (canPick) {
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     Text(
-                        "Plays for everyone waiting in the room until you go on air. It is not recorded.",
+                        if (isLive) "Plays for everyone in the room. It is not recorded." else "Plays for everyone waiting in the room until you go on air. It is not recorded.",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).width(220.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = RabbleColors.TextTertiary,

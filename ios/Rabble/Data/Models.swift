@@ -125,6 +125,8 @@ struct Show: Codable, Identifiable, Hashable {
     var followedInRoom: [PublicHost] = []
     /// Pre-show music mood id (see Music), nil for silence.
     var musicMood: String?
+    /// Host only: whether music sits on stage or has been moved to "Listening" while live. Ignored off air.
+    var musicOnStage: Bool = true
 
     /// Worth surfacing in "For you": a followed host, or a follow in the room.
     var forYou: Bool { hostFollowed || !followedInRoom.isEmpty }
@@ -133,7 +135,7 @@ struct Show: Codable, Identifiable, Hashable {
         case id, slug, title, description, isLive, status, scheduledAt, expiresAt
         case listenerCount, speakerCount, reactionCount, likeCount, sessionCount, totalListeners
         case tags, createdAt, updatedAt, host, shareableUrl, replay, reminded, hostFollowed, hostSubscribed
-        case isNamedShow, showFollowed, followedInRoom, musicMood
+        case isNamedShow, showFollowed, followedInRoom, musicMood, musicOnStage
     }
 
     init(from decoder: Decoder) throws {
@@ -165,6 +167,7 @@ struct Show: Codable, Identifiable, Hashable {
         showFollowed = c.opt(.showFollowed, false)
         followedInRoom = c.opt(.followedInRoom, [])
         musicMood = c.optional(.musicMood)
+        musicOnStage = c.opt(.musicOnStage, true)
     }
 }
 

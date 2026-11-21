@@ -94,6 +94,7 @@ final class ShowModel: ObservableObject {
     @Published var showFollowing = false
     @Published var showFollowBusy = false
     @Published var moodBusy = false
+    @Published var musicStageBusy = false
     @Published var editing = false
     @Published var confirmLeave = false
     /// Top centre of each member's avatar in the show coordinate space, kept fresh by the tiles.
@@ -322,6 +323,32 @@ final class ShowModel: ObservableObject {
         }
     }
 
+    /// Host only: move music on/off the stage while live, without changing the mood (issue #111).
+    func setMusicOnStage(_ onStage: Bool) {
+        if musicStageBusy { return }
+        musicStageBusy = true
+        Task {
+            do {
+                show = try await env.api.setMusicOnStage(showId: showId, onStage: onStage)
+            } catch {
+                Diagnostics.event("music_stage_failed", error.localizedDescription)
+            }
+            musicStageBusy = false
+        }
+    }
+
+    /// The stage tile's "Remove from stage" action always asks for mood =
+    /// nil; while live that must not erase the mood (so inviting it back can
+    /// restore the exact mood automatically), only move it to the audience.
+    /// Mirrors SpaceRoom.tsx's handleMusicMoodChange.
+    func pickMusicMood(_ mood: String?) {
+        if mood == nil, room.connected?.onAir == true, show?.musicOnStage == true {
+            setMusicOnStage(false)
+        } else {
+            setMusicMood(mood)
+        }
+    }
+
     func toggleRemind() {
         if remindBusy { return }
         remindBusy = true
@@ -500,6 +527,7 @@ final class ShowModel: ObservableObject {
             if msg.keys.contains("description") { s.description = msg["description"] as? String }
             if let tags = msg["tags"] as? [String] { s.tags = tags }
             if msg.keys.contains("musicMood") { s.musicMood = msg["musicMood"] as? String }
+            if let musicOnStage = msg["musicOnStage"] as? Bool { s.musicOnStage = musicOnStage }
             show = s
         case "stage_removed":
             if msg["identity"] as? String == current.join.identity {

@@ -117,8 +117,8 @@ struct ShowView: View {
                         room: connected,
                         baseURL: env.baseURL,
                         isHost: model.isHostOfShow,
-                        moodBusy: model.moodBusy,
-                        onMusicPick: { model.setMusicMood($0) }
+                        moodBusy: model.moodBusy || model.musicStageBusy,
+                        onMusicPick: { model.pickMusicMood($0) }
                     )
                     if showReplay, let replay = show.replay {
                         // Off air with a recording: play it instead of opening an empty stage.
@@ -138,7 +138,12 @@ struct ShowView: View {
                     }
                     // Below: who is listening.
                     if let connected {
-                        AudiencePanel(room: connected, onInvite: connected.isHost ? { model.invite($0) } : nil)
+                        AudiencePanel(
+                            room: connected,
+                            onInvite: connected.isHost ? { model.invite($0) } : nil,
+                            musicGuest: show.musicMood != nil && connected.onAir && !show.musicOnStage,
+                            onInviteMusic: connected.isHost ? { model.setMusicOnStage(true) } : nil
+                        )
                     }
                     Spacer(minLength: 24)
                 }
@@ -205,7 +210,11 @@ private struct ShowHeader: View {
             // to pick one.
             SectionLabel(text: "ON STAGE").padding(.top, 4)
             let stage = room?.members.filter(\.onStage) ?? []
-            let showMusicTile = room != nil && (show.musicMood != nil || (isHost && !(room?.onAir ?? false)))
+            // musicOnStage only matters while live: off air, music is always on
+            // stage once a mood is set (there is no audience placement to fall
+            // back to). Mirrors SpaceRoom.tsx's Inner.
+            let musicStaysOnStage = room.map { !$0.onAir || show.musicOnStage } ?? true
+            let showMusicTile = room != nil && ((show.musicMood != nil && musicStaysOnStage) || (isHost && !(room?.onAir ?? false)))
             if stage.isEmpty, !showMusicTile {
                 HStack(spacing: 12) {
                     ForEach(0..<3, id: \.self) { _ in PlaceholderSeat() }
@@ -219,10 +228,11 @@ private struct ShowHeader: View {
                             baseURL: baseURL,
                             spaceId: show.id,
                             moodId: show.musicMood,
-                            active: show.musicMood != nil && (!room.onAir || !room.remoteAudio),
-                            canPick: isHost && !room.onAir,
+                            active: show.musicMood != nil && musicStaysOnStage && (!room.onAir || !room.remoteAudio),
+                            canPick: isHost,
                             busy: moodBusy,
-                            onPick: onMusicPick
+                            onPick: onMusicPick,
+                            isLive: room.onAir
                         )
                     }
                     ForEach(stage) { MemberTile(member: $0, large: true) }
@@ -396,6 +406,10 @@ private struct AudiencePanel: View {
     let room: ConnectedRoom
     /// Present for the host: invites a listener onto the stage.
     var onInvite: ((String) -> Void)?
+    /// Music removed from stage while live (issue #111); shown last, like a listener.
+    var musicGuest: Bool = false
+    /// Present for the host: invites the music back onto the stage with the same mood.
+    var onInviteMusic: (() -> Void)?
 
     var body: some View {
         let audience = room.members.filter { !$0.onStage }
@@ -426,12 +440,13 @@ private struct AudiencePanel: View {
                 }
             }
             SectionLabel(text: "LISTENING · \(audience.count + room.anonymousListeners)")
-            if audience.isEmpty {
+            if audience.isEmpty, !musicGuest {
                 Text(room.anonymousListeners > 0 ? "\(room.anonymousListeners) listening without an account." : "Nobody in the audience yet.")
                     .foregroundStyle(RabbleColors.textSecondary)
             } else {
                 FlowLayout(spacing: 10) {
                     ForEach(audience) { MemberTile(member: $0, large: false) }
+                    if musicGuest { MusicListenerTile(onInvite: onInviteMusic) }
                 }
                 if room.anonymousListeners > 0 {
                     Text("+\(room.anonymousListeners) listening without an account")
@@ -440,6 +455,34 @@ private struct AudiencePanel: View {
             }
         }
         .card()
+    }
+}
+
+/// Music parked in the audience/listening list after the host removes it
+/// from the stage while live (issue #111/#119). Visible to everyone; only
+/// the host gets the Invite control that puts it back on stage with the
+/// same mood automatically.
+private struct MusicListenerTile: View {
+    var onInvite: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle().fill(RabbleColors.ink)
+                Image(systemName: "music.note").font(RabbleFont.sans(18, .semibold)).foregroundStyle(RabbleColors.textOnInk)
+            }
+            .frame(width: 44, height: 44)
+            Text(onInvite != nil ? "Invite" : "Music")
+                .font(RabbleFont.style(.caption, onInvite != nil ? .semibold : .regular))
+                .foregroundStyle(onInvite != nil ? RabbleColors.accent : RabbleColors.text)
+                .lineLimit(1)
+        }
+        .frame(width: 60, minHeight: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { onInvite?() }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(onInvite != nil ? "Invite music back to the stage" : "Music")
+        .accessibilityAddTraits(onInvite != nil ? .isButton : [])
     }
 }
 
@@ -629,6 +672,7 @@ private struct MusicTile: View {
     let canPick: Bool
     let busy: Bool
     let onPick: (String?) -> Void
+    var isLive: Bool = false
     @StateObject private var player = MusicPlayer()
 
     private var mood: MusicMood? { Music.mood(moodId) }
@@ -686,7 +730,9 @@ private struct MusicTile: View {
 
         if canPick {
             Menu {
-                Text("Plays for everyone waiting in the room until you go on air. It is not recorded.")
+                Text(isLive
+                     ? "Plays for everyone in the room. It is not recorded."
+                     : "Plays for everyone waiting in the room until you go on air. It is not recorded.")
                 ForEach(Music.moods) { m in
                     Button {
                         onPick(m.id)

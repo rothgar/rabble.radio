@@ -10,6 +10,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaD1 } from '@prisma/adapter-d1';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { logger } from '@/lib/logger';
 
 /** The binding type the adapter accepts, without importing the Workers globals. */
 type D1Database = ConstructorParameters<typeof PrismaD1>[0];
@@ -27,14 +28,67 @@ function getBinding(): D1Database {
   return db;
 }
 
+let queryCounter = 0;
+
+// Logs the start and end of every D1 query so a request the Workers runtime
+// cancels as "hung" (issue #128: the query's own promise never settles, so
+// nothing ever throws) still leaves a `db.query.start` with no matching
+// `db.query.done`/`db.query.failed` to identify which call hung. Args are
+// deliberately not logged, and a failure logs only the error's name and
+// code: Prisma's own `PrismaClientValidationError.message` embeds the full
+// call arguments for debuggability, so logging the error as-is would leak
+// the same DIDs, tokens or other viewer data args are kept out for.
+//
+// The hook is top-level (`query.$allOperations`), not nested under
+// `$allModels`: nested under `$allModels` it only sees model methods
+// (`user.findMany`, etc) and misses `$queryRaw`/`$executeRaw` (src/lib/users.ts,
+// src/app/api/health/route.ts) and the statements inside `$transaction`
+// (src/lib/metrics.ts, src/lib/reaction-buffer.ts) — confirmed against the
+// local D1 adapter, which runs `$transaction` as individual queries anyway
+// since D1 has no real transactions. Top-level catches all of these without
+// double-logging the model ops a nested `$allModels` hook would also catch.
+function withQueryTelemetry(client: PrismaInstance): PrismaInstance {
+  return client.$extends({
+    name: 'query-telemetry',
+    query: {
+      async $allOperations({ model, operation, args, query }) {
+        const queryId = `d1q_${(++queryCounter).toString(36)}`;
+        const startedAt = Date.now();
+        logger.info('db.query.start', { queryId, model, operation });
+        try {
+          const result = await query(args);
+          logger.info('db.query.done', {
+            queryId,
+            model,
+            operation,
+            durationMs: Date.now() - startedAt,
+          });
+          return result;
+        } catch (err) {
+          logger.error('db.query.failed', {
+            queryId,
+            model,
+            operation,
+            durationMs: Date.now() - startedAt,
+            errorName: err instanceof Error ? err.name : typeof err,
+            errorCode: (err as { code?: unknown })?.code,
+          });
+          throw err;
+        }
+      },
+    },
+  }) as unknown as PrismaInstance;
+}
+
 function getClient(): PrismaInstance {
   const db = getBinding();
   let client = clients.get(db);
   if (!client) {
-    client = new PrismaClient({
+    const base = new PrismaClient({
       adapter: new PrismaD1(db),
       log: ['error', 'warn'],
     });
+    client = withQueryTelemetry(base);
     clients.set(db, client);
   }
   return client;

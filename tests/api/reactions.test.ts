@@ -9,27 +9,20 @@ const {
   mockGetCurrentUser,
   mockGetSpaceById,
   mockGetSpaceBySlug,
-  mockIncrementSpaceReactions,
-  mockRecordReaction,
+  mockBufferReaction,
   mockBroadcast,
   mockFindUser,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockGetSpaceById: vi.fn(),
   mockGetSpaceBySlug: vi.fn(),
-  mockIncrementSpaceReactions: vi.fn(),
-  mockRecordReaction: vi.fn(async () => undefined),
+  mockBufferReaction: vi.fn(async () => 1),
   mockBroadcast: vi.fn(async () => true),
   mockFindUser: vi.fn<() => Promise<{ handle: string; displayName: string | null; avatarUrl: string | null } | null>>(async () => null),
 }));
 
-vi.mock('@/lib/metrics', () => ({
-  startShowSession: vi.fn(async () => undefined),
-  endShowSession: vi.fn(async () => undefined),
-  recordJoin: vi.fn(async () => undefined),
-  recordLeave: vi.fn(async () => undefined),
-  recordStageChange: vi.fn(async () => undefined),
-  recordReaction: mockRecordReaction,
+vi.mock('@/lib/reaction-buffer', () => ({
+  bufferReaction: mockBufferReaction,
 }));
 
 vi.mock('@/lib/livekit', () => ({
@@ -48,7 +41,6 @@ vi.mock('@/lib/session', () => ({
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: mockGetSpaceBySlug,
-  incrementSpaceReactions: mockIncrementSpaceReactions,
 }));
 
 import { POST } from '@/app/api/spaces/[id]/reactions/route';
@@ -63,6 +55,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentUser.mockResolvedValue(USER);
   mockGetSpaceById.mockResolvedValue(makeSpace());
+  mockBufferReaction.mockResolvedValue(1);
 });
 
 async function post(id = 'sp1', body?: unknown): Promise<Response> {
@@ -82,7 +75,7 @@ describe('POST /api/spaces/[id]/reactions', () => {
     mockGetCurrentUser.mockResolvedValue(null);
     const res = await post();
     expect(res.status).toBe(401);
-    expect(mockIncrementSpaceReactions).not.toHaveBeenCalled();
+    expect(mockBufferReaction).not.toHaveBeenCalled();
   });
 
   it('returns 404 when the space does not exist', async () => {
@@ -92,31 +85,26 @@ describe('POST /api/spaces/[id]/reactions', () => {
     expect(res.status).toBe(404);
   });
 
-  it('increments reactions and returns the new count', async () => {
-    mockIncrementSpaceReactions.mockResolvedValue(7);
+  it('buffers the reaction and returns the running count', async () => {
+    mockBufferReaction.mockResolvedValue(7);
     const res = await post();
     expect(res.status).toBe(200);
-    expect(mockIncrementSpaceReactions).toHaveBeenCalledWith('sp1');
+    expect(mockBufferReaction).toHaveBeenCalledWith({ spaceId: 'sp1', did: USER.did, kind: '❤️' });
     await expect(res.json()).resolves.toEqual({ reactionCount: 7 });
   });
 
   it('falls back to slug lookup when id does not match', async () => {
     mockGetSpaceById.mockResolvedValue(null);
     mockGetSpaceBySlug.mockResolvedValue(makeSpace({ id: 'sp-slug' }));
-    mockIncrementSpaceReactions.mockResolvedValue(1);
+    mockBufferReaction.mockResolvedValue(1);
     await post('some-slug');
     expect(mockGetSpaceBySlug).toHaveBeenCalledWith('some-slug');
-    expect(mockIncrementSpaceReactions).toHaveBeenCalledWith('sp-slug');
-  });
-
-  it('returns 500 when recording the reaction fails', async () => {
-    mockIncrementSpaceReactions.mockResolvedValue(null);
-    const res = await post();
-    expect(res.status).toBe(500);
+    expect(mockBufferReaction).toHaveBeenCalledWith(
+      expect.objectContaining({ spaceId: 'sp-slug' })
+    );
   });
 
   it('records the chosen emoji and broadcasts it with the sender profile', async () => {
-    mockIncrementSpaceReactions.mockResolvedValue(1);
     mockFindUser.mockResolvedValueOnce({
       handle: 'alice.bsky.social',
       displayName: 'Alice',
@@ -124,7 +112,7 @@ describe('POST /api/spaces/[id]/reactions', () => {
     });
     const res = await post('sp1', { emoji: '🎉' });
     expect(res.status).toBe(200);
-    expect(mockRecordReaction).toHaveBeenCalledWith(
+    expect(mockBufferReaction).toHaveBeenCalledWith(
       expect.objectContaining({ spaceId: 'sp1', did: USER.did, kind: '🎉' })
     );
     expect(mockBroadcast).toHaveBeenCalledWith('space-sp1', {
@@ -139,7 +127,6 @@ describe('POST /api/spaces/[id]/reactions', () => {
   });
 
   it('falls back to a heart for unknown emoji and an empty body', async () => {
-    mockIncrementSpaceReactions.mockResolvedValue(1);
     await post('sp1', { emoji: '🐍' });
     expect(mockBroadcast).toHaveBeenLastCalledWith('space-sp1', expect.objectContaining({ emoji: '❤️' }));
     await post('sp1');

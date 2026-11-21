@@ -568,24 +568,6 @@ export async function expireStaleSpaces(
 }
 
 /**
- * Increment the reaction counter for a space. Returns the new count.
- */
-export async function incrementSpaceReactions(
-  spaceId: string
-): Promise<number | null> {
-  try {
-    const updated = await prisma.space.update({
-      where: { id: spaceId },
-      data: { reactionCount: { increment: 1 } },
-      select: { reactionCount: true },
-    });
-    return updated.reactionCount;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Best-effort: run the expiration sweep. Swallows errors so callers (e.g. a
  * request handler) can safely invoke it without aborting the main flow.
  */

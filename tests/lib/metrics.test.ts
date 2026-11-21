@@ -33,8 +33,13 @@ const m = vi.hoisted(() => {
     userFindMany: vi.fn(),
     transaction: vi.fn(async (ops: unknown[]) => ops),
     warn: vi.fn(),
+    flushSpaceReactions: vi.fn(async () => undefined),
   };
 });
+
+vi.mock('@/lib/reaction-buffer', () => ({
+  flushSpaceReactions: m.flushSpaceReactions,
+}));
 
 vi.mock('@/lib/db', () => ({
   prisma: {
@@ -85,7 +90,6 @@ import {
   likeShow,
   recordJoin,
   recordLeave,
-  recordReaction,
   recordStageChange,
   startShowSession,
   unlikeShow,
@@ -319,26 +323,6 @@ describe('recordStageChange', () => {
   });
 });
 
-describe('recordReaction', () => {
-  it('stores the reaction and bumps the live session in one transaction', async () => {
-    m.sessionFindFirst.mockResolvedValueOnce(session());
-    await recordReaction({ spaceId: 'sp1', did: 'did:plc:bob', now: T0 });
-    const sent = m.transaction.mock.calls[0][0] as { op: string; args: unknown }[];
-    expect(sent.map((o) => o.op)).toEqual(['showReaction.create', 'showSession.update']);
-    expect(sent[0].args).toEqual({
-      data: { spaceId: 'sp1', sessionId: 'sess1', did: 'did:plc:bob', kind: 'reaction', createdAt: T0 },
-    });
-  });
-
-  it('still stores the reaction when the show is not live', async () => {
-    m.sessionFindFirst.mockResolvedValueOnce(null);
-    await recordReaction({ spaceId: 'sp1', did: 'did:plc:bob' });
-    const sent = m.transaction.mock.calls[0][0] as { op: string; args: { data: { sessionId: unknown } } }[];
-    expect(sent).toHaveLength(1);
-    expect(sent[0].args.data.sessionId).toBeNull();
-  });
-});
-
 describe('likeShow / unlikeShow', () => {
   const spaceRow = { id: 'sp1', hostId: 'did:plc:host', tags: [{ tag: 'Music' }], likeCount: 4 };
 
@@ -414,6 +398,15 @@ describe('endShowSession', () => {
     m.sessionFindFirst.mockResolvedValueOnce(null);
     await expect(endShowSession({ spaceId: 'sp1' })).resolves.toBeUndefined();
     expect(m.transaction).not.toHaveBeenCalled();
+  });
+
+  it('flushes buffered reactions before reading the session, so the roll-up sees them', async () => {
+    m.sessionFindFirst.mockResolvedValueOnce(null);
+    await endShowSession({ spaceId: 'sp1' });
+    expect(m.flushSpaceReactions).toHaveBeenCalledWith('sp1');
+    const flushOrder = m.flushSpaceReactions.mock.invocationCallOrder[0];
+    const readOrder = m.sessionFindFirst.mock.invocationCallOrder[0];
+    expect(flushOrder).toBeLessThan(readOrder);
   });
 
   it('closes stragglers, totals the show and rolls it up per topic', async () => {

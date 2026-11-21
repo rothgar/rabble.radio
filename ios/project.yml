@@ -48,3 +48,14 @@ targets:
         RABBLE_BASE_URL: https://rabble.rodeo
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+  RabbleUITests:
+    type: ui-testing-bundle
+    platform: iOS
+    sources: [RabbleUITests]
+    dependencies:
+      - target: Rabble
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: radio.rabble.ios.RabbleUITests
+        TEST_TARGET_NAME: Rabble
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "NO"

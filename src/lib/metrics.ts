@@ -20,6 +20,7 @@
 import { prisma } from '@/lib/db';
 import { isAnonymousIdentity } from '@/lib/anonymous';
 import { logger } from '@/lib/logger';
+import { flushSpaceReactions } from '@/lib/reaction-buffer';
 import type { Prisma, ShowSession } from '@prisma/client';
 
 /** An open session with its tag rows flattened to strings. */
@@ -128,6 +129,13 @@ export async function endShowSession(
 ): Promise<ShowSession | undefined> {
   const now = input.now ?? new Date();
   return (async () => {
+    // Flush this isolate's own buffered reactions (waiting for one already
+    // in flight, if there is one) so the roll-up below doesn't miss taps
+    // this isolate is holding. It can't reach taps buffered in another
+    // isolate for the same space — reaction-buffer.ts's state is
+    // per-isolate — so this narrows the window where a reaction is lost to
+    // the roll-up, it doesn't close it.
+    await flushSpaceReactions(input.spaceId);
     const session = await getOpenSession(input.spaceId);
     if (!session) return undefined;
 
@@ -405,43 +413,13 @@ export async function getTunedInCounts(spaceIds: string[]): Promise<Map<string, 
 }
 
 // ---------------------------------------------------------------------------
-// Reactions and likes
+// Likes
 // ---------------------------------------------------------------------------
-
-export interface ReactionInput {
-  spaceId: string;
-  did: string;
-  kind?: string;
-  now?: Date;
-}
-
-/** Store one reaction and bump the open session's counter. */
-export async function recordReaction(input: ReactionInput): Promise<void> {
-  const now = input.now ?? new Date();
-  await (async () => {
-    const session = await getOpenSession(input.spaceId);
-    const ops: Prisma.PrismaPromise<unknown>[] = [
-      prisma.showReaction.create({
-        data: {
-          spaceId: input.spaceId,
-          sessionId: session?.id ?? null,
-          did: input.did,
-          kind: input.kind ?? 'reaction',
-          createdAt: now,
-        },
-      }),
-    ];
-    if (session) {
-      ops.push(
-        prisma.showSession.update({
-          where: { id: session.id },
-          data: { reactionCount: { increment: 1 } },
-        })
-      );
-    }
-    await prisma.$transaction(ops);
-  })().catch(swallow('metrics.reaction_failed', { spaceId: input.spaceId }));
-}
+//
+// Reactions themselves are recorded through src/lib/reaction-buffer.ts,
+// which batches taps instead of writing one per request; endShowSession
+// above flushes it so a show's reactionCount is accurate by the time the
+// roll-up below reads it.
 
 export interface LikeInput {
   spaceId: string;

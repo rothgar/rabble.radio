@@ -54,7 +54,6 @@ vi.mock('@/lib/metrics', () => ({
   recordJoin: vi.fn(async () => undefined),
   recordLeave: vi.fn(async () => undefined),
   recordStageChange: vi.fn(async () => undefined),
-  recordReaction: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/session', async () => {

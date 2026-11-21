@@ -2,9 +2,13 @@
 //
 // POST /api/spaces/[id]/reactions
 //
-// Record a reaction in a room by incrementing the space's `reactionCount`
-// metric and storing a ShowReaction row for the show's metrics. Requires an
-// authenticated session. Used by the in-room reaction bar (web and mobile).
+// Record a reaction in a room. The tap is buffered in memory and the
+// space's `reactionCount` metric and its ShowReaction row are written to D1
+// in a batch later (src/lib/reaction-buffer.ts), not on this request: a
+// burst of concurrent taps during a live show used to queue one D1 round
+// trip per tap behind the single connection and hang (issue #73). Requires
+// an authenticated session. Used by the in-room reaction bar (web and
+// mobile).
 //
 // Body (optional): { emoji?: string }
 //
@@ -12,13 +16,14 @@
 // carrying the emoji and the sender's profile so clients can float the
 // reaction from that person's avatar. Delivery is best-effort.
 //
-// Response: { reactionCount: number }
+// Response: { reactionCount: number } — an estimate, not a fresh read: see
+// src/lib/reaction-buffer.ts.
 //   or an error envelope on failure.
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getSpaceById, getSpaceBySlug, incrementSpaceReactions } from '@/lib/spaces';
+import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
-import { recordReaction } from '@/lib/metrics';
+import { bufferReaction } from '@/lib/reaction-buffer';
 import { broadcastRoomData, roomNameForSpace } from '@/lib/livekit';
 import { prisma } from '@/lib/db';
 
@@ -61,15 +66,7 @@ export async function POST(
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
-  const reactionCount = await incrementSpaceReactions(space.id);
-  if (reactionCount === null) {
-    return NextResponse.json(
-      { error: 'reaction_failed', message: 'Failed to record reaction.' },
-      { status: 500 }
-    );
-  }
-
-  await recordReaction({ spaceId: space.id, did: user.did, kind: emoji });
+  const reactionCount = await bufferReaction({ spaceId: space.id, did: user.did, kind: emoji });
 
   // Tell the room who reacted so every client can float it from their avatar.
   const profile = await prisma.user

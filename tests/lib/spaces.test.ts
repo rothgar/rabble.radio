@@ -28,7 +28,6 @@ vi.mock('@/lib/metrics', () => ({
   recordJoin: vi.fn(async () => undefined),
   recordLeave: vi.fn(async () => undefined),
   recordStageChange: vi.fn(async () => undefined),
-  recordReaction: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -74,7 +73,6 @@ import {
   getSpaceById,
   getSpaceBySlug,
   getSpacesForUser,
-  incrementSpaceReactions,
   generateSlugSuffix,
   toPublicSpace,
   SPACE_STATUS,
@@ -367,25 +365,6 @@ describe('expireStaleSpaces', () => {
 
     expect(count).toBe(0);
     expect(mockSpaceUpdate).not.toHaveBeenCalled();
-  });
-});
-
-describe('incrementSpaceReactions', () => {
-  it('increments the reaction counter and returns the new value', async () => {
-    mockSpaceUpdate.mockResolvedValueOnce({ reactionCount: 7 });
-    const count = await incrementSpaceReactions('sp1');
-    expect(count).toBe(7);
-    expect(mockSpaceUpdate).toHaveBeenCalledWith({
-      where: { id: 'sp1' },
-      data: { reactionCount: { increment: 1 } },
-      select: { reactionCount: true },
-    });
-  });
-
-  it('returns null on failure', async () => {
-    mockSpaceUpdate.mockRejectedValueOnce(new Error('boom'));
-    const count = await incrementSpaceReactions('sp1');
-    expect(count).toBeNull();
   });
 });
 

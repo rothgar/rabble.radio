@@ -234,6 +234,23 @@ code, and mistakes already made there.
   (`canPick: model.isHostOfShow && !connected.onAir`) gate their own music
   picker the same off-air-only way — keep that in step if this changes.
 
+## src/components/MusicCard.tsx (CC BY attribution visibility)
+
+- The file's own header comment promises "Attribution is shown wherever a
+  track plays." Issue #110 moved the full copyright/attribution string and
+  licence link out of the always-visible `music-track` line and into the
+  host-only mood-picker popup (`canPick = isHost && onMoodChange`), which
+  would have left every non-host listener — the actual audience hearing a
+  CC BY 4.0 track — with no attribution at all, since the popup only a host
+  can ever open. Caught in round 1 of #110's review. Fixed by keeping a
+  compact, always-visible licence link in `music-track` (everyone sees
+  title+artist via the guest name, plus licence type+link) while the fuller
+  `attribution()` string (title, full artist-with-site, licence) is
+  additional detail in the host popup, not the only place attribution
+  appears. Any future change to this file's attribution display must keep
+  at least title, artist and licence visible to every viewer, not just the
+  host.
+
 ## src/components/ShowDetailsForm.tsx (unmount while dirty)
 
 - `ShowDetailsForm` keeps its draft (title/description/tags) as local state

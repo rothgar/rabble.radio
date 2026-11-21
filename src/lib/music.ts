@@ -13,6 +13,9 @@ export interface MusicTrack {
   /** File name under music/ in the bucket, also the URL path segment. */
   file: string;
   title: string;
+  /** Short form for display next to a title, e.g. "Kevin MacLeod". */
+  artistName: string;
+  /** Full attribution form, e.g. "Kevin MacLeod (incompetech.com)". */
   artist: string;
   license: string;
   licenseUrl: string;
@@ -27,6 +30,7 @@ export interface MusicMood {
 }
 
 const KM = {
+  artistName: 'Kevin MacLeod',
   artist: 'Kevin MacLeod (incompetech.com)',
   license: 'CC BY 4.0',
   licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
@@ -122,4 +126,9 @@ export function playlistFor(mood: MusicMood, spaceId: string): MusicTrack[] {
 
 export function attribution(track: MusicTrack): string {
   return `${track.title} by ${track.artist}, ${track.license}`;
+}
+
+/** The track's title and artist, standing in for a guest's name on the tile. */
+export function guestName(track: MusicTrack): string {
+  return `${track.title} by ${track.artistName}`;
 }

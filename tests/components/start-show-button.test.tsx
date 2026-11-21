@@ -90,7 +90,7 @@ describe('<StartShowButton spaceId />', () => {
       json: async () => ({ space: { id: 'sp2' } }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<StartShowButton spaceId="sp2" label="Start a session" />);
+    render(<StartShowButton spaceId="sp2" label="Custom label" />);
     fireEvent.click(screen.getByTestId('start-show-button'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];

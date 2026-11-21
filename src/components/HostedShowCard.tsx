@@ -329,7 +329,7 @@ export function HostedShowCard({ space, recordings }: HostedShowCardProps): Reac
 
       <div className="flex flex-wrap gap-2">
         {space.isLive ? null : (
-          <StartShowButton spaceId={space.id} size="sm" label="Start a session" />
+          <StartShowButton spaceId={space.id} size="sm" />
         )}
         <Button href={`/show/${encodeURIComponent(space.id)}`} variant="secondary" size="sm" data-testid="hosted-show-open">
           {space.isLive ? 'Back to the room' : 'Show page'}

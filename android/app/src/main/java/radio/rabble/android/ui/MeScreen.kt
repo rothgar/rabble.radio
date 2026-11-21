@@ -104,7 +104,7 @@ fun MeScreen(
                 val show = api.startShow(showId)
                 onStartedShow(show.id)
             } catch (e: Exception) {
-                startError = e.message ?: "Could not start a session."
+                startError = e.message ?: "Could not start the show."
             } finally {
                 startingId = null
             }
@@ -300,7 +300,7 @@ private fun HostedShowCard(show: Show, starting: Boolean, onOpen: () -> Unit, on
                     Button(onClick = onOpen, modifier = Modifier.weight(1f).height(44.dp)) { Text("Back to the room") }
                 } else {
                     Button(onClick = onStart, enabled = !starting, modifier = Modifier.weight(1f).height(44.dp)) {
-                        Text(if (starting) "Starting…" else "Start a session")
+                        Text(if (starting) "Starting…" else "Start a show")
                     }
                     OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f).height(44.dp)) { Text("Show page") }
                 }

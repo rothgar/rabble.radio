@@ -174,7 +174,7 @@ struct MeView: View {
                     Button("Back to the room") { nav.push(.show(id: show.id, autoJoin: false)) }
                         .buttonStyle(.borderedProminent).wideButton(height: 44)
                 } else {
-                    Button(startingId == show.id ? "Starting…" : "Start a session") { start(show.id) }
+                    Button(startingId == show.id ? "Starting…" : "Start a show") { start(show.id) }
                         .buttonStyle(.borderedProminent)
                         .disabled(startingId != nil)
                         .wideButton(height: 44)

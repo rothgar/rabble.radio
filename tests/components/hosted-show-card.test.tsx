@@ -81,9 +81,9 @@ describe('<HostedShowCard />', () => {
     await waitFor(() => expect(screen.getByTestId('hosted-show-copy')).toHaveTextContent('Copied'));
   });
 
-  it('offers a new session for off-air shows and only the room link while live', () => {
+  it('offers to start a show for off-air shows and only the room link while live', () => {
     const { unmount } = render(<HostedShowCard space={space({ status: 'expired' })} recordings={[]} />);
-    expect(screen.getByTestId('start-show-button')).toHaveTextContent('Start a session');
+    expect(screen.getByTestId('start-show-button')).toHaveTextContent('Start a show');
     expect(screen.getByTestId('hosted-show-open')).toHaveTextContent('Show page');
     unmount();
     render(<HostedShowCard space={space({ status: 'live', isLive: true })} recordings={[]} />);

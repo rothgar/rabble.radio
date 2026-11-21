@@ -347,3 +347,47 @@ code, and mistakes already made there.
   UI must read `barVisible` too — either to reposition itself above the bar
   (as `ReminderToasts` does) or to stay out from under it — rather than
   assuming it has the bottom of the viewport to itself.
+
+## src/app/show/[id]/opengraph-image.tsx (next/og / satori rendering)
+
+- This is the repo's first use of `next/og`'s `ImageResponse`: it renders a
+  tree with satori, which has no CSS engine. Tailwind `className` strings
+  and `var(--color-*)` custom properties are silently ignored, not an
+  error — a component built for the DOM (`src/components/ui/Logo.tsx`'s
+  `Monogram`, which sizes itself with `className` and defaults its wave
+  colour to `var(--color-accent)`) can't be dropped in here as-is. Pull
+  shared *data* instead (`src/lib/brand-mark.ts`'s path constants, used by
+  both `Monogram` and this file) rather than duplicating literals a third
+  time or assuming a ui/ component "just works" in a satori tree; check any
+  future ui/ import here the same way.
+- satori fetches a custom `fonts[]` entry and every `<img src>` itself
+  during rendering, and throws on failure — there is no Next error
+  boundary for a route handler like this, so an uncaught throw here is a
+  bare 500 with no image at all, worse than a graceful branding-only
+  fallback. Every fetch this file makes (the font, each avatar) must
+  degrade to a fallback rather than propagate — but satori also throws if
+  `fonts` is passed as an empty array ("No fonts are loaded"); a failed
+  font fetch must omit the `fonts` option entirely, which falls back to
+  next/og's own bundled default face, not pass `fonts: []`. This file
+  pre-fetches each avatar itself and inlines it as a data URI specifically
+  so satori never makes its own avatar fetch to fail mid-render.
+- `host.avatarUrl` is the one place in the app a Bluesky profile field is
+  fetched by the server rather than rendered by a browser (satori needs
+  the bytes to rasterize the PNG). It's allowlisted here to `*.bsky.app` /
+  `*.bsky.network` hosts as defense in depth, independent of the deployed
+  Worker's `global_fetch_strictly_public` compatibility flag
+  (`wrangler.jsonc`) that's the other thing standing between an
+  attacker-chosen `avatarUrl` and an outbound fetch from the Worker. Check
+  both are still true — the flag present, the allowlist intact — before
+  changing how this file handles avatars.
+- `cdn.bsky.app`'s image proxy defaults to serving WebP, which next/og's
+  bundled resvg rasterizer cannot decode — not an error, a silently blank
+  circle where the avatar should be, caught only by fetching a real
+  `cdn.bsky.app` URL and looking at the rendered PNG (the demo seed's
+  avatars are dicebear PNGs, so no unit test surfaced this). Bluesky's CDN
+  honours an explicit encode via an `@<ext>` path suffix; `fetchableAvatarUrl()`
+  rewrites the request to `@jpeg` for a `bsky.app` hostname before
+  fetching, replacing any format suffix already on the stored URL. A raw
+  `*.bsky.network` PDS blob host has no such proxy or suffix convention and
+  is fetched as stored. Before trusting a next/og avatar/image render as
+  correct, open the actual output PNG — a failed decode does not throw.

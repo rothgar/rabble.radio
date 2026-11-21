@@ -86,7 +86,7 @@ export function AddToCalendar({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
+        className="inline-flex min-h-touch min-w-touch items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] hover:bg-[var(--color-ink-muted)]"
         data-testid="add-to-calendar-trigger"
       >
         Add to calendar

@@ -303,6 +303,20 @@ code, and mistakes already made there.
   needs the same guard; `decodeURIComponent` is never safe to call directly
   on a value that came from the URL.
 
+## src/components/AddToCalendar.tsx (trigger touch target)
+
+- The "Add to calendar" trigger button had no `min-h-touch`/`min-w-touch`,
+  under the design system's 44px touch-target requirement (`DESIGN.md`:
+  "at least 44px tall and wide … on every tappable thing, including chips
+  and icon buttons"). It went unnoticed while the component only rendered
+  inside `HostCard.tsx`'s dense `/hosts` ranked-host list; issue #72 added a
+  second call site on the show's own page (`SpacePageClient.tsx`), the
+  primary per-show surface, which is what caught it. Check this component's
+  interactive elements against `min-h-touch`/`min-w-touch` again before
+  adding a third call site — the dropdown menu's own items
+  (`calendar-google`, `calendar-ics`) have the same gap and were left as is
+  this time since no new surface put them in front of more users.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

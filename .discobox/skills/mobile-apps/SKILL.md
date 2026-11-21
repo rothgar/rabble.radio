@@ -158,10 +158,13 @@ two theme files mirror them.
 - **Web first**: when a flow changes, verify it on the web with the
   `verify-recipes` skill and the local LiveKit server, then mirror. The
   mobile apps can be pointed at the same dev server.
-- **Tests**: the apps have no unit-test suites. The server side of every
-  shared flow is covered in `tests/api` and `tests/lib`; a wire change
-  adds or updates those tests. Keep old response fields when adding new
-  ones so older installed app builds keep working.
+- **Tests**: Android has a JVM unit-test suite (`android/app/src/test/`),
+  starting with `data/Models.kt`'s `fromJson` parsing; run it with
+  `cd android && nix-shell --run './gradlew testDebugUnitTest'` (no emulator
+  needed). iOS still has none. The server side of every shared flow is
+  covered in `tests/api` and `tests/lib`; a wire change adds or updates
+  those tests. Keep old response fields when adding new ones so older
+  installed app builds keep working.
 
 ## Gotchas
 

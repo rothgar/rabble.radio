@@ -20,6 +20,17 @@ Point the app at a different server:
 ./gradlew assembleDebug -PrabbleBaseUrl=http://10.0.2.2:3000   # host machine from the emulator
 ```
 
+## Test
+
+```bash
+cd android
+nix-shell --run './gradlew testDebugUnitTest'
+```
+
+JVM unit tests under `app/src/test/`, starting with `data/Models.kt`'s
+`fromJson` parsing. These run on the host JVM, so they work in a sandbox
+with no Android emulator.
+
 ## Run in the emulator
 
 ```bash

@@ -27,6 +27,7 @@ import type { ReactElement } from 'react';
 import { SpacePageClient } from '@/components/SpacePageClient';
 import { ShareButtons } from '@/components/ShareButtons';
 import { SiteHeader } from '@/components/SiteHeader';
+import { Footer } from '@/components/Footer';
 import { PageLayout } from '@/components/ui';
 import type { PublicSpace, PublicUser } from '@/types';
 
@@ -125,9 +126,14 @@ const INITIAL_STATE: LoadState = {
   recording: null,
 };
 
-/** Classes matching the PageLayout primitive's gutters and max width. */
+/**
+ * Classes matching the PageLayout primitive's gutters and max width,
+ * including its `flex-1` (fills a `flex min-h-screen flex-col` ancestor so
+ * Footer pins to the bottom of a short page — see REVIEW.md,
+ * "sticky-footer composition").
+ */
 const PAGE_MAIN_CLASSES =
-  'mx-auto flex min-h-screen w-full max-w-content flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8';
+  'mx-auto flex w-full max-w-content flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8';
 
 const BACK_LINK_CLASSES =
   'inline-flex min-h-touch items-center self-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)]';
@@ -266,7 +272,7 @@ export default function SpacePage(): ReactElement {
 
   if (state.status === 'loading') {
     return (
-      <>
+      <div className="flex min-h-screen flex-col">
         <SiteHeader />
         <PageLayout>
           <header className="flex items-center gap-3">
@@ -283,13 +289,14 @@ export default function SpacePage(): ReactElement {
             </p>
           </section>
         </PageLayout>
-      </>
+        <Footer />
+      </div>
     );
   }
 
   if (state.status === 'not-found') {
     return (
-      <>
+      <div className="flex min-h-screen flex-col">
         <SiteHeader />
         <PageLayout>
           <header className="flex items-center gap-3">
@@ -310,13 +317,14 @@ export default function SpacePage(): ReactElement {
             </p>
           </section>
         </PageLayout>
-      </>
+        <Footer />
+      </div>
     );
   }
 
   if (state.status === 'error') {
     return (
-      <>
+      <div className="flex min-h-screen flex-col">
         <SiteHeader />
         <PageLayout>
           <header className="flex items-center gap-3">
@@ -347,7 +355,8 @@ export default function SpacePage(): ReactElement {
             </button>
           </section>
         </PageLayout>
-      </>
+        <Footer />
+      </div>
     );
   }
 
@@ -356,7 +365,7 @@ export default function SpacePage(): ReactElement {
   // the narrowing explicit so downstream usage stays safe.
   if (!view) {
     return (
-      <>
+      <div className="flex min-h-screen flex-col">
         <SiteHeader />
         <PageLayout>
           <header className="flex items-center gap-3">
@@ -368,7 +377,8 @@ export default function SpacePage(): ReactElement {
             Loading the show&hellip;
           </section>
         </PageLayout>
-      </>
+        <Footer />
+      </div>
     );
   }
 
@@ -384,7 +394,7 @@ export default function SpacePage(): ReactElement {
   // conditionally mounting SpacePageClient) so the room is never unmounted
   // by the swap.
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       {inRoom ? null : <SiteHeader />}
       <main
         className={inRoom ? 'flex w-full flex-col' : PAGE_MAIN_CLASSES}
@@ -482,6 +492,7 @@ export default function SpacePage(): ReactElement {
           </>
         )}
       </main>
-    </>
+      {inRoom ? null : <Footer />}
+    </div>
   );
 }

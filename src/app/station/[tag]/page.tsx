@@ -18,6 +18,7 @@ import { decoratePublicSpaces } from '@/lib/space-extras';
 import { CATEGORY_PROMPTS, isValidTag, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { StationShowCard } from '@/components/StationShowCard';
 import { SiteHeader } from '@/components/SiteHeader';
+import { Footer } from '@/components/Footer';
 import { PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -68,7 +69,7 @@ export default async function StationPage({
 
   if (!isValidTag(decoded)) {
     return (
-      <>
+      <div className="flex min-h-screen flex-col">
         <SiteHeader />
         <PageLayout>
           <Link
@@ -82,7 +83,8 @@ export default async function StationPage({
             &ldquo;{decoded}&rdquo; isn&apos;t a valid category.
           </p>
         </PageLayout>
-      </>
+        <Footer />
+      </div>
     );
   }
 
@@ -102,7 +104,7 @@ export default async function StationPage({
   const listening = shows.reduce((sum, s) => sum + s.listenerCount, 0);
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <SiteHeader />
       <PageLayout>
       <Link
@@ -208,6 +210,7 @@ export default async function StationPage({
           ))}
       </p>
       </PageLayout>
-    </>
+      <Footer />
+    </div>
   );
 }

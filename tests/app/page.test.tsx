@@ -27,6 +27,7 @@ vi.mock('@/components/StartShowMenu', () => ({
 }));
 
 import HomePage, { HomeBody, HomeSkeleton } from '@/app/page';
+import { Footer } from '@/components/Footer';
 
 function show(overrides: Partial<PublicSpace>): PublicSpace {
   return {
@@ -138,5 +139,11 @@ describe('HomePage shell', () => {
     expect(suspense.type).toBe(Suspense);
     expect((suspense.props as { fallback: ReactElement }).fallback.type).toBe(HomeSkeleton);
     expect((suspense.props as { children: ReactElement }).children.type).toBe(HomeBody);
+  });
+
+  it('renders the Footer with the privacy link after the page body', () => {
+    const el = HomePage();
+    const children = (el.props as { children: ReactElement[] }).children;
+    expect(children[2].type).toBe(Footer);
   });
 });

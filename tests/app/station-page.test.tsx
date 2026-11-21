@@ -127,6 +127,17 @@ describe('/station/[tag] page', () => {
     );
     expect(mockGetSpacesForUser).not.toHaveBeenCalled();
   });
+
+  it('links to the privacy policy from the footer (#95)', async () => {
+    mockGetSpacesForUser.mockResolvedValue([makeShow({ id: 'sp1', tags: ['Music'] })]);
+    await renderStation('Music');
+    expect(screen.getByTestId('footer-privacy-link')).toBeInTheDocument();
+  });
+
+  it('links to the privacy policy from the footer on the not-found state (#95)', async () => {
+    await renderStation('Not A Category');
+    expect(screen.getByTestId('footer-privacy-link')).toBeInTheDocument();
+  });
 });
 
 describe('/station/[tag] metadata', () => {

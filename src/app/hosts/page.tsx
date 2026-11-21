@@ -11,6 +11,7 @@ import { getBlockedDids } from '@/lib/blocks';
 import { getCurrentUser } from '@/lib/session';
 import { HostCard } from '@/components/HostCard';
 import { SiteHeader } from '@/components/SiteHeader';
+import { Footer } from '@/components/Footer';
 import { PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ export default async function HostsPage(): Promise<ReactElement> {
   );
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <SiteHeader />
       <PageLayout>
         <header className="flex items-center justify-between">
@@ -72,6 +73,7 @@ export default async function HostsPage(): Promise<ReactElement> {
         </div>
       )}
       </PageLayout>
-    </>
+      <Footer />
+    </div>
   );
 }

@@ -18,6 +18,7 @@ import { getTopHosts, type TopHost } from '@/lib/hosts';
 import { getBlockedDids } from '@/lib/blocks';
 import { primaryTagOf, YOUTUBE_CATEGORIES } from '@/lib/tags';
 import { SiteHeader } from '@/components/SiteHeader';
+import { Footer } from '@/components/Footer';
 import { StartShowMenu } from '@/components/StartShowMenu';
 import { ShowListCard } from '@/components/ShowListCard';
 import { Button, PageLayout } from '@/components/ui';
@@ -110,14 +111,15 @@ export function HomeSkeleton(): ReactElement {
  */
 export default function HomePage(): ReactElement {
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <SiteHeader />
       <PageLayout>
         <Suspense fallback={<HomeSkeleton />}>
           <HomeBody />
         </Suspense>
       </PageLayout>
-    </>
+      <Footer />
+    </div>
   );
 }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -26,8 +27,12 @@ import androidx.compose.material3.DropdownMenuItem
 import radio.rabble.android.data.Music
 import radio.rabble.android.data.Replay
 import radio.rabble.android.Reminders
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.LocalBar
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
@@ -1349,6 +1354,18 @@ private fun formatClock(ms: Int): String {
  * follows it and streams with range requests, so seeking works.
  */
 /**
+ * One glyph per mood so a guest's tile is recognizable at a glance; moods
+ * without a listed icon (or no mood picked) fall back to MusicNote. Mirrors
+ * MOOD_ICONS in src/components/MusicCard.tsx.
+ */
+private val MOOD_ICONS: Map<String, ImageVector> = mapOf(
+    "lounge" to Icons.Filled.LocalBar,
+    "upbeat" to Icons.Filled.AutoAwesome,
+    "focus" to Icons.Filled.Psychology,
+    "groove" to Icons.Filled.Album,
+)
+
+/**
  * Pre-show music: plays the mood's tracks locally while [active] (off air,
  * or on air with nobody publishing audio, as in the demo shows). Each phone
  * runs its own player; nothing goes into the room or the recording. Hosts
@@ -1420,7 +1437,11 @@ private fun MusicTile(
                     .semantics { contentDescription = if (canPick) "Music actions" else "Music" },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = RabbleColors.TextOnInk)
+                Icon(
+                    mood?.let { MOOD_ICONS[it.id] } ?: Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    tint = RabbleColors.TextOnInk,
+                )
             }
             if (!playing) {
                 Box(
@@ -1459,7 +1480,7 @@ private fun MusicTile(
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            "Music",
+            track?.guestName ?: "Music",
             style = MaterialTheme.typography.labelSmall,
             color = RabbleColors.Text,
             maxLines = 1,

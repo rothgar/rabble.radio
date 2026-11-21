@@ -606,6 +606,16 @@ private struct FloatingReactionView: View {
 
 // MARK: - Music and replay
 
+/// One glyph per mood so a guest's tile is recognizable at a glance; moods
+/// without a listed icon (or no mood picked) fall back to "music.note".
+/// Mirrors MOOD_ICONS in src/components/MusicCard.tsx.
+private let moodIcons: [String: String] = [
+    "lounge": "wineglass.fill",
+    "upbeat": "sparkles",
+    "focus": "brain.head.profile",
+    "groove": "opticaldisc",
+]
+
 /// Pre-show music, rendered as a tile in the on-stage grid the same way a
 /// MemberTile is (issue #105) — each phone plays the mood's tracks locally
 /// while `active`; nothing enters the room or the recording. The host taps
@@ -639,7 +649,7 @@ private struct MusicTile: View {
                         .clipShape(Circle())
                 }
             }
-            Text("Music").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.text).lineLimit(1)
+            Text(track?.guestName ?? "Music").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.text).lineLimit(1)
             Text(mood?.label ?? "No music")
                 .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).lineLimit(1)
             if let error = player.error {
@@ -658,9 +668,10 @@ private struct MusicTile: View {
 
     @ViewBuilder
     private var avatar: some View {
+        let symbol = mood.flatMap { moodIcons[$0.id] } ?? "music.note"
         let circle = ZStack {
             Circle().fill(RabbleColors.ink)
-            Image(systemName: "music.note").font(RabbleFont.sans(24, .semibold)).foregroundStyle(RabbleColors.textOnInk)
+            Image(systemName: symbol).font(RabbleFont.sans(24, .semibold)).foregroundStyle(RabbleColors.textOnInk)
         }
         .frame(width: 64, height: 64)
 

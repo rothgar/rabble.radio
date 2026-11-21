@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WebKit
 
 /// Runs the web app's Bluesky OAuth flow in a WKWebView. When the callback
@@ -32,13 +33,14 @@ struct LoginWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let view = WKWebView(frame: .zero)
         view.navigationDelegate = context.coordinator
+        view.uiDelegate = context.coordinator
         view.load(URLRequest(url: baseURL.appending(path: "/login")))
         return view
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let parent: LoginWebView
         private var done = false
         init(_ parent: LoginWebView) { self.parent = parent }
@@ -63,6 +65,21 @@ struct LoginWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             finishIfSignedIn(webView)
+        }
+
+        /// The login page's "create an account" links are target="_blank". With no
+        /// uiDelegate installed, WKWebView drops that window-open request silently;
+        /// opening the URL in the system browser instead leaves the OAuth flow intact.
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            if let url = navigationAction.request.url {
+                UIApplication.shared.open(url)
+            }
+            return nil
         }
     }
 }

@@ -19,6 +19,7 @@ import { NotifyMeButton } from '@/components/NotifyMeButton';
 import { FollowHostButton } from '@/components/FollowHostButton';
 import { ShowFollowButton } from '@/components/ShowFollowButton';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
+import { AddToCalendar } from '@/components/AddToCalendar';
 
 export interface SpacePageClientProps {
   spaceId: string;
@@ -458,6 +459,17 @@ export function SpacePageClient({
             scheduledAt={scheduledAt}
           />
         </div>
+        {scheduled && scheduledAt ? (
+          <div>
+            <AddToCalendar
+              spaceId={spaceId}
+              title={title}
+              description={description}
+              scheduledAt={scheduledAt}
+              url={shareableUrl}
+            />
+          </div>
+        ) : null}
         {host.did ? (
           <div>
             <FollowHostButton

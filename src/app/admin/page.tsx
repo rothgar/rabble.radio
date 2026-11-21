@@ -79,7 +79,7 @@ export default async function AdminPage(): Promise<ReactElement> {
           <OverviewStat label="Banned" value={overview.bannedUsers} />
           <OverviewStat label="Shows" value={overview.totalShows} />
           <OverviewStat label="Live now" value={overview.liveNow} />
-          <OverviewStat label="Sessions run" value={overview.totalSessions} />
+          <OverviewStat label="Live shows run" value={overview.totalSessions} />
         </div>
         <section className="flex flex-col gap-3">
           <h2 className="text-title font-display font-bold">Users</h2>

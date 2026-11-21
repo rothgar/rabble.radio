@@ -290,6 +290,38 @@ its window is 262k tokens while Claude Code assumes 1M for an unknown id, so
 a very long session can overflow after the switch; and `/model` saves the
 choice in the box, which is why the watcher puts it back at the reset.
 
+## Routing experiment: Switchyard in front of Aperture
+
+`scripts/switchyard/` runs [NVIDIA-NeMo/Switchyard](https://github.com/NVIDIA-NeMo/Switchyard)
+as a Docker container on the factory host, in front of Aperture, for the
+triage boxes only. A box asks for the model `switchyard`; the route in
+`scripts/switchyard/switchyard.toml` has a judge (qwen3.6-35b-a3b on Aperture,
+limit-free) pick a tier per user turn, capable (claude-sonnet-5) or efficient
+(qwen3.8-27b-nvfp4), and Switchyard's stage router moves between the tiers on
+tool-activity signals. No Claude quota is spent on deciding.
+
+```bash
+docker compose -f scripts/switchyard/compose.yml up -d --build   # build from the pinned commit, run on :4000
+docker compose -f scripts/switchyard/compose.yml logs -f
+curl -s http://localhost:4000/v1/stats | jq .                      # per-tier counts
+tail -f scripts/switchyard/data/routing.jsonl                      # one decision per request
+```
+
+The harness `switchyard-triage` is the `aperture-triage` config with the base
+URL changed (`GATEWAY_URL=http://s.gerbil-dragon.ts.net:4000
+scripts/discobox-gateway-harness.sh switchyard-triage switchyard switchyard-small`);
+the manager's `workers.harnessByJob.triage` names it. Everything else stays on
+Aperture directly. Requests leave the container with this host's tailnet
+identity and no key: the credential sentinel a box sends is dropped, not
+forwarded, so Aperture meters the routed traffic under the host's user.
+
+What to compare before moving another job: triage comments and labels on the
+issues the experiment handled against the Sonnet-only ones before it, and the
+`routing.jsonl` share that stayed on the efficient tier. Upstream marks
+`switchyard-server` "Demo" and the library "Beta"; the image is pinned to one
+commit on purpose. To stop the experiment, point `harnessByJob.triage` back at
+`aperture-triage` and `docker compose -f scripts/switchyard/compose.yml down`.
+
 ## Branch protection
 
 Workers push to a fork and open PRs, so `main` needs no rule for them. A

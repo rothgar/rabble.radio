@@ -84,7 +84,10 @@ commands yourself regardless.
   `aperture-qa` and `aperture-design` (Opus, for UI work) run Claude Code
   through the metered tailnet gateway;
   `scripts/discobox-gateway-harness.sh SLUG MODEL` creates one or changes
-  its model (`docs/discobox.md`).
+  its model (`docs/discobox.md`). `switchyard-triage` is the same config
+  pointed at the Switchyard router container (`scripts/switchyard/`), an
+  experiment that lets a local judge model send triage turns to a
+  limit-free local model (`docs/discobox.md`, Routing experiment).
 - QA of the live site: `scripts/qa-live.mjs` (deterministic, run after
   every deploy) and the `qa-live` skill (daily box that also screenshots
   and files `qa` issues). Issues labelled `qa` come from it; issues labelled

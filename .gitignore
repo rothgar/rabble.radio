@@ -47,3 +47,6 @@ uploads/
 .dev.vars
 cloudflare-env.d.ts
 .vitest/
+
+# Switchyard routing log (scripts/switchyard/compose.yml)
+scripts/switchyard/data/

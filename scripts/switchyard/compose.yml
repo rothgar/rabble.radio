@@ -1,0 +1,31 @@
+# Switchyard (NVIDIA-NeMo/Switchyard) as a model router in front of the
+# Aperture gateway, for the factory's triage boxes. docs/discobox.md, "Routing
+# experiment". Build and run:
+#
+#   docker compose -f scripts/switchyard/compose.yml up -d --build
+#   docker compose -f scripts/switchyard/compose.yml logs -f
+#
+# The image is built from the pinned upstream commit (the `switchyard-server`
+# binary is marked "Demo" upstream; pin, do not track main). Routing decisions
+# are appended to data/routing.jsonl for the before/after comparison.
+services:
+  switchyard:
+    build:
+      context: https://github.com/NVIDIA-NeMo/Switchyard.git#49defa3634c59e52a013d4a163f8666e93287517
+      dockerfile: Dockerfile
+    image: rabble/switchyard-server:49defa3
+    container_name: rabble-switchyard
+    restart: unless-stopped
+    command: ["--config", "/config/switchyard.toml", "--routing-log-file", "/data/routing.jsonl"]
+    volumes:
+      - ./switchyard.toml:/config/switchyard.toml:ro
+      - ./data:/data
+    ports:
+      # Boxes reach it at http://s.gerbil-dragon.ts.net:4000 (this host's
+      # tailnet name); the pool's egress proxy resolves it.
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/4000 && printf 'GET /health HTTP/1.0\r\n\r\n' >&3 && head -c 15 <&3 | grep -q 200"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

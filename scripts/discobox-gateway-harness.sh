@@ -45,7 +45,7 @@ discobox=${DISCOBOX:-discobox}
 secret=${GATEWAY_SECRET:-anthropic}
 gateway=${GATEWAY_URL:-https://ai.gerbil-dragon.ts.net}
 secret_as=${GATEWAY_SECRET_AS:-CLAUDE_CODE_OAUTH_TOKEN}
-host=${gateway#*://}; host=${host%%/*}
+host=${gateway#*://}; host=${host%%/*}; host=${host%%:*}   # egress allow-lists are by host, not port
 
 tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
 # The built-in claude-code settings (theme, no permission prompts) plus the

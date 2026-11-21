@@ -55,4 +55,34 @@ describe('AudienceRows', () => {
     expect(screen.getByTestId('share-entry-row')).toBeInTheDocument();
     expect(screen.getByTestId('audience-rows-empty')).toBeInTheDocument();
   });
+
+  it('shows music removed from the stage with its own Invite action, even with no other listeners', () => {
+    const onInvite = vi.fn();
+    render(
+      <AudienceRows
+        audience={[]}
+        invitedSet={new Set()}
+        onInvite={() => undefined}
+        musicGuest={{ onInvite }}
+        {...shareProps}
+      />
+    );
+    expect(screen.queryByTestId('audience-rows-empty')).toBeNull();
+    fireEvent.click(screen.getByTestId('audience-invite-music'));
+    expect(onInvite).toHaveBeenCalled();
+  });
+
+  it('shows music alongside other listeners too', () => {
+    render(
+      <AudienceRows
+        audience={[audience[0]]}
+        invitedSet={new Set()}
+        onInvite={() => undefined}
+        musicGuest={{ onInvite: vi.fn() }}
+        {...shareProps}
+      />
+    );
+    expect(screen.getByTestId('audience-row-music')).toBeInTheDocument();
+    expect(screen.getByTestId('audience-row-did:plc:a')).toBeInTheDocument();
+  });
 });

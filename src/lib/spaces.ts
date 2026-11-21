@@ -33,6 +33,8 @@ export interface SpaceModel {
   lastLiveAt: Date | null;
   /** Pre-show music mood id (src/lib/music.ts), null for silence. */
   musicMood?: string | null;
+  /** True while music sits on stage; false once removed while on air. Ignored off air. */
+  musicOnStage?: boolean;
   /** True once the host has turned this show into its own podcast feed. */
   podcastFeedEnabled: boolean;
   /** True for the auto-titled default show from an untitled "Start a show". */
@@ -255,6 +257,8 @@ export interface UpdateSpaceInput {
   description?: string | null;
   tags?: string[];
   musicMood?: string | null;
+  /** Host only: move music on/off the stage without changing the mood. */
+  musicOnStage?: boolean;
   podcastFeedEnabled?: boolean;
 }
 
@@ -286,6 +290,14 @@ export async function updateSpace(
   }
   if (input.musicMood !== undefined) {
     data.musicMood = input.musicMood;
+    // Picking (or clearing) a mood is the host deciding what music is on
+    // stage right now, so it always lands on stage; a caller who also wants
+    // to move it straight to the audience passes musicOnStage explicitly,
+    // handled below.
+    data.musicOnStage = true;
+  }
+  if (input.musicOnStage !== undefined) {
+    data.musicOnStage = input.musicOnStage;
   }
   if (input.podcastFeedEnabled !== undefined) {
     data.podcastFeedEnabled = input.podcastFeedEnabled;
@@ -859,6 +871,7 @@ export function toPublicSpace(
     isNamedShow: !isDefaultShowTitle(space.title, space.host.handle, space.host.displayName),
     showFollowed: extras.showFollowed ?? false,
     musicMood: space.musicMood ?? null,
+    musicOnStage: space.musicOnStage ?? true,
     podcastFeedEnabled,
     podcastFeedUrl,
   };

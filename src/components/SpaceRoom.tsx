@@ -114,6 +114,10 @@ export interface SpaceRoomProps {
   musicMood?: string | null;
   /** Host only: persist a new mood. */
   onMusicMoodChange?: (mood: string | null) => Promise<void> | void;
+  /** On stage vs. removed to the audience while live (issue #111); ignored off air. */
+  musicOnStage?: boolean;
+  /** Host only: move music on/off the stage without changing the mood. */
+  onMusicOnStageChange?: (onStage: boolean) => Promise<void> | void;
 }
 
 /**
@@ -284,7 +288,7 @@ function RoomSync({
   useEffect(() => {
     if (!room) return;
     const onData = (payload: Uint8Array): void => {
-      let parsed: { type?: string; spaceId?: string; onAir?: boolean } & Partial<ShowDetails> &
+      let parsed: { type?: string; spaceId?: string; onAir?: boolean; musicOnStage?: boolean } & Partial<ShowDetails> &
         Partial<RemoteReaction>;
       try {
         parsed = JSON.parse(new TextDecoder().decode(payload));
@@ -301,6 +305,7 @@ function RoomSync({
           tags: Array.isArray(parsed.tags) ? parsed.tags : [],
           musicMood:
             parsed.musicMood === undefined ? undefined : typeof parsed.musicMood === 'string' ? parsed.musicMood : null,
+          musicOnStage: typeof parsed.musicOnStage === 'boolean' ? parsed.musicOnStage : undefined,
         });
       } else if (
         parsed.type === 'reaction' &&
@@ -376,6 +381,8 @@ interface InnerProps {
   onMicError?: (err: Error) => void;
   musicMood: string | null;
   onMusicMoodChange?: (mood: string | null) => Promise<void> | void;
+  musicOnStage: boolean;
+  onMusicOnStageChange?: (onStage: boolean) => Promise<void> | void;
 }
 
 function Inner({
@@ -411,6 +418,8 @@ function Inner({
   onMicError,
   musicMood,
   onMusicMoodChange,
+  musicOnStage,
+  onMusicOnStageChange,
 }: InnerProps): ReactElement {
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
@@ -420,11 +429,41 @@ function Inner({
   // shows).
   const micTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
   const liveAudioCount = micTracks.filter((t) => Boolean(t.publication)).length;
-  const musicActive = Boolean(musicMood) && (!isLive || liveAudioCount === 0);
+  // musicOnStage only matters while live: off air, music is always on stage
+  // once a mood is set (there is no audience placement to fall back to).
+  const musicStaysOnStage = !isLive || musicOnStage;
+  const musicActive = Boolean(musicMood) && musicStaysOnStage && (!isLive || liveAudioCount === 0);
   // Music shows up on stage like any other guest: visible to everyone once
   // a mood is set, and to the host beforehand too so there's a tile to tap
-  // to pick one.
-  const showMusicCard = Boolean(musicMood) || (isHost && !isLive);
+  // to pick one. Removed from stage while live (issue #111), it moves to
+  // the audience/listening list instead of disappearing.
+  const showMusicCard = (Boolean(musicMood) && musicStaysOnStage) || (isHost && !isLive);
+  const musicInAudience = Boolean(musicMood) && isLive && !musicOnStage;
+  // The stage tile's "Remove from stage" button always calls onMoodChange
+  // with null; while live that must not erase the mood (so re-inviting can
+  // restore it automatically), only move it to the audience.
+  const handleMusicMoodChange = useCallback(
+    (mood: string | null) => {
+      if (mood === null && isLive && musicOnStage) {
+        return onMusicOnStageChange?.(false);
+      }
+      return onMusicMoodChange?.(mood);
+    },
+    [isLive, musicOnStage, onMusicMoodChange, onMusicOnStageChange]
+  );
+  const inviteMusicToStage = useCallback(() => {
+    void (async () => {
+      try {
+        await onMusicOnStageChange?.(true);
+      } catch (err) {
+        // The audience list has no error surface of its own (unlike the
+        // stage tile's menu, which shows a failed save inline); log so a
+        // failed re-invite isn't a silent no-op.
+        // eslint-disable-next-line no-console
+        console.error('[SpaceRoom] Could not bring music back on stage:', err);
+      }
+    })();
+  }, [onMusicOnStageChange]);
   const localAvatarRef = useRef<HTMLDivElement | null>(null);
   const [micOn, setMicOn] = useState<boolean>(
     Boolean(localParticipant?.isMicrophoneEnabled)
@@ -643,8 +682,9 @@ function Inner({
               spaceId={spaceId}
               moodId={musicMood}
               active={musicActive}
-              isHost={isHost && !isLive}
-              onMoodChange={onMusicMoodChange}
+              isHost={isHost}
+              isLive={isLive}
+              onMoodChange={handleMusicMoodChange}
             />
           ) : null}
           {speakers.map((p) => {
@@ -713,6 +753,7 @@ function Inner({
           avatarUrl: avatarFor(p) ?? null,
           handRaised: handFor(p),
         }))}
+        musicGuest={musicInAudience ? { onInvite: inviteMusicToStage } : null}
         shareableUrl={shareableUrl}
         title={title}
         invitedSet={invitedSet}
@@ -760,6 +801,7 @@ function Inner({
           avatarUrl: avatarFor(p) ?? null,
           handRaised: handFor(p),
         }))}
+        musicGuest={musicInAudience}
       />
     </section>
   );
@@ -918,6 +960,8 @@ export function SpaceRoom({
   recording,
   musicMood,
   onMusicMoodChange,
+  musicOnStage = true,
+  onMusicOnStageChange,
 }: SpaceRoomProps): ReactElement {
   // The connection itself is owned by ActiveRoomProvider (mounted in the
   // root layout) so it survives navigating away from this page; this
@@ -1124,6 +1168,8 @@ export function SpaceRoom({
       <Inner
         musicMood={musicMood ?? null}
         onMusicMoodChange={onMusicMoodChange}
+        musicOnStage={musicOnStage}
+        onMusicOnStageChange={onMusicOnStageChange}
         identity={identity}
         displayName={displayName}
         isHost={isHost}

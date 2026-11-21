@@ -51,6 +51,8 @@ export interface SpacePageClientProps {
   showFollowed?: boolean;
   /** Pre-show music mood id, null for silence. */
   musicMood?: string | null;
+  /** On stage vs. removed to the audience while live. */
+  musicOnStage?: boolean;
   /**
    * Called whenever the joined state changes (`true` once the user is in
    * the room, `false` after leaving). Lets the surrounding page swap its
@@ -95,6 +97,7 @@ export function SpacePageClient({
   isNamedShow = false,
   showFollowed = false,
   musicMood = null,
+  musicOnStage = true,
   onJoinedChange,
 }: SpacePageClientProps): ReactElement {
   const [joining, setJoining] = useState(false);
@@ -114,11 +117,22 @@ export function SpacePageClient({
   );
   // Show details can change while in the room (the host renames the show
   // or picks topics), so they live in state seeded from the page props.
-  const [details, setDetails] = useState<ShowDetails>({ title, description, tags, musicMood: musicMood ?? null });
-  // Messages that predate the music field leave the current mood alone.
+  const [details, setDetails] = useState<ShowDetails>({
+    title,
+    description,
+    tags,
+    musicMood: musicMood ?? null,
+    musicOnStage,
+  });
+  // Messages that predate a field leave its current value alone.
   const mergeDetails = useCallback(
     (next: ShowDetails) => {
-      setDetails((prev) => ({ ...prev, ...next, musicMood: next.musicMood === undefined ? prev.musicMood : next.musicMood }));
+      setDetails((prev) => ({
+        ...prev,
+        ...next,
+        musicMood: next.musicMood === undefined ? prev.musicMood : next.musicMood,
+        musicOnStage: next.musicOnStage === undefined ? prev.musicOnStage : next.musicOnStage,
+      }));
       // Keep PersistentShowBar's title current even after the host
       // navigates away from this page.
       if (activeRoom.session?.spaceId === spaceId) activeRoom.setTitle(next.title);
@@ -136,7 +150,23 @@ export function SpacePageClient({
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(body.message ?? `Could not save the music mood (HTTP ${res.status}).`);
       }
-      setDetails((prev) => ({ ...prev, musicMood: mood }));
+      // Picking (or clearing) a mood always puts it on stage server-side.
+      setDetails((prev) => ({ ...prev, musicMood: mood, musicOnStage: true }));
+    },
+    [spaceId]
+  );
+  const changeMusicOnStage = useCallback(
+    async (onStage: boolean) => {
+      const res = await fetch(`/api/spaces/${encodeURIComponent(spaceId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ musicOnStage: onStage }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? `Could not move the music (HTTP ${res.status}).`);
+      }
+      setDetails((prev) => ({ ...prev, musicOnStage: onStage }));
     },
     [spaceId]
   );
@@ -384,6 +414,8 @@ export function SpacePageClient({
         onSpaceUpdated={mergeDetails}
         musicMood={details.musicMood ?? null}
         onMusicMoodChange={isHost ? changeMusicMood : undefined}
+        musicOnStage={details.musicOnStage ?? true}
+        onMusicOnStageChange={isHost ? changeMusicOnStage : undefined}
         host={host}
         hostSubscribed={hostSubscribed}
         shareableUrl={shareableUrl}

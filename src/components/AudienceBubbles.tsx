@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
+import { MusicNotes } from '@phosphor-icons/react';
 import { ShareEntry } from '@/components/ShareEntry';
 
 export interface AudienceMember {
@@ -22,6 +23,8 @@ export interface AudienceBubblesProps {
   localAvatarRef?: RefObject<HTMLDivElement | null>;
   shareableUrl: string;
   title: string;
+  /** Music removed from the stage while live (issue #111). */
+  musicGuest?: boolean;
 }
 
 function initialsFor(name: string): string {
@@ -39,6 +42,7 @@ function Bubble({
   avatarRef,
   highlight,
   label,
+  icon,
   handRaised,
 }: {
   name: string;
@@ -49,6 +53,7 @@ function Bubble({
   avatarRef?: RefObject<HTMLDivElement | null>;
   highlight?: boolean;
   label?: string;
+  icon?: ReactElement;
   handRaised?: boolean;
 }): ReactElement {
   const [broken, setBroken] = useState(false);
@@ -65,7 +70,7 @@ function Bubble({
       data-testid={`${testId}-avatar-${identity}`}
       data-local-avatar={highlight ? 'true' : undefined}
     >
-      {avatarUrl && !broken ? (
+      {icon ?? (avatarUrl && !broken ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={avatarUrl}
@@ -77,7 +82,7 @@ function Bubble({
         <span className="text-xs font-medium text-[var(--color-text-on-ink)]">
           {label ?? initialsFor(name)}
         </span>
-      )}
+      ))}
     </div>
     {handRaised ? (
       <span
@@ -123,6 +128,7 @@ export function AudienceBubbles({
   localAvatarRef,
   shareableUrl,
   title,
+  musicGuest = false,
 }: AudienceBubblesProps): ReactElement {
   return (
     <div
@@ -152,6 +158,14 @@ export function AudienceBubbles({
           testId="audience-bubble"
         />
       ))}
+      {musicGuest ? (
+        <Bubble
+          identity="music"
+          name="Music"
+          testId="audience-bubble"
+          icon={<MusicNotes size={20} weight="fill" className="text-[var(--color-text-on-ink)]" />}
+        />
+      ) : null}
     </div>
   );
 }

@@ -64,6 +64,12 @@ model Space {
   lastLiveAt     DateTime?
   /// Pre-show music mood (see src/lib/music.ts), null for silence.
   musicMood      String?
+  /// True while the music tile sits in the on-stage grid; false once a host
+  /// removes it from the stage while on air (issue #111). It moves into the
+  /// audience/listening list instead of disappearing, and re-inviting it
+  /// flips this back to true without touching musicMood. Ignored off air,
+  /// where the tile is always on stage once a mood is set.
+  musicOnStage   Boolean   @default(true)
   /// True once the host has turned this show into its own podcast feed,
   /// scoped to just its published recordings (/podcast/[handle]/show/[id]/feed.xml).
   podcastFeedEnabled Boolean @default(false)

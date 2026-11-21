@@ -22,4 +22,32 @@ describe('AudienceBubbles', () => {
     expect(first).not.toBeNull();
     expect(first?.getAttribute('data-testid')).toBe('share-entry-bubble');
   });
+
+  it('shows music removed from the stage as a plain bubble, with no invite action', () => {
+    render(
+      <AudienceBubbles
+        audience={[]}
+        localIdentity="did:plc:me"
+        localName="Me"
+        shareableUrl="https://rabble.example/space/sp1"
+        title="My Space"
+        musicGuest
+      />
+    );
+    expect(screen.getByTestId('audience-bubble-music')).toBeInTheDocument();
+    expect(screen.queryByTestId('audience-invite-music')).toBeNull();
+  });
+
+  it('omits the music bubble when nothing has been removed from the stage', () => {
+    render(
+      <AudienceBubbles
+        audience={[]}
+        localIdentity="did:plc:me"
+        localName="Me"
+        shareableUrl="https://rabble.example/space/sp1"
+        title="My Space"
+      />
+    );
+    expect(screen.queryByTestId('audience-bubble-music')).toBeNull();
+  });
 });

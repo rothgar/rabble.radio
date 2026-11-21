@@ -55,4 +55,22 @@ describe('LoginPage', () => {
     expect(assigned).toBe('https://rabble.rodeo/api/auth/bluesky?handle=bob.example.com&next=%2Fme');
     expect(screen.getByTestId('login-submit').textContent).toMatch(/redirecting/i);
   });
+
+  it('links out to each provider to create an account', async () => {
+    await act(async () => {
+      render(<LoginPage />);
+    });
+    const bluesky = screen.getByTestId('signup-bluesky') as HTMLAnchorElement;
+    const blacksky = screen.getByTestId('signup-blacksky') as HTMLAnchorElement;
+    const eurosky = screen.getByTestId('signup-eurosky') as HTMLAnchorElement;
+
+    expect(bluesky).toHaveAttribute('href', 'https://bsky.app');
+    expect(blacksky).toHaveAttribute('href', 'https://blacksky.community');
+    expect(eurosky).toHaveAttribute('href', 'https://portal.eurosky.tech/create-account');
+
+    for (const link of [bluesky, blacksky, eurosky]) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+  });
 });

@@ -5,7 +5,13 @@ import type { ReactElement } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { HandleInput } from '@/components/HandleInput';
 import { recallHandle, rememberHandle } from '@/lib/bluesky-typeahead';
-import { Wordmark } from '@/components/ui';
+import { Button, Wordmark } from '@/components/ui';
+
+const SIGNUP_PROVIDERS = [
+  { name: 'Bluesky', href: 'https://bsky.app' },
+  { name: 'Blacksky', href: 'https://blacksky.community' },
+  { name: 'Eurosky', href: 'https://portal.eurosky.tech/create-account' },
+] as const;
 
 const subscribeNever = (): (() => void) => () => {};
 
@@ -65,6 +71,27 @@ export default function LoginPage(): ReactElement {
         <Suspense fallback={<div className="h-24" />}>
           <LoginForm />
         </Suspense>
+
+        <div className="mt-6">
+          <p className="mb-3 text-sm text-[var(--color-text-secondary)]">Don&apos;t have an account?</p>
+          <ul className="flex flex-col gap-2">
+            {SIGNUP_PROVIDERS.map((provider) => (
+              <li key={provider.name}>
+                <Button
+                  href={provider.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                  data-testid={`signup-${provider.name.toLowerCase()}`}
+                >
+                  Create a {provider.name} account
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </main>
   );

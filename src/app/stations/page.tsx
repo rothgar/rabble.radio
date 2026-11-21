@@ -14,6 +14,7 @@ import {
 import { StationCard } from '@/components/StationCard';
 import { StationSuggestionCard } from '@/components/StationSuggestionCard';
 import { SiteHeader } from '@/components/SiteHeader';
+import { Footer } from '@/components/Footer';
 import { StartShowMenu } from '@/components/StartShowMenu';
 import { Button, PageLayout } from '@/components/ui';
 
@@ -57,7 +58,7 @@ export default async function StationsPage(): Promise<ReactElement> {
   ).slice(0, SUGGESTION_COUNT);
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <SiteHeader />
       <PageLayout>
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -119,6 +120,7 @@ export default async function StationsPage(): Promise<ReactElement> {
           </div>
         )}
       </PageLayout>
-    </>
+      <Footer />
+    </div>
   );
 }

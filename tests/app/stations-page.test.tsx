@@ -149,6 +149,15 @@ describe('/stations start-a-show call to action', () => {
   });
 });
 
+describe('/stations footer (#95)', () => {
+  it('links to the privacy policy', async () => {
+    mockGetSpacesForUser.mockResolvedValue([makeShow()]);
+    const { default: StationsPage } = await import('@/app/stations/page');
+    render(await StationsPage());
+    expect(screen.getByTestId('footer-privacy-link')).toBeInTheDocument();
+  });
+});
+
 describe('/stations metadata (#78)', () => {
   it('exports static Open Graph metadata naming every category', async () => {
     const pageModule = await import('@/app/stations/page');

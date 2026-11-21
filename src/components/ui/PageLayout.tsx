@@ -16,12 +16,17 @@ interface Props {
  *   desktop → 32 px sides  (--gutter-desk,   lg:)
  *
  * Max-width: 1024 px centered — matches --content-max in the token system.
+ *
+ * `flex-1`: fills the remaining height of a `flex min-h-screen flex-col`
+ * ancestor (see REVIEW.md, "sticky-footer composition") so a sibling after
+ * it (a page footer) pins to the bottom of a short page. A no-op outside
+ * such an ancestor, same as today.
  */
 export function PageLayout({ children, fullBleed = false, className = '' }: Props): ReactElement {
   return (
     <main
       className={[
-        'mx-auto flex min-h-screen w-full flex-col gap-6',
+        'mx-auto flex w-full flex-1 flex-col gap-6',
         'px-4 py-6',
         'sm:px-6 sm:py-8',
         'lg:px-8',

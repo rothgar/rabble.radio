@@ -317,6 +317,27 @@ code, and mistakes already made there.
   (`calendar-google`, `calendar-ics`) have the same gap and were left as is
   this time since no new surface put them in front of more users.
 
+## src/components/ui/PageLayout.tsx and src/components/Footer.tsx (sticky-footer composition)
+
+- `Footer` has no `mt-auto` to pin itself and needs none: it only pins to
+  the bottom of a short page because its page wraps `SiteHeader`,
+  `PageLayout` and `Footer` in a `<div className="flex min-h-screen
+  flex-col">` instead of a bare `<>` fragment, and `PageLayout`'s `<main>`
+  is `flex-1` (not `min-h-screen`) so it fills exactly the remaining space
+  in that column rather than forcing its own 100vh. Issue #95's first
+  version skipped the wrapper and kept `main` at `min-h-screen`: with no
+  flex ancestor, `mt-auto` resolved to nothing, and `main`'s own
+  `min-h-screen` meant every short page (an empty state, a not-found
+  branch) pushed the footer a full extra viewport below the fold — caught
+  in round 1 of its review, independently, by both the general and the
+  design-system reviewer. `PageLayout`'s `flex-1` is a no-op outside such a
+  wrapper (today's six other callers — `me`, `admin`, `admin/reports`,
+  `admin/feedback`, `stations/new`, `downloads` — none of which use
+  `Footer`), so
+  adding `Footer` to a page that doesn't compose this wrapper reintroduces
+  the bug silently rather than visibly breaking; check for the wrapper, not
+  just for the import, whenever a page gains a `Footer`.
+
 ## Bottom-fixed UI (PersistentShowBar, ReminderToasts)
 
 - `ActiveRoomProvider` exposes a single `barVisible` flag (session connected,

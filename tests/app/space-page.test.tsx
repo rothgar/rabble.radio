@@ -189,6 +189,7 @@ describe('<SpacePage />', () => {
       /scheduled/i
     );
     expect(screen.getByTestId('scheduled-info')).toBeInTheDocument();
+    expect(screen.getByTestId('footer-privacy-link')).toBeInTheDocument();
   });
 
   it('omits the recording block for non-host viewers', async () => {

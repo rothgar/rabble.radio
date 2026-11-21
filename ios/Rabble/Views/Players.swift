@@ -8,9 +8,6 @@ import Foundation
 final class MusicPlayer: ObservableObject {
     @Published var index = 0
     @Published var error: String?
-    @Published var muted: Bool = UserDefaults.standard.bool(forKey: "musicMuted") {
-        didSet { UserDefaults.standard.set(muted, forKey: "musicMuted") }
-    }
 
     private let player = AVPlayer()
     private var currentURL: URL?

@@ -111,20 +111,15 @@ struct ShowView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Top box: title, host, on-air state and the stage.
-                    ShowHeader(show: show, onAir: onAir, room: connected)
-                    if let connected {
-                        if show.musicMood != nil || (model.isHostOfShow && !connected.onAir) {
-                            MusicCard(
-                                baseURL: env.baseURL,
-                                spaceId: show.id,
-                                moodId: show.musicMood,
-                                active: show.musicMood != nil && (!connected.onAir || !connected.remoteAudio),
-                                canPick: model.isHostOfShow && !connected.onAir,
-                                busy: model.moodBusy,
-                                onPick: { model.setMusicMood($0) }
-                            )
-                        }
-                    }
+                    ShowHeader(
+                        show: show,
+                        onAir: onAir,
+                        room: connected,
+                        baseURL: env.baseURL,
+                        isHost: model.isHostOfShow,
+                        moodBusy: model.moodBusy,
+                        onMusicPick: { model.setMusicMood($0) }
+                    )
                     if showReplay, let replay = show.replay {
                         // Off air with a recording: play it instead of opening an empty stage.
                         ReplayPanel(show: show, replay: replay, audioUrl: env.api.absolute(replay.audioUrl))
@@ -176,6 +171,10 @@ private struct ShowHeader: View {
     let show: Show
     let onAir: Bool
     let room: ConnectedRoom?
+    let baseURL: URL
+    let isHost: Bool
+    let moodBusy: Bool
+    let onMusicPick: (String?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -201,9 +200,13 @@ private struct ShowHeader: View {
             }
 
             // The stage lives in the top box. Empty seats are drawn as placeholders.
+            // Music shows up on stage like any other guest: visible to everyone once
+            // a mood is set, and to the host beforehand too so there's a tile to tap
+            // to pick one.
             SectionLabel(text: "ON STAGE").padding(.top, 4)
             let stage = room?.members.filter(\.onStage) ?? []
-            if stage.isEmpty {
+            let showMusicTile = room != nil && (show.musicMood != nil || (isHost && !(room?.onAir ?? false)))
+            if stage.isEmpty, !showMusicTile {
                 HStack(spacing: 12) {
                     ForEach(0..<3, id: \.self) { _ in PlaceholderSeat() }
                 }
@@ -211,6 +214,17 @@ private struct ShowHeader: View {
                     .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
             } else {
                 FlowLayout(spacing: 12) {
+                    if showMusicTile, let room {
+                        MusicTile(
+                            baseURL: baseURL,
+                            spaceId: show.id,
+                            moodId: show.musicMood,
+                            active: show.musicMood != nil && (!room.onAir || !room.remoteAudio),
+                            canPick: isHost && !room.onAir,
+                            busy: moodBusy,
+                            onPick: onMusicPick
+                        )
+                    }
                     ForEach(stage) { MemberTile(member: $0, large: true) }
                 }
             }
@@ -592,10 +606,12 @@ private struct FloatingReactionView: View {
 
 // MARK: - Music and replay
 
-/// Pre-show music: plays the mood's tracks locally while `active` (off air,
-/// or on air with nobody publishing audio, as in the demo shows). Hosts
-/// pick the mood here while off air.
-private struct MusicCard: View {
+/// Pre-show music, rendered as a tile in the on-stage grid the same way a
+/// MemberTile is (issue #105) — each phone plays the mood's tracks locally
+/// while `active`; nothing enters the room or the recording. The host taps
+/// the tile (off air only) for a menu to change the mood or remove music
+/// from the stage.
+private struct MusicTile: View {
     let baseURL: URL
     let spaceId: String
     let moodId: String?
@@ -609,50 +625,71 @@ private struct MusicCard: View {
     private var playlist: [MusicTrack] { mood.map { Music.playlist($0, spaceId: spaceId) } ?? [] }
     private var track: MusicTrack? { playlist.isEmpty ? nil : playlist[player.index % playlist.count] }
     private var url: URL? { track.map { Music.url(baseURL: baseURL, track: $0) } }
-    private var playing: Bool { active && !player.muted && url != nil }
+    private var playing: Bool { active && url != nil }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("♪ Pre-show music" + (mood.map { " · \($0.label)" } ?? "")).font(RabbleFont.style(.headline))
-                Spacer()
-                if mood != nil {
-                    Button(player.muted ? "Unmute" : "Mute") { player.muted.toggle() }.frame(minHeight: 44)
+        VStack(spacing: 4) {
+            ZStack(alignment: .bottomTrailing) {
+                avatar
+                if !playing {
+                    Text("🔇")
+                        .font(RabbleFont.sans(10))
+                        .frame(width: 18, height: 18)
+                        .background(RabbleColors.surface)
+                        .clipShape(Circle())
                 }
             }
-            if let track {
-                Text((active ? "Now playing: " : "Next up: ") + track.attribution)
-                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
-            }
+            Text("Music").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.text).lineLimit(1)
+            Text(mood?.label ?? "No music")
+                .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary).lineLimit(1)
             if let error = player.error {
-                Text(error).font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
-            }
-            if canPick {
-                Text("Plays for everyone waiting in the room until you go on air. It is not recorded.")
-                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textTertiary)
-                FlowLayout(spacing: 8) {
-                    ForEach(Music.moods) { m in
-                        let selected = m.id == mood?.id
-                        Button(m.label) { onPick(selected ? nil : m.id) }
-                            .buttonStyle(.bordered)
-                            .tint(selected ? RabbleColors.accent : RabbleColors.textSecondary)
-                            .disabled(busy)
-                            .frame(minHeight: 44)
-                    }
-                    Button("Off") { onPick(nil) }
-                        .buttonStyle(.bordered)
-                        .tint(mood == nil ? RabbleColors.accent : RabbleColors.textSecondary)
-                        .disabled(busy || mood == nil)
-                        .frame(minHeight: 44)
-                }
+                Text(error)
+                    .font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.live)
+                    .multilineTextAlignment(.center)
             }
         }
-        .card()
+        .frame(width: 80)
         .onChange(of: moodId) { _, _ in player.index = 0 }
         .onChange(of: playing) { _, _ in sync() }
         .onChange(of: url) { _, _ in sync() }
         .onAppear { sync() }
         .onDisappear { player.stop() }
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        let circle = ZStack {
+            Circle().fill(RabbleColors.ink)
+            Image(systemName: "music.note").font(RabbleFont.sans(24, .semibold)).foregroundStyle(RabbleColors.textOnInk)
+        }
+        .frame(width: 64, height: 64)
+
+        if canPick {
+            Menu {
+                Text("Plays for everyone waiting in the room until you go on air. It is not recorded.")
+                ForEach(Music.moods) { m in
+                    Button {
+                        onPick(m.id)
+                    } label: {
+                        if m.id == mood?.id {
+                            Label(m.label, systemImage: "checkmark")
+                        } else {
+                            Text(m.label)
+                        }
+                    }
+                    .disabled(busy)
+                }
+                if mood != nil {
+                    Button("Remove from stage", role: .destructive) { onPick(nil) }
+                        .disabled(busy)
+                }
+            } label: {
+                circle
+            }
+            .accessibilityLabel("Music actions")
+        } else {
+            circle
+        }
     }
 
     private func sync() {

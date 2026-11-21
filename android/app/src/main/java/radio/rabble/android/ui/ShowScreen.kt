@@ -21,10 +21,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableStateMapOf
 import radio.rabble.android.data.Diagnostics
 import radio.rabble.android.data.Me
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import radio.rabble.android.data.Music
 import radio.rabble.android.data.Replay
 import radio.rabble.android.Reminders
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
@@ -707,18 +709,16 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
                     val showReplay = replay != null && connected == null && !(connected?.onAir ?: s.show.isLive)
                     // Top box: title, host, on-air state and the stage.
                     val topBox: @Composable () -> Unit = {
-                        ShowHeader(s.show, onAir = connected?.onAir ?: s.show.isLive, room = connected, avatarCentres = avatarCentres)
-                        if (connected != null && (s.show.musicMood != null || (isHostOfShow && !connected.onAir))) {
-                            MusicCard(
-                                baseUrl = app.baseUrl,
-                                spaceId = s.show.id,
-                                moodId = s.show.musicMood,
-                                active = s.show.musicMood != null && (!connected.onAir || !connected.remoteAudio),
-                                canPick = isHostOfShow && !connected.onAir,
-                                busy = moodBusy,
-                                onPick = ::setMusicMood,
-                            )
-                        }
+                        ShowHeader(
+                            s.show,
+                            onAir = connected?.onAir ?: s.show.isLive,
+                            room = connected,
+                            avatarCentres = avatarCentres,
+                            baseUrl = app.baseUrl,
+                            isHost = isHostOfShow,
+                            moodBusy = moodBusy,
+                            onMusicPick = ::setMusicMood,
+                        )
                         if (showReplay && replay != null) {
                             // Off air with a recording: play it instead of opening an empty stage.
                             ReplayPanel(show = s.show, replay = replay, audioUrl = app.api.absolute(replay.audioUrl))
@@ -807,7 +807,16 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun ShowHeader(show: Show, onAir: Boolean, room: RoomState.Connected?, avatarCentres: MutableMap<String, Offset>) {
+private fun ShowHeader(
+    show: Show,
+    onAir: Boolean,
+    room: RoomState.Connected?,
+    avatarCentres: MutableMap<String, Offset>,
+    baseUrl: String,
+    isHost: Boolean,
+    moodBusy: Boolean,
+    onMusicPick: (String?) -> Unit,
+) {
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -827,9 +836,27 @@ private fun ShowHeader(show: Show, onAir: Boolean, room: RoomState.Connected?, a
             if (show.tags.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { show.tags.forEach { Pill(it) } }
 
             // The stage lives in the top box. Empty seats are drawn as placeholders.
+            // Music shows up on stage like any other guest: visible to everyone once
+            // a mood is set, and to the host beforehand too so there's a tile to tap
+            // to pick one.
             Text("ON STAGE", style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
             val stage = room?.members?.filter { it.onStage } ?: emptyList()
-            if (stage.isEmpty()) {
+            val musicTile: (@Composable () -> Unit)? = room?.let { r ->
+                if (show.musicMood != null || (isHost && !r.onAir)) {
+                    {
+                        MusicTile(
+                            baseUrl = baseUrl,
+                            spaceId = show.id,
+                            moodId = show.musicMood,
+                            active = show.musicMood != null && (!r.onAir || !r.remoteAudio),
+                            canPick = isHost && !r.onAir,
+                            busy = moodBusy,
+                            onPick = onMusicPick,
+                        )
+                    }
+                } else null
+            }
+            if (stage.isEmpty() && musicTile == null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     repeat(3) { PlaceholderSeat() }
                 }
@@ -840,6 +867,7 @@ private fun ShowHeader(show: Show, onAir: Boolean, room: RoomState.Connected?, a
                 )
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    musicTile?.invoke()
                     stage.forEach { m -> MemberTile(m, large = true, onAvatarCentre = { c -> avatarCentres[m.identity] = c }) }
                 }
             }
@@ -1328,7 +1356,7 @@ private fun formatClock(ms: Int): String {
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun MusicCard(
+private fun MusicTile(
     baseUrl: String,
     spaceId: String,
     moodId: String?,
@@ -1337,18 +1365,16 @@ private fun MusicCard(
     busy: Boolean,
     onPick: (String?) -> Unit,
 ) {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("rabble", android.content.Context.MODE_PRIVATE) }
-    var muted by remember { mutableStateOf(prefs.getBoolean("musicMuted", false)) }
     val mood = Music.mood(moodId)
     val playlist = remember(moodId, spaceId) { mood?.let { Music.playlist(it, spaceId) } ?: emptyList() }
     var index by remember(moodId) { mutableStateOf(0) }
     val track = if (playlist.isEmpty()) null else playlist[index % playlist.size]
     val url = track?.let { Music.url(baseUrl, it) }
-    val playing = active && !muted && url != null
+    val playing = active && url != null
     var error by remember { mutableStateOf<String?>(null) }
     val player = remember { MediaPlayer() }
     var preparedUrl by remember { mutableStateOf<String?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         player.setAudioAttributes(
@@ -1383,53 +1409,73 @@ private fun MusicCard(
         }.onFailure { error = it.message }
     }
 
-    Card {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "♪ Pre-show music" + (mood?.let { " · ${it.label}" } ?: ""),
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (mood != null) {
-                    TextButton(onClick = {
-                        muted = !muted
-                        prefs.edit().putBoolean("musicMuted", muted).apply()
-                    }) { Text(if (muted) "Unmute" else "Mute") }
-                }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
+        Box(contentAlignment = Alignment.BottomEnd) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(RabbleColors.Ink)
+                    .then(if (canPick) Modifier.clickable { menuOpen = true } else Modifier)
+                    .semantics { contentDescription = if (canPick) "Music actions" else "Music" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = RabbleColors.TextOnInk)
             }
-            if (track != null) {
-                Text(
-                    (if (active) "Now playing: " else "Next up: ") + track.attribution,
-                    color = RabbleColors.TextSecondary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            if (!playing) {
+                Box(
+                    Modifier
+                        .size(18.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(RabbleColors.Surface),
+                    contentAlignment = Alignment.Center,
+                ) { Text("🔇", fontSize = 10.sp) }
             }
-            error?.let { Text(it, color = RabbleColors.Live, style = MaterialTheme.typography.bodySmall) }
             if (canPick) {
-                Text(
-                    "Plays for everyone waiting in the room until you go on air. It is not recorded.",
-                    color = RabbleColors.TextTertiary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    Text(
+                        "Plays for everyone waiting in the room until you go on air. It is not recorded.",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).width(220.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RabbleColors.TextTertiary,
+                    )
                     Music.MOODS.forEach { m ->
-                        val selected = m.id == mood?.id
-                        FilterChip(
-                            selected = selected,
+                        DropdownMenuItem(
+                            text = { Text(m.label) },
                             enabled = !busy,
-                            onClick = { onPick(if (selected) null else m.id) },
-                            label = { Text(m.label) },
+                            trailingIcon = { if (m.id == mood?.id) Text("✓") },
+                            onClick = { onPick(m.id); menuOpen = false },
                         )
                     }
-                    FilterChip(
-                        selected = mood == null,
-                        enabled = !busy && mood != null,
-                        onClick = { onPick(null) },
-                        label = { Text("Off") },
-                    )
+                    if (mood != null) {
+                        DropdownMenuItem(
+                            text = { Text("Remove from stage", color = RabbleColors.Warning) },
+                            enabled = !busy,
+                            onClick = { onPick(null); menuOpen = false },
+                        )
+                    }
                 }
             }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Music",
+            style = MaterialTheme.typography.labelSmall,
+            color = RabbleColors.Text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            mood?.label ?: "No music",
+            style = MaterialTheme.typography.labelSmall,
+            color = RabbleColors.TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        error?.let {
+            Text(it, color = RabbleColors.Live, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
         }
     }
 }

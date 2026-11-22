@@ -24,6 +24,24 @@ Two services start at boot (`discobox admin service ls` to check, `logs` to read
 If `web` is not up, `pnpm dev --port 3000` in a terminal does the same thing.
 It hot-reloads, so edits are live without a restart.
 
+`discobox admin service ls`/`logs` may refuse with a 403 (`discoboxApi` not
+set on the box). The server's own structured logs (`src/lib/logger.ts`) are
+still readable straight from disk: Next.js writes them to
+`.next/dev/logs/next-development.log` (each line a `{timestamp, source,
+level, message}` wrapper; `message` is the logger's own JSON string for a
+`logger.*` call). `tail`/`grep` it directly instead of trying a second
+`pnpm dev` on another port — Next refuses to run two dev servers against the
+same project and just points you at the existing one's log file.
+
+To drive the Prisma/D1 layer itself outside the running app (e.g. to see
+exactly what a real Prisma error looks like, or to check a client extension
+hook fires for a call shape the running routes don't exercise), get a real
+`D1Database` binding in a throwaway Node script with `wrangler`'s
+`getPlatformProxy({ configPath: 'wrangler.jsonc' })` (`proxy.env.DB`), then
+construct `new PrismaClient({ adapter: new PrismaD1(db) })` directly — no
+need for `next dev` or a request context. Run the script from inside the
+repo root (bare `import`s need its `node_modules`); delete it afterwards.
+
 ## Data
 
 The local D1 is SQLite under `.wrangler/state/`. Query it with wrangler:

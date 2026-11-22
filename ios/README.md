@@ -38,6 +38,17 @@ xcrun simctl launch booted radio.rabble.ios -showId demo_space_1 -autoJoin
 Xcode 27 no longer ships a Simulator.app GUI alongside the command-line
 tools on this machine, so verification is screenshot-based.
 
+## UI tests
+
+`scripts/ios-test.sh` (run from the repo root on Linux) rsyncs `ios/` to the
+Mac mini and runs `ios/scripts/run-ui-tests.sh` there, which builds and runs
+the `RabbleUITests` target (XCUITest) against the simulator headlessly —
+`xcodebuild test` has run without a Simulator.app window since Xcode 9, the
+same as the build above. The result bundle is copied back to
+`ios/build/ui-tests.xcresult`; the script's exit status reports pass/fail.
+No signing is needed: like the debug build, the test target is
+unsigned/simulator-only.
+
 ## TestFlight
 
 `scripts/ios-testflight.sh` (run from the repo root on Linux) rsyncs `ios/`

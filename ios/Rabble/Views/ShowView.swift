@@ -185,12 +185,13 @@ private struct ShowHeader: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 if onAir {
-                    LiveBadge()
+                    LiveBadge().accessibilityIdentifier("show-on-air-badge")
                 } else {
                     Pill(text: show.status == "active" || show.status == "live" ? "Off air" : show.status.capitalized)
                 }
                 Spacer()
                 Text("\(room?.listening ?? show.listenerCount) listening").font(RabbleFont.style(.caption)).foregroundStyle(RabbleColors.textSecondary)
+                    .accessibilityIdentifier("show-listening-count")
             }
             Text(show.title).font(RabbleFont.style(.title2, .semibold))
             HStack(spacing: 8) {
@@ -352,6 +353,7 @@ private struct RoomPanel: View {
                 .foregroundStyle(RabbleColors.textSecondary)
             HStack(spacing: 8) {
                 Button("Listen") { model.joinShow() }.buttonStyle(.borderedProminent).wideButton()
+                    .accessibilityIdentifier("room-join-button")
                 Button("Sign in", action: onLogin).buttonStyle(.bordered).wideButton()
             }
         } else {
@@ -360,6 +362,7 @@ private struct RoomPanel: View {
                  : "The host is off air. You can join and wait in the studio; audio starts when they go on air.")
                 .foregroundStyle(RabbleColors.textSecondary)
             Button("Join") { model.joinShow() }.buttonStyle(.borderedProminent).wideButton()
+                .accessibilityIdentifier("room-join-button")
         }
     }
 

@@ -25,6 +25,7 @@ parts whose files changed:
 | Web and API | anything outside `android/`, `ios/`, docs and agent config changed | typecheck, lint, test; `wrangler d1 migrations apply rabble-dev --remote`; `pnpm cf:deploy` (OpenNext build and `wrangler deploy` of the `rabble-dev` Worker); `GET https://rabble.rodeo/api/health` must answer |
 | Android | `android/**` changed | `./gradlew assembleDebug`, keeps the APK as a run artifact, uploads it to R2 `builds/rabble-android.apk`, served at https://rabble.rodeo/downloads/rabble-android.apk |
 | iOS | `ios/**` changed and the `IOS_TESTFLIGHT` variable is `true` | `ios/scripts/testflight.sh`: archive, cloud-sign with the App Store Connect key, upload to TestFlight |
+| iOS tests | `ios/**` changed, independent of `IOS_TESTFLIGHT` | Seeds a local D1 with demo data and starts `pnpm dev` for `ios/scripts/run-ui-tests.sh` (XCUITest) to join, against no deployed environment; uploads the `.xcresult` as a run artifact |
 | Live-site checks | after a web deploy | `scripts/qa-live.mjs` against rabble.rodeo; a failure opens or updates the "QA: live-site checks failing after deploy" issue (`bug`, `qa`) and fails the run |
 
 A change to the workflow file itself runs all three. Actions, Run workflow,

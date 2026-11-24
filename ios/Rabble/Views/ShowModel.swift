@@ -555,7 +555,9 @@ final class ShowModel: ObservableObject {
 /// LiveKit's delegate callbacks arrive off the main actor; this forwards
 /// them to the model on it.
 private final class RoomEvents: RoomDelegate {
-    private weak var model: ShowModel?
+    // Set once in init, read only via `[model]` capture below: safe despite
+    // RoomDelegate's Sendable requirement flagging the mutable `weak var`.
+    private nonisolated(unsafe) weak var model: ShowModel?
     init(model: ShowModel) { self.model = model }
 
     private func refresh() {

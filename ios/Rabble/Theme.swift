@@ -215,7 +215,8 @@ extension View {
 
     /// A full-width button that meets the 44pt touch target.
     func wideButton(height: CGFloat = 48) -> some View {
-        frame(maxWidth: .infinity, minHeight: height)
+        frame(maxWidth: .infinity)
+            .frame(minHeight: height)
     }
 }
 

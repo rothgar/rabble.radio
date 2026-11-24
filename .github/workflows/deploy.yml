@@ -234,3 +234,67 @@ jobs:
       - name: Remove the key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+  ios-tests:
+    name: iOS (XCUITest)
+    needs: changes
+    # Independent of IOS_TESTFLIGHT: this runs whether or not TestFlight
+    # upload is turned on. Only gates pushes to main, like every other job
+    # here (see docs/DEPLOY.md) — the repository has no pull_request CI.
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: ${{ vars.IOS_RUNNER || 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pick the newest Xcode on a GitHub-hosted runner
+        if: vars.IOS_RUNNER == ''
+        run: |
+          latest=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - name: Seed a local D1 with demo data
+        run: |
+          pnpm d1:migrate:local
+          node scripts/seed-demo.mjs --local
+      - name: Start a dev server for the suite to join
+        # RabbleUITests needs a server seeded with demo data (ios/README.md,
+        # "UI tests"), not a real LiveKit: the join route only signs a
+        # token, it never has to reach LIVEKIT_URL, so dev-mode values are
+        # enough for RABBLE_BASE_URL's default (http://localhost:3000) to
+        # answer.
+        run: |
+          cat > .env.local <<ENV
+          SESSION_SECRET=$(openssl rand -hex 32)
+          NEXT_PUBLIC_APP_URL=http://localhost:3000
+          LIVEKIT_URL=ws://127.0.0.1:7880
+          LIVEKIT_PUBLIC_URL=ws://localhost:7880
+          LIVEKIT_API_KEY=devkey
+          LIVEKIT_API_SECRET=secret
+          ENV
+          pnpm dev --port 3000 > /tmp/next-dev.log 2>&1 &
+          echo $! > /tmp/next-dev.pid
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:3000/api/health && exit 0
+            sleep 5
+          done
+          echo "dev server did not answer /api/health after 150s" >&2
+          cat /tmp/next-dev.log
+          exit 1
+      - name: Run the XCUITest suite
+        working-directory: ios
+        run: scripts/run-ui-tests.sh
+      - name: Stop the dev server
+        if: always()
+        run: kill "$(cat /tmp/next-dev.pid 2>/dev/null)" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rabble-ios-ui-tests-${{ github.sha }}
+          path: ios/build/ui-tests.xcresult
+          if-no-files-found: warn

@@ -480,7 +480,8 @@ private struct MusicListenerTile: View {
                 .foregroundStyle(onInvite != nil ? RabbleColors.accent : RabbleColors.text)
                 .lineLimit(1)
         }
-        .frame(width: 60, minHeight: 44)
+        .frame(width: 60)
+            .frame(minHeight: 44)
         .contentShape(Rectangle())
         .onTapGesture { onInvite?() }
         .accessibilityElement(children: .combine)

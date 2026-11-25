@@ -266,6 +266,159 @@ export async function deleteLiveStatus(
   }
 }
 
+const APP_PROFILE_COLLECTION = 'community.lexicon.app.profile';
+
+/** Known `platforms` values for `community.lexicon.app.profile`. */
+export const APP_PROFILE_PLATFORM = {
+  web: 'community.lexicon.app.defs#platformWeb',
+  ios: 'community.lexicon.app.defs#platformIOS',
+  android: 'community.lexicon.app.defs#platformAndroid',
+} as const;
+
+export interface AppProfileLink {
+  /** The destination URL. The first link in the array is the primary one. */
+  uri: string;
+  label?: string;
+}
+
+export interface AppProfileInput {
+  name: string;
+  description?: string;
+  /** 1-12 entries, primary destination first. */
+  links: AppProfileLink[];
+  /** `APP_PROFILE_PLATFORM` values this app ships on. */
+  platforms?: string[];
+  tags?: string[];
+  createdAt?: string;
+}
+
+/**
+ * Session for a script running outside the browser, authenticated with an
+ * app password via `com.atproto.server.createSession` rather than the
+ * web app's OAuth flow. Its `fetchHandler` matches `OAuthSessionLike` so it
+ * can go through the same `callXrpc` path as the OAuth-backed helpers above.
+ */
+export interface AppPasswordSession {
+  did: string;
+  handle?: string;
+  accessJwt: string;
+  service: string;
+}
+
+/**
+ * Build the record payload for a `community.lexicon.app.profile#self`
+ * record. Exported for tests and for the one-off publish script.
+ */
+export function buildAppProfileRecord(
+  input: AppProfileInput
+): Record<string, unknown> {
+  if (input.links.length < 1 || input.links.length > 12) {
+    throw new Error(
+      `links must have between 1 and 12 entries (got ${input.links.length}).`
+    );
+  }
+  return {
+    $type: APP_PROFILE_COLLECTION,
+    name: input.name,
+    description: input.description,
+    links: input.links,
+    platforms: input.platforms,
+    tags: input.tags,
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  };
+}
+
+/**
+ * Authenticate with an app password, for a script run outside the browser
+ * where there's no stored OAuth session to restore.
+ */
+export async function createAppPasswordSession(input: {
+  identifier: string;
+  password: string;
+  service?: string;
+}): Promise<AppPasswordSession> {
+  const service = input.service ?? PDS_SERVICE_URL;
+  const response = await fetch(
+    `${service}/xrpc/com.atproto.server.createSession`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        identifier: input.identifier,
+        password: input.password,
+      }),
+    }
+  );
+  if (!response.ok) {
+    let detail = '';
+    try {
+      detail = await response.text();
+    } catch {
+      // ignore
+    }
+    throw new Error(
+      `com.atproto.server.createSession failed with ${response.status}${detail ? `: ${detail}` : ''}`
+    );
+  }
+  const data = (await response.json()) as {
+    did?: string;
+    handle?: string;
+    accessJwt?: string;
+  };
+  if (!data.did || !data.accessJwt) {
+    throw new Error(
+      'com.atproto.server.createSession response is missing did or accessJwt.'
+    );
+  }
+  return { did: data.did, handle: data.handle, accessJwt: data.accessJwt, service };
+}
+
+function fetchHandlerForAppPasswordSession(
+  session: AppPasswordSession
+): OAuthSessionLike['fetchHandler'] {
+  return async (pathname, init) =>
+    fetch(`${session.service}${pathname}`, {
+      ...init,
+      headers: {
+        ...(init?.headers as Record<string, string> | undefined),
+        authorization: `Bearer ${session.accessJwt}`,
+      },
+    });
+}
+
+/**
+ * Publish the `community.lexicon.app.profile#self` record for the given
+ * app-password session. Used by `scripts/publish-app-profile.ts`, not by
+ * any user-triggered flow.
+ */
+export async function publishAppProfile(input: {
+  session: AppPasswordSession;
+  profile: AppProfileInput;
+}): Promise<LiveStatusResult> {
+  try {
+    const data = await callXrpc<PutRecordResponse>({
+      method: 'POST',
+      nsid: 'com.atproto.repo.putRecord',
+      fetch: fetchHandlerForAppPasswordSession(input.session),
+      body: {
+        repo: input.session.did,
+        collection: APP_PROFILE_COLLECTION,
+        rkey: RKEY,
+        record: buildAppProfileRecord(input.profile),
+      },
+    });
+    return { ok: true, record: data, uri: data.uri };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Failed to publish app profile record.',
+    };
+  }
+}
+
 interface GetBlocksPage {
   blocks?: Array<{ did?: string }>;
   cursor?: string;

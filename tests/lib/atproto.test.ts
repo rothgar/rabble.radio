@@ -4,7 +4,7 @@
 // payloads and parses responses. The OAuth client is mocked to return a
 // session whose `fetchHandler` we capture and assert against.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const fetchHandlerMock = vi.fn();
 
@@ -17,9 +17,13 @@ vi.mock('@/lib/auth', () => ({
 }));
 
 import {
+  APP_PROFILE_PLATFORM,
+  buildAppProfileRecord,
   buildLiveStatusRecord,
+  createAppPasswordSession,
   deleteLiveStatus,
   fetchBlockedDids,
+  publishAppProfile,
   publishLiveStatus,
 } from '@/lib/atproto';
 
@@ -247,5 +251,156 @@ describe('fetchBlockedDids', () => {
   it('throws on HTTP errors', async () => {
     fetchHandlerMock.mockResolvedValueOnce(new Response('boom', { status: 500 }));
     await expect(fetchBlockedDids('did:plc:host123')).rejects.toThrow(/500/);
+  });
+});
+
+describe('buildAppProfileRecord', () => {
+  it('builds a community.lexicon.app.profile record', () => {
+    const record = buildAppProfileRecord({
+      name: 'Rabble',
+      description: 'Live audio spaces for Bluesky.',
+      links: [{ uri: 'https://rabble.radio', label: 'Website' }],
+      platforms: [APP_PROFILE_PLATFORM.web],
+    });
+    expect(record.$type).toBe('community.lexicon.app.profile');
+    expect(record.name).toBe('Rabble');
+    expect(record.links).toEqual([
+      { uri: 'https://rabble.radio', label: 'Website' },
+    ]);
+    expect(record.platforms).toEqual([APP_PROFILE_PLATFORM.web]);
+    expect(typeof record.createdAt).toBe('string');
+  });
+
+  it('rejects an empty links array', () => {
+    expect(() => buildAppProfileRecord({ name: 'Rabble', links: [] })).toThrow(
+      /links/
+    );
+  });
+
+  it('rejects more than 12 links', () => {
+    const links = Array.from({ length: 13 }, (_, i) => ({
+      uri: `https://example.com/${i}`,
+    }));
+    expect(() => buildAppProfileRecord({ name: 'Rabble', links })).toThrow(
+      /links/
+    );
+  });
+});
+
+describe('createAppPasswordSession', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('authenticates and returns the session', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        did: 'did:plc:app123',
+        handle: 'rabble.bsky.social',
+        accessJwt: 'jwt-token',
+      })
+    );
+
+    const session = await createAppPasswordSession({
+      identifier: 'rabble.bsky.social',
+      password: 'xxxx-xxxx-xxxx-xxxx',
+    });
+
+    expect(session).toEqual({
+      did: 'did:plc:app123',
+      handle: 'rabble.bsky.social',
+      accessJwt: 'jwt-token',
+      service: 'https://bsky.social',
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(
+      'https://bsky.social/xrpc/com.atproto.server.createSession'
+    );
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      identifier: 'rabble.bsky.social',
+      password: 'xxxx-xxxx-xxxx-xxxx',
+    });
+  });
+
+  it('throws when createSession fails', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('bad creds', { status: 401 }));
+    await expect(
+      createAppPasswordSession({ identifier: 'x', password: 'y' })
+    ).rejects.toThrow(/401/);
+  });
+
+  it('throws when the response is missing did or accessJwt', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({}));
+    await expect(
+      createAppPasswordSession({ identifier: 'x', password: 'y' })
+    ).rejects.toThrow(/did or accessJwt/);
+  });
+});
+
+describe('publishAppProfile', () => {
+  const fetchMock = vi.fn();
+  const session = {
+    did: 'did:plc:app123',
+    handle: 'rabble.bsky.social',
+    accessJwt: 'jwt-token',
+    service: 'https://bsky.social',
+  };
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('writes community.lexicon.app.profile/self with a bearer token', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        uri: 'at://did:plc:app123/community.lexicon.app.profile/self',
+      })
+    );
+
+    const result = await publishAppProfile({
+      session,
+      profile: { name: 'Rabble', links: [{ uri: 'https://rabble.radio' }] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.uri).toBe(
+      'at://did:plc:app123/community.lexicon.app.profile/self'
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(
+      'https://bsky.social/xrpc/com.atproto.repo.putRecord'
+    );
+    expect((init.headers as Record<string, string>).authorization).toBe(
+      'Bearer jwt-token'
+    );
+    const body = JSON.parse(init.body as string);
+    expect(body.repo).toBe('did:plc:app123');
+    expect(body.collection).toBe('community.lexicon.app.profile');
+    expect(body.rkey).toBe('self');
+    expect(body.record.name).toBe('Rabble');
+  });
+
+  it('returns ok=false when the PDS errors', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+    const result = await publishAppProfile({
+      session,
+      profile: { name: 'Rabble', links: [{ uri: 'https://rabble.radio' }] },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/500/);
   });
 });

@@ -416,6 +416,33 @@ code, and mistakes already made there.
   (as `ReminderToasts` does) or to stay out from under it — rather than
   assuming it has the bottom of the viewport to itself.
 
+## .github/workflows/deploy.yml (ios-tests needs a real LiveKit)
+
+- The `ios-tests` job's own comment used to claim "not a real LiveKit: the
+  join route only signs a token, it never has to reach LIVEKIT_URL" — false:
+  `POST /api/spaces/[id]/join` calls `createRoom()` (`src/lib/livekit.ts`)
+  before it mints anything, which reaches `LIVEKIT_URL` over HTTP and 503s
+  if nothing is listening, and the app's own `lkRoom.connect()`
+  (`ShowModel.swift`) then opens a real WebSocket to it. Nothing in this job
+  ever started a LiveKit server, on the GitHub-hosted `macos-latest` path the
+  job runs by default (confirmed from a real failing run's own
+  `/api/health` log line: `"checks":{"db":true,"livekit":false}}`) — the
+  job's `/api/health` retry loop only checks for HTTP 200, which `degraded`
+  (one dependency down) still returns, so it never caught this. `RabbleUITests`
+  and `ShowRoomUITests` happened to pass anyway because both only assert
+  things with a non-LiveKit fallback (`ShowView.swift`'s `onAir = connected?.onAir
+  ?? show.isLive`, `listening = room?.listening ?? show.listenerCount`);
+  `LeaveConfirmationUITests` genuinely cannot pass without one, since the
+  "Leave the show" button only renders inside `ReactionBar` once
+  `model.room.connected` is set, which requires a real connection to
+  succeed (issue #148). Fixed by adding a `livekit-server --dev` step (the
+  job's existing `LIVEKIT_API_KEY=devkey`/`LIVEKIT_API_SECRET=secret` already
+  matched `--dev`'s built-in keypair) before the dev server starts. Any
+  future change to this job that asserts something gated on a real
+  `connected` room needs this step to still run before it; don't trust a
+  green `RabbleUITests`/`ShowRoomUITests` run alone as proof LiveKit is
+  reachable here.
+
 ## src/app/show/[id]/opengraph-image.tsx (next/og / satori rendering)
 
 - This is the repo's first use of `next/og`'s `ImageResponse`: it renders a

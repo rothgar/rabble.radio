@@ -8,15 +8,23 @@ final class LeaveConfirmationUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         // Alphabetically first in the bundle, so this is the first test
-        // XCTest runs — it pays a first-connection cold-start cost (fresh
-        // simulator network stack, WebRTC/media engine init) that
-        // ShowRoomUITests, running after it, doesn't. Pay that cost here,
-        // untimed and unasserted, instead of inside the real test's 20s
-        // connection budget below (#148).
+        // XCTest runs — it pays a cold-start cost (fresh simulator, first
+        // app launch, first network round trip to the dev server and to
+        // LiveKit) that ShowRoomUITests, running after it, doesn't. Pay
+        // that cost here, untimed and unasserted, instead of inside the
+        // real test's 20s connection budget below (#148). Leaves cleanly
+        // (same flow as the real test) so this warmup's own listener
+        // doesn't linger in demo_space_1 for the real test that follows.
         let warmup = XCUIApplication()
         warmup.launchArguments = ["-showId", "demo_space_1", "-autoJoin"]
         warmup.launch()
-        _ = warmup.descendants(matching: .any)["show-on-air-badge"].waitForExistence(timeout: 30)
+        if warmup.descendants(matching: .any)["show-on-air-badge"].waitForExistence(timeout: 30),
+           warmup.buttons["Leave the show"].waitForExistence(timeout: 5) {
+            warmup.buttons["Leave the show"].tap()
+            if warmup.alerts["Leave the show?"].waitForExistence(timeout: 5) {
+                warmup.alerts.buttons["Leave"].tap()
+            }
+        }
         warmup.terminate()
     }
 

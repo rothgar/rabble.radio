@@ -262,12 +262,39 @@ jobs:
         run: |
           pnpm d1:migrate:local
           node scripts/seed-demo.mjs --local
+      - name: Start a local LiveKit dev server for the suite to join
+        # The join route's createRoom() (src/lib/livekit.ts) calls out to
+        # LIVEKIT_URL before it ever mints a token, and ShowModel.swift's
+        # lkRoom.connect() does too once the app has the token: both need a
+        # real LiveKit reachable, not just a dev-mode API key/secret pair.
+        # `--dev` uses the devkey/secret keypair below by default. A TCP
+        # connect, not an HTTP request, checks readiness (and whether one is
+        # already up) to match what this repo already trusts for this
+        # service (k8s/livekit.yaml's readinessProbe); only the Next.js
+        # server and the Simulator, both on this same host, need to reach
+        # it, so it's bound to loopback only. Skips starting a second
+        # instance if something is already listening on 7880 — a
+        # self-hosted runner's own persistent LiveKit (docs/DEPLOY.md,
+        # IOS_RUNNER) is left alone rather than fought over the port.
+        run: |
+          listening() { (exec 3<>/dev/tcp/127.0.0.1/7880) 2>/dev/null; }
+          if listening; then
+            echo "already listening on 7880, not starting our own"
+            exit 0
+          fi
+          brew install livekit
+          livekit-server --dev --bind 127.0.0.1 > /tmp/livekit.log 2>&1 &
+          echo $! > /tmp/livekit.pid
+          for i in $(seq 1 30); do
+            listening && exit 0
+            sleep 1
+          done
+          echo "livekit-server did not come up after 30s" >&2
+          cat /tmp/livekit.log
+          exit 1
       - name: Start a dev server for the suite to join
         # RabbleUITests needs a server seeded with demo data (ios/README.md,
-        # "UI tests"), not a real LiveKit: the join route only signs a
-        # token, it never has to reach LIVEKIT_URL, so dev-mode values are
-        # enough for RABBLE_BASE_URL's default (http://localhost:3000) to
-        # answer.
+        # "UI tests") and the LiveKit dev server above.
         run: |
           cat > .env.local <<ENV
           SESSION_SECRET=$(openssl rand -hex 32)
@@ -292,6 +319,9 @@ jobs:
       - name: Stop the dev server
         if: always()
         run: kill "$(cat /tmp/next-dev.pid 2>/dev/null)" 2>/dev/null || true
+      - name: Stop the LiveKit dev server
+        if: always()
+        run: kill "$(cat /tmp/livekit.pid 2>/dev/null)" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

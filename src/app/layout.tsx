@@ -26,6 +26,11 @@ function resolveAppUrl(): URL {
 
 const appUrl = resolveAppUrl();
 
+// Cloudflare Web Analytics (Core Web Vitals). Off until the owner creates
+// the site in the Cloudflare dashboard and sets the beacon token
+// (docs/DEPLOY.md); until then this is unset and nothing renders.
+const cfBeaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
+
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
@@ -80,6 +85,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               "try{var t=localStorage.getItem('rabble-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t)}}catch(e){}",
           }}
         />
+        {cfBeaconToken && (
+          <script
+            defer
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon={JSON.stringify({ token: cfBeaconToken })}
+          />
+        )}
       </head>
       <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] antialiased">
         <DiagnosticsInstaller />

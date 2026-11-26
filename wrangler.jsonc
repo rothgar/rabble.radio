@@ -46,6 +46,9 @@
     // Web Push (VAPID). The private key is the VAPID_PRIVATE_KEY secret.
     "VAPID_PUBLIC_KEY": "BMtZBKmewyV3-_C2qn97wceZqSA-hW5NEGcyhOyDS_AJOFu8OJ00FuMBmZ0XVuSECiOu4AP3BMn_GcwilLz7ulA",
     "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
+    // Cloudflare Web Analytics is off until the owner creates the site
+    // (Account Home → Web Analytics → Add a site) and adds
+    // "NEXT_PUBLIC_CF_BEACON_TOKEN" here with the beacon token it prints.
   },
   "env": {
     "production": {
@@ -82,6 +85,8 @@
         "ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
         "SUPPORT_EMAIL": "justin.garrison@siderolabs.com",
         "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
+        // Add "NEXT_PUBLIC_CF_BEACON_TOKEN" here once a production Web
+        // Analytics site exists for rabble.radio; see the top-level vars.
       }
     }
   }

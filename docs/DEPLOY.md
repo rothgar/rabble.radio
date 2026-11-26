@@ -138,6 +138,12 @@ dry run. Before the first real deploy:
    | `FEEDBACK_READ_TOKEN` | `openssl rand -hex 32`. The daily feedback intake reads rabble.rodeo only; give the QA box a second discobox secret routed to `GET rabble.radio/api/feedback` when production feedback should be triaged too. |
 
    `wrangler secret list --env production` shows what is set.
+
+   Not a secret: Cloudflare Web Analytics (Core Web Vitals) is off until the
+   owner creates a site for rabble.radio (dashboard → Account Home → Web
+   Analytics → Add a site) and puts the beacon token it prints in
+   `env.production.vars` as `NEXT_PUBLIC_CF_BEACON_TOKEN` in
+   `wrangler.jsonc`, committed like `VAPID_PUBLIC_KEY`.
 4. **Music.** The production bucket starts empty. Upload the pre-show tracks
    with `RECORDING_BUCKET=rabble-prod-recordings node scripts/upload-music.mjs
    <dir>`; the R2 token in `.env` must cover the production bucket.

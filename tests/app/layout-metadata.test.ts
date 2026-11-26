@@ -1,6 +1,8 @@
 // tests/app/layout-metadata.test.ts
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
 
 vi.mock('next/font/google', () => ({
   Inter: () => ({ variable: '--font-inter' }),
@@ -16,6 +18,7 @@ vi.mock('@/components/PersistentShowBar', () => ({ PersistentShowBar: () => null
 describe('root layout metadata', () => {
   const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
   const originalPublicUrl = process.env.PUBLIC_URL;
+  const originalBeaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
 
   beforeEach(() => {
     vi.resetModules();
@@ -24,6 +27,7 @@ describe('root layout metadata', () => {
   afterEach(() => {
     process.env.NEXT_PUBLIC_APP_URL = originalAppUrl;
     process.env.PUBLIC_URL = originalPublicUrl;
+    process.env.NEXT_PUBLIC_CF_BEACON_TOKEN = originalBeaconToken;
   });
 
   it('sets an absolute Open Graph image and a summary_large_image Twitter card', async () => {
@@ -62,5 +66,25 @@ describe('root layout metadata', () => {
     const { metadata } = await import('@/app/layout');
 
     expect((metadata.metadataBase as URL).href).toBe('https://rabble.invalid/');
+  });
+
+  it('renders no Cloudflare beacon when NEXT_PUBLIC_CF_BEACON_TOKEN is unset', async () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://rabble.radio';
+    delete process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
+    const { default: RootLayout } = await import('@/app/layout');
+
+    const html = renderToStaticMarkup(createElement(RootLayout, null, createElement('div')));
+    expect(html).not.toContain('cloudflareinsights.com');
+    expect(html).not.toContain('data-cf-beacon');
+  });
+
+  it('renders the Cloudflare beacon with the configured token when NEXT_PUBLIC_CF_BEACON_TOKEN is set', async () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://rabble.radio';
+    process.env.NEXT_PUBLIC_CF_BEACON_TOKEN = 'test-beacon-token';
+    const { default: RootLayout } = await import('@/app/layout');
+
+    const html = renderToStaticMarkup(createElement(RootLayout, null, createElement('div')));
+    expect(html).toContain('https://static.cloudflareinsights.com/beacon.min.js');
+    expect(html).toContain('data-cf-beacon="{&quot;token&quot;:&quot;test-beacon-token&quot;}"');
   });
 });

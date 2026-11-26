@@ -1,8 +1,10 @@
 # Scan the Workers' error logs and file one `logs` issue per new kind of
-# error (scripts/log-triage.mjs), for the factory to triage. Every six hours
-# with a wider window than the gap, so nothing between runs is missed; the
-# script de-duplicates against open `logs` issues. Needs CLOUDFLARE_API_TOKEN
-# with the account permission "Workers Observability" (docs/discobox.md, QA).
+# error (scripts/log-triage.mjs), for the factory to triage. Also scan their
+# P95/P99 wall time and file one `latency` issue per service whose P95
+# crosses a threshold (scripts/latency-triage.mjs). Every six hours with a
+# wider window than the gap, so nothing between runs is missed; both scripts
+# de-duplicate against their own open issues. Needs CLOUDFLARE_API_TOKEN with
+# the account permission "Workers Observability" (docs/discobox.md, QA).
 name: Log triage
 
 on:
@@ -39,9 +41,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Scan rabble-dev and rabble-prod
+      - name: Scan rabble-dev and rabble-prod for errors
         run: |
           node scripts/log-triage.mjs \
+            --services=rabble-dev,rabble-prod \
+            --hours=${{ inputs.hours || '8' }} \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+      - name: Scan rabble-dev and rabble-prod for elevated latency
+        if: ${{ !cancelled() }}
+        run: |
+          node scripts/latency-triage.mjs \
             --services=rabble-dev,rabble-prod \
             --hours=${{ inputs.hours || '8' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }}

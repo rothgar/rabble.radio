@@ -213,6 +213,18 @@ PR's Evidence says so.
 - **Push notifications, recordings to R2, Bluesky posting**: external
   services with no dev-mode stand-in. Covered by tests only.
 
+## CI scripts (scripts/*.mjs)
+
+`scripts/log-triage.mjs`, `scripts/latency-triage.mjs` and similar don't run
+as part of `next dev`; drive them directly with `node scripts/<name>.mjs`.
+Each takes `--input=<file>` to read a fixture instead of querying the real
+Cloudflare/GitHub APIs, and `--dry-run --json` (add `--bodies` for the issue
+body text) to observe the report without filing anything — the credentials
+these scripts need (`CLOUDFLARE_API_TOKEN`, a `GH_TOKEN` scoped to file
+issues) aren't available in a box, so this `--input`/`--dry-run` path is as
+far as a box can verify; the real telemetry wire format and actual issue
+filing are unverified here.
+
 ## Gotchas
 
 - `.env.local` is gitignored and dev-only. Never commit it, and never put a

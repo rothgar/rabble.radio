@@ -443,6 +443,19 @@ code, and mistakes already made there.
   green `RabbleUITests`/`ShowRoomUITests` run alone as proof LiveKit is
   reachable here.
 
+## src/app/.well-known/security.txt/route.ts (EXPIRES staleness)
+
+- `EXPIRES` is a hardcoded literal (RFC 9116 requires it), refreshed by
+  hand "a year out" on each edit, per issue #160. Nothing enforces that: if
+  this file goes untouched past the date, the route keeps serving an
+  expired `Expires` field indefinitely with no test, lint or CI failure to
+  notice. `tests/app/security-txt-route.test.ts`'s `has not yet expired`
+  test only catches it once CI runs against a stale `EXPIRES` — i.e. after
+  the date has already passed — not before. Whoever next edits this file
+  for any reason should push `EXPIRES` another year out while they're in
+  it; don't assume a green test suite means the contact information is
+  still current.
+
 ## src/app/show/[id]/opengraph-image.tsx (next/og / satori rendering)
 
 - This is the repo's first use of `next/og`'s `ImageResponse`: it renders a

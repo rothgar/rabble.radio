@@ -92,7 +92,9 @@ commands yourself regardless.
   every deploy) and the `qa-live` skill (daily box that also screenshots
   and files `qa` issues). Issues labelled `qa` come from it; issues labelled
   `logs` come from `scripts/log-triage.mjs` scanning the Workers' error
-  logs every six hours; issues labelled `feedback` come from the
+  logs every six hours; issues labelled `latency` come from
+  `scripts/latency-triage.mjs`, run the same six hours, scanning the same
+  Workers' P95/P99 wall time; issues labelled `feedback` come from the
   `feedback-intake` skill reading the feedback button's reports, and carry
   `status/needs-decision` until the owner decides. Issues labelled `ops`
   come from `scripts/box-watch.mjs`, which watches boxes for Claude usage

@@ -238,6 +238,22 @@ seen. Noise is logged and nothing else.
    account permission "Workers Observability" (the CI token has to be
    given it too).
 
+4. **The same run**, `.github/workflows/log-triage.yml` also runs
+   `scripts/latency-triage.mjs`: it queries the Workers Observability
+   telemetry API's calculations view for the P95, P99 and invocation count of
+   each Worker's wall time (`$workers.wallTimeMs`) over the last eight hours,
+   and files one issue labelled `latency` and `bug` per service whose P95
+   crosses `--threshold-ms` (default 5000ms — no baseline existed yet, so
+   this starts conservative; tighten it once real `--dump` data comes in),
+   titled `Latency (dev|prod): P95 wall time <ms>ms (> <threshold>ms)`. A
+   service with an open `latency` issue gets a "still happening" comment at
+   most once a day; one closed as `wontfix` is never filed again, and a
+   service back under the threshold, or with too few invocations in the
+   window to trust a percentile, is left alone. Run it by hand with
+   `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node scripts/latency-triage.mjs
+   --dry-run --bodies`; same token and permission as log-triage.mjs, no new
+   secret.
+
 `aperture-qa` is a gateway config like the others; its `github` binding is
 narrowed to listing, creating and commenting on this repository's issues,
 so a QA box cannot push, open PRs or touch labels. `node scripts/qa-live.mjs`

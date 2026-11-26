@@ -90,6 +90,24 @@ gh variable set IOS_TESTFLIGHT --body true
 - iOS build numbers are UTC timestamps, so every upload is newer than the
   last; the marketing version comes from `ios/project.yml`.
 
+## Monitoring and dashboards
+
+Four consoles, already enabled, no code or cost:
+
+| Console | Shows |
+|---|---|
+| [`rabble-dev` Worker observability](https://dash.cloudflare.com/?to=/:account/workers/services/view/rabble-dev/production/observability/metrics) | Development's request and error counts, and wall-time/CPU-time at P50/P90/P99, three months of history |
+| [`rabble-prod` Worker observability](https://dash.cloudflare.com/?to=/:account/workers/services/view/rabble-prod/production/observability/metrics) | Production's request and error counts, and wall-time/CPU-time at P50/P90/P99, three months of history |
+| [LiveKit Cloud console](https://cloud.livekit.io/), dev project | Session, participant, bandwidth and egress for the dev LiveKit Cloud project |
+| [LiveKit Cloud console](https://cloud.livekit.io/), production project | Session, participant, bandwidth and egress for the production LiveKit Cloud project |
+
+The LiveKit Cloud console has one login across both projects; pick the dev
+or production project after signing in (there's no project-specific URL to
+link to from here). `scripts/log-triage.mjs` already turns the Workers'
+error-level logs into `logs`-labelled issues every six hours
+(`.github/workflows/log-triage.yml`); these consoles are for looking, not
+alerting.
+
 ## Production: rabble.radio
 
 `deploy-production.yml` runs on a `v*` tag (`git tag v0.1.0 && git push

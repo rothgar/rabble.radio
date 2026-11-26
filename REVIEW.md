@@ -499,3 +499,18 @@ code, and mistakes already made there.
   `*.bsky.network` PDS blob host has no such proxy or suffix convention and
   is fetched as stored. Before trusting a next/og avatar/image render as
   correct, open the actual output PNG — a failed decode does not throw.
+
+## android/.../ui/Common.kt (grouping a Compose icon+label as one accessibility element)
+
+- `Modifier.semantics(mergeDescendants = true) { ... }` is not the Compose
+  equivalent of SwiftUI's `.accessibilityElement(children: .ignore)`:
+  `mergeDescendants` *merges* descendant nodes' own semantics (a child
+  `Text`'s content) into the parent rather than discarding them, so an
+  explicit `contentDescription` set alongside it can still get announced
+  together with the child's own text (a double announcement under
+  TalkBack). To fully replace descendant semantics with one explicit
+  label, the way the iOS counterpart does, use
+  `Modifier.clearAndSetSemantics { contentDescription = "..." }`
+  (`androidx.compose.ui.semantics.clearAndSetSemantics`) instead. Hit when
+  porting iOS's `Wordmark` (icon + text, one accessibility element) to
+  Android's `Wordmark` in `Common.kt` for issue #157.

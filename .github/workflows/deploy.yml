@@ -184,7 +184,7 @@ jobs:
       - name: Build
         working-directory: android
         run: ./gradlew --no-daemon assembleDebug
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rabble-android-${{ github.sha }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
@@ -322,7 +322,7 @@ jobs:
       - name: Stop the LiveKit dev server
         if: always()
         run: kill "$(cat /tmp/livekit.pid 2>/dev/null)" 2>/dev/null || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: rabble-ios-ui-tests-${{ github.sha }}

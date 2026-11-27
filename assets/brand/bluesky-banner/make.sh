@@ -18,11 +18,10 @@ html,body{margin:0;width:3000px;height:1000px;overflow:hidden}
 body{background:$BG;color:$INK;font-family:Inter,system-ui,sans-serif;position:relative}
 /* faint radio-wave arcs bleeding off the right edge, the mark's motif at page scale */
 .waves{position:absolute;right:-480px;top:-540px;width:1900px;height:1900px}
-.wrap{position:absolute;left:180px;top:0;height:1000px;display:flex;align-items:center;gap:110px}
-.mark{width:560px;height:560px;flex:none}
-.text{display:flex;flex-direction:column;gap:34px}
-.word{font-family:Fraunces;font-weight:900;font-size:300px;line-height:.86;letter-spacing:-.015em;font-variation-settings:"SOFT" 100,"WONK" 0;margin:0}
-.tag{font-size:76px;font-weight:500;color:$MUTED;margin:0;letter-spacing:-.005em}
+.wrap{position:absolute;left:220px;top:0;height:1000px;display:flex;align-items:center}
+.text{display:flex;flex-direction:column;gap:40px}
+.word{font-family:Fraunces;font-weight:900;font-size:340px;line-height:.86;letter-spacing:-.015em;font-variation-settings:"SOFT" 100,"WONK" 0;margin:0}
+.tag{font-size:84px;font-weight:500;color:$MUTED;margin:0;letter-spacing:-.005em}
 .row{display:flex;align-items:center;gap:28px;margin-top:10px}
 .live{display:inline-flex;align-items:center;gap:22px;background:$LIVE_BG;color:$LIVE_FG;font-weight:600;font-size:46px;letter-spacing:.08em;padding:18px 40px;border-radius:16px}
 .live i{width:26px;height:26px;border-radius:50%;background:#fff;display:inline-block}
@@ -34,12 +33,6 @@ body{background:$BG;color:$INK;font-family:Inter,system-ui,sans-serif;position:r
   <path d="M 466 68 A 382 382 0 0 1 752 711" stroke-width="58.5"/>
 </svg>
 <div class="wrap">
-  <svg class="mark" viewBox="0 0 1024 1024">
-    <path d="M 268 246 L 436 246 L 436 505 L 522 505 L 693 697 L 756 716 L 756 779 L 612 779 L 452 582 L 436 582 L 436 705 L 478 717 L 478 779 L 268 779 L 268 717 L 313 705 L 313 318 L 268 306 Z" fill="$INK"/>
-    <circle cx="462.5" cy="450.5" r="79.5" fill="$DOT"/>
-    <path d="M 477.07 283.94 A 167.20 167.20 0 0 1 617.53 513.13" fill="none" stroke="$ARC" stroke-width="58.5" stroke-linecap="round"/>
-    <path d="M 472.09 175.77 A 274.90 274.90 0 0 1 684.90 612.08" fill="none" stroke="$ARC" stroke-width="58.5" stroke-linecap="round"/>
-  </svg>
   <div class="text">
     <h1 class="word">rabble radio</h1>
     <p class="tag">Live audio spaces for Bluesky</p>

@@ -56,7 +56,7 @@ letter, mustard dot and waves on teal.
   dark-appearance app icons
 - `assets/brand/monogram-1024.png` / `monogram-dark-1024.png` — transparent PNGs
 - `assets/brand/bluesky-banner-light.png` / `bluesky-banner-dark.png` — the
-  3000×1000 Bluesky profile banner (mark, wordmark, tagline), rendered by
+  3000×1000 Bluesky profile banner (wordmark and tagline, no mark: the avatar is the mark), rendered by
   `assets/brand/bluesky-banner/make.sh` with headless Chrome
 - Web: `src/app/icon.svg` (favicon, adapts via an embedded
   `prefers-color-scheme` rule), `src/app/apple-icon.png`, `public/logo.png`

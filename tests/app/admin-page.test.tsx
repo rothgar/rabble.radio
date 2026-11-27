@@ -3,21 +3,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
-const { mockGetCurrentUser, mockGetPlatformOverview, mockListUsersForAdmin, mockIsAdmin, mockNotFound } = vi.hoisted(
-  () => ({
-    mockGetCurrentUser: vi.fn(),
-    mockGetPlatformOverview: vi.fn(),
-    mockListUsersForAdmin: vi.fn(),
-    mockIsAdmin: vi.fn(),
-    mockNotFound: vi.fn(() => {
-      throw new Error('NEXT_NOT_FOUND');
-    }),
-  })
-);
+const {
+  mockGetCurrentUser,
+  mockGetPlatformOverview,
+  mockGetPlatformActivity,
+  mockListUsersForAdmin,
+  mockIsAdmin,
+  mockNotFound,
+} = vi.hoisted(() => ({
+  mockGetCurrentUser: vi.fn(),
+  mockGetPlatformOverview: vi.fn(),
+  mockGetPlatformActivity: vi.fn(),
+  mockListUsersForAdmin: vi.fn(),
+  mockIsAdmin: vi.fn(),
+  mockNotFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
+}));
 
 vi.mock('@/lib/session', () => ({ getCurrentUser: mockGetCurrentUser }));
 vi.mock('@/lib/admin', () => ({
   getPlatformOverview: mockGetPlatformOverview,
+  getPlatformActivity: mockGetPlatformActivity,
   listUsersForAdmin: mockListUsersForAdmin,
   isAdmin: mockIsAdmin,
 }));
@@ -41,6 +48,22 @@ beforeEach(() => {
     totalSessions: 20,
     buildId: 'abc1234',
   });
+  mockGetPlatformActivity.mockResolvedValue({
+    signUps: { current: 5, previous: 3 },
+    showsHosted: { current: 4, previous: 2 },
+    hoursHosted: { current: 6.5, previous: 3 },
+    listenerJoins: { current: 20, previous: 15 },
+    distinctListeners: { current: 8, previous: 5 },
+    peakConcurrentListeners: { current: 10, previous: 6 },
+    reactions: { current: 30, previous: 25 },
+    likes: { current: 9, previous: 4 },
+    weeklySeries: Array.from({ length: 12 }, (_, i) => ({
+      weekStart: `2026-${String(9 + Math.floor(i / 4)).padStart(2, '0')}-${String((i % 4) * 7 + 1).padStart(2, '0')}`,
+      signUps: i,
+      showsHosted: i,
+      listenerJoins: i,
+    })),
+  });
 });
 
 describe('/admin', () => {
@@ -48,6 +71,7 @@ describe('/admin', () => {
     mockIsAdmin.mockReturnValue(false);
     await expect(AdminPage()).rejects.toThrow('NEXT_NOT_FOUND');
     expect(mockListUsersForAdmin).not.toHaveBeenCalled();
+    expect(mockGetPlatformActivity).not.toHaveBeenCalled();
   });
 
   it('renders the overview counts and the build id', async () => {
@@ -58,6 +82,18 @@ describe('/admin', () => {
     expect(screen.getByTestId('admin-stat-users').textContent).toContain('5');
     expect(screen.getByTestId('admin-stat-banned').textContent).toContain('1');
     expect(screen.getByTestId('admin-stat-live-now').textContent).toContain('2');
+  });
+
+  it('renders the activity tiles with their trailing-week trend and the weekly table', async () => {
+    mockIsAdmin.mockReturnValue(true);
+    mockListUsersForAdmin.mockResolvedValue([]);
+    render(await AdminPage());
+    expect(screen.getByTestId('admin-stat-new-sign-ups').textContent).toContain('5');
+    expect(screen.getByTestId('admin-stat-new-sign-ups').textContent).toContain('3');
+    expect(screen.getByTestId('admin-stat-peak-concurrent-listeners').textContent).toContain('10');
+    expect(screen.getByTestId('admin-stat-signed-in-listeners').textContent).toContain('8');
+    const table = screen.getByTestId('admin-activity-weekly');
+    expect(table.textContent).toContain('2026-09-01');
   });
 
   it('renders users with their ban state and actions', async () => {

@@ -14,6 +14,7 @@ vi.mock('@/lib/session', () => ({ getCurrentUser: m.getCurrentUser }));
 vi.mock('@/lib/spaces', () => ({
   getHostedSpaces: m.getHostedSpaces,
   defaultPublicOrigin: () => 'https://rabble.rodeo',
+  originFromRequest: (request: Request) => new URL(request.url).origin,
   toPublicSpace: (s: { id: string; title: string }, origin: string) => ({
     id: s.id,
     title: s.title,

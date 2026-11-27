@@ -68,6 +68,7 @@ vi.mock('@/lib/spaces', () => ({
   setSpaceLive: mockSetSpaceLive,
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: mockGetSpaceBySlug,
+  originFromRequest: (request: Request) => new URL(request.url).origin,
 }));
 
 vi.mock('@/lib/atproto', () => ({

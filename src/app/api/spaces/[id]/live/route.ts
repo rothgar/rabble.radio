@@ -20,7 +20,7 @@
 //   { ok: false, error: string, message?: string }
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { resolveSpaceForUser, setSpaceLive, toPublicSpace } from '@/lib/spaces';
+import { originFromRequest, resolveSpaceForUser, setSpaceLive, toPublicSpace } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
 import { publishLiveStatus } from '@/lib/atproto';
 import {
@@ -45,32 +45,6 @@ export const runtime = 'nodejs';
 interface LiveBody {
   action?: unknown;
   thumb?: unknown;
-}
-
-function originFromRequest(request: Request): string {
-  try {
-    const url = new URL(request.url);
-    const host = url.host.toLowerCase();
-    if (
-      host === '0.0.0.0:3000' ||
-      host === '127.0.0.1:3000' ||
-      host === '0.0.0.0' ||
-      host === '127.0.0.1'
-    ) {
-      return (
-        process.env.NEXT_PUBLIC_APP_URL ||
-        process.env.PUBLIC_URL ||
-        'https://rabble.invalid'
-      );
-    }
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return (
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.PUBLIC_URL ||
-      'https://rabble.invalid'
-    );
-  }
 }
 
 export async function POST(

@@ -18,6 +18,7 @@ vi.mock('@/lib/session', () => ({ getCurrentUser: m.getCurrentUser }));
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: vi.fn(),
   getSpaceBySlug: vi.fn(),
+  originFromRequest: (request: Request) => new URL(request.url).origin,
   resolveSpaceForUser: m.resolveSpaceForUser,
   setSpaceLive: vi.fn(),
   updateSpace: m.updateSpace,

@@ -38,6 +38,7 @@ vi.mock('@/lib/spaces', () => ({
   resolveSpaceForUser: mockResolveSpaceForUser,
   setSpaceLive: mockSetSpaceLive,
   toPublicSpace: vi.fn((s: unknown) => s),
+  originFromRequest: (request: Request) => new URL(request.url).origin,
 }));
 
 vi.mock('@/lib/atproto', () => ({

@@ -765,6 +765,11 @@ export function canonicalizeOrigin(origin?: string | null): string {
   }
 }
 
+/** Public origin for URLs built from an incoming request (see `canonicalizeOrigin`). */
+export function originFromRequest(request: Request): string {
+  return canonicalizeOrigin(request.url);
+}
+
 /** Viewer- and recording-specific additions attached by `decoratePublicSpaces`. */
 export interface PublicSpaceExtras {
   replay?: PublicReplay | null;

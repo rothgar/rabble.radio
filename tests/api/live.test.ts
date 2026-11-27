@@ -63,6 +63,7 @@ vi.mock('@/lib/session', () => ({
 }));
 
 vi.mock('@/lib/spaces', () => ({
+  originFromRequest: (request: Request) => new URL(request.url).origin,
   resolveSpaceForUser: mockResolveSpaceForUser,
   setSpaceLive: mockSetSpaceLive,
   toPublicSpace: mockToPublicSpace,

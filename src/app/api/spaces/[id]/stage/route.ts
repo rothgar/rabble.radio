@@ -35,7 +35,7 @@ import {
   removeFromStage,
   StageError,
 } from '@/lib/stage';
-import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
+import { getSpaceById, getSpaceBySlug, originFromRequest } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -44,32 +44,6 @@ export const runtime = 'nodejs';
 interface StageBody {
   action?: unknown;
   targetIdentity?: unknown;
-}
-
-function originFromRequest(request: Request): string {
-  try {
-    const url = new URL(request.url);
-    const host = url.host.toLowerCase();
-    if (
-      host === '0.0.0.0:3000' ||
-      host === '127.0.0.1:3000' ||
-      host === '0.0.0.0' ||
-      host === '127.0.0.1'
-    ) {
-      return (
-        process.env.NEXT_PUBLIC_APP_URL ||
-        process.env.PUBLIC_URL ||
-        'https://rabble.invalid'
-      );
-    }
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return (
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.PUBLIC_URL ||
-      'https://rabble.invalid'
-    );
-  }
 }
 
 interface SuccessTokenBody {

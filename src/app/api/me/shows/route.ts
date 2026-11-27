@@ -8,7 +8,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
-import { defaultPublicOrigin, getHostedSpaces, toPublicSpace } from '@/lib/spaces';
+import { getHostedSpaces, originFromRequest, toPublicSpace } from '@/lib/spaces';
 import { getJoinedShows } from '@/lib/metrics';
 import { decoratePublicSpaces } from '@/lib/space-extras';
 
@@ -28,15 +28,6 @@ export interface JoinedShowSummary {
     tags: string[];
     host: { did: string; handle: string; displayName: string | null; avatarUrl: string | null };
   };
-}
-
-function originFromRequest(request: Request): string {
-  try {
-    const url = new URL(request.url);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return defaultPublicOrigin();
-  }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

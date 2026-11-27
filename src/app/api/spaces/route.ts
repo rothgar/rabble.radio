@@ -25,6 +25,7 @@ import {
   defaultShowTitle,
   findDefaultHostedSpace,
   getSpacesForUser,
+  originFromRequest,
   reopenSpace,
   resolveSpaceForUser,
   toPublicSpace,
@@ -44,32 +45,6 @@ const SCHEDULE_MAX_DAYS = 30;
 const SCHEDULE_MAX_MS = SCHEDULE_MAX_DAYS * 24 * 60 * 60 * 1000;
 /** `scheduledAt` must align to this UTC minute boundary. */
 const SCHEDULE_BOUNDARY_MINUTES = 15;
-
-function originFromRequest(request: Request): string {
-  try {
-    const url = new URL(request.url);
-    const host = url.host.toLowerCase();
-    if (
-      host === '0.0.0.0:3000' ||
-      host === '127.0.0.1:3000' ||
-      host === '0.0.0.0' ||
-      host === '127.0.0.1'
-    ) {
-      return (
-        process.env.NEXT_PUBLIC_APP_URL ||
-        process.env.PUBLIC_URL ||
-        'https://rabble.invalid'
-      );
-    }
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return (
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.PUBLIC_URL ||
-      'https://rabble.invalid'
-    );
-  }
-}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // The stale-show sweep (one LiveKit round trip per active show) runs from

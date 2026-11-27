@@ -16,6 +16,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
   getSpaceById,
   getSpaceBySlug,
+  originFromRequest,
   resolveSpaceForUser,
   setSpaceLive,
   toPublicSpace,
@@ -32,15 +33,6 @@ import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function originFromRequest(request: Request): string {
-  try {
-    const url = new URL(request.url);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return '';
-  }
-}
 
 export async function GET(
   request: NextRequest,

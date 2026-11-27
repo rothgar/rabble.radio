@@ -41,6 +41,7 @@ const { mockGetPendingInvite, mockListActiveSpeakers, mockGetSpaceById } = vi.ho
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: vi.fn(async () => null),
+  originFromRequest: (request: Request) => new URL(request.url).origin,
 }));
 
 vi.mock('@/lib/stage', () => ({

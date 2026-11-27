@@ -62,7 +62,7 @@ jobs:
                 android/*) android=true ;;
                 ios/*) ios=true ;;
                 .github/workflows/deploy.yml) web=true; android=true; ios=true ;;
-                docs/*|k8s/*|kanban/*|redesign/*|.discobox/*|.claude/*|.kimchi/*|*.md|TODO.md) ;;
+                docs/*|kanban/*|redesign/*|.discobox/*|.claude/*|*.md|TODO.md) ;;
                 *) web=true ;;
               esac
             done < <(git diff --name-only "$BEFORE" "$GITHUB_SHA")
@@ -317,9 +317,9 @@ jobs:
         # real LiveKit reachable, not just a dev-mode API key/secret pair.
         # `--dev` uses the devkey/secret keypair below by default. A TCP
         # connect, not an HTTP request, checks readiness (and whether one is
-        # already up) to match what this repo already trusts for this
-        # service (k8s/livekit.yaml's readinessProbe); only the Next.js
-        # server and the Simulator, both on this same host, need to reach
+        # already up), matching how this repo already treats LiveKit's own
+        # readiness; only the Next.js server and the Simulator, both on this
+        # same host, need to reach
         # it, so it's bound to loopback only. Skips starting a second
         # instance if something is already listening on 7880 — a
         # self-hosted runner's own persistent LiveKit (docs/DEPLOY.md,

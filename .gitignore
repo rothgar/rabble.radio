@@ -33,10 +33,6 @@ coverage/
 .idea/
 .vscode/
 
-# Kimchi local docs/ferments (keep project docs, ignore runtime artifacts)
-.kimchi/ferments/
-.kimchi/runtime.json
-
 # Temporary uploads / local data (if mounted locally)
 *.tmp
 uploads/

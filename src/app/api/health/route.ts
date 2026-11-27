@@ -3,8 +3,7 @@
 // GET /api/health
 //
 // Returns overall service status plus per-dependency health checks. Used by
-// the Kubernetes readiness/liveness probes and by humans/automation to verify
-// the deployment is healthy.
+// humans/automation to verify the deployment is healthy.
 //
 // Body:
 //   {

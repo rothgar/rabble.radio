@@ -19,7 +19,7 @@ Always prefix shell commands with `rtk` (see ~/CLAUDE.md).
 - `src/components/` UI; `src/components/ui/` holds the Button, Card, PageLayout primitives
 - `src/lib/` server logic (spaces, hosts, tags, livekit, session, atproto)
 - `tests/` mirrors `src/`: `tests/lib`, `tests/api`, `tests/components`, `tests/app`, `tests/security`
-- `prisma/` schema and migrations; `k8s/` manifests; `docs/` setup guides
+- `prisma/` schema and migrations; `docs/` setup guides
 
 ## Conventions
 
@@ -33,18 +33,6 @@ Always prefix shell commands with `rtk` (see ~/CLAUDE.md).
   Production is rabble.radio, the `production` wrangler environment, deployed
   only by a `v*` tag or a manual run of `deploy-production.yml`.
 
-## Working as a team
-
-Agent teams are enabled in `.claude/settings.json`. Claude is the lead and the `reviewer`. The three implementation roles (`frontend-dev`, `test-writer`, `dev`) are Claude wrappers in `.claude/agents/` that hand the task to a Kimchi persona in `.kimchi/agents/` through `scripts/kimchi-agent.sh`. The Kimchi persona file sets the model and thinking level; edit it there, not in the wrapper.
-
-- The lead breaks work into tasks with one owner each and no two tasks touching the same file.
-- Spawn implementation teammates with `isolation: worktree` on the Agent call itself; frontmatter alone is not honored for named teammates.
-- Task text sent to an implementation teammate must be self-contained: files to touch, expected behavior, and acceptance criteria. Kimchi sees only that text plus the persona and this file.
-- Wrappers verify with typecheck, lint, and test before marking a task complete, then message the `reviewer` with the branch and diff summary.
-- The reviewer never edits. It reports findings to the task owner by name and to the lead.
-- To run a persona by hand: `scripts/kimchi-agent.sh dev "Add a GET /api/health/db route that pings Prisma"`.
-- Skills: project skills live in `.claude/skills/<name>/SKILL.md` (Claude Code loads them; `rabble-design-system` covers tokens, layout rules and Tailwind gotchas). A persona lists `skills: [...]` in its frontmatter and `scripts/kimchi-agent.sh` appends those bodies to its system prompt, resolving `.claude/skills/` first and then `.kimchi/skills/` (Kimchi-only; `frontend-design` now lives in `.discobox/skills/` and is linked from `.claude/skills/`). `KIMCHI_AGENT_PRINT_PROMPT=1 scripts/kimchi-agent.sh frontend-dev x` prints the assembled prompt.
-
 ## Working in a discobox (issue-driven workers)
 
 Issues and features can be worked by agents in discobox sandboxes
@@ -54,8 +42,8 @@ app and a LiveKit dev server as boot services. `.discobox/hooks/` declares
 typecheck, lint and test hooks for boxes with a hook runner; run the three
 commands yourself regardless.
 
-- The repository's rules above apply unchanged; "Working as a team" does not:
-  in a box you are the only agent, and Kimchi wrappers are not available.
+- The repository's rules above apply unchanged; in a box you are the only
+  agent.
 - Verify at runtime with the `verify-recipes` skill (`.discobox/skills/`,
   also linked as `.claude/skills/verify-recipes`). Say in the PR what could not
   be driven (Bluesky login, Android, iOS, deploys).

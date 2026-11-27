@@ -74,12 +74,15 @@ starts; the manager holds the issue until then, whatever its automation
 settings. Do not add `bug`, `enhancement`, a priority or any other
 `status/*` label: that is the owner's decision.
 
-Body, at most 15 lines:
+Body, at most 15 lines. The repository is public: never quote the report
+or name the reporter. Paraphrase the problem in your own words with no
+names, handles, emails or pasted text; the verbatim report stays in
+`/admin/feedback`, which the marker line links to.
 
 ```
-> <the report, quoted; trim to the relevant part if long>
+**Report:** <your paraphrase of the problem, one or two sentences, no quotes>
 
-**From:** <handle or "signed out">, <platform> <appVersion or build id>, on <page or show> at <createdAt>
+**From:** <"signed in" or "signed out">, <platform> <appVersion or build id>, on <page or show> at <createdAt>
 **Context:** <one line from the diagnostics that matters, or "nothing notable">
 **Looks like:** <your one-sentence reading: what is probably wrong or being asked>
 **Suggested next step:** <reproduce via ..., ask the reporter ..., or product call>
@@ -87,7 +90,7 @@ Body, at most 15 lines:
 ```
 
 One marker line per report the issue covers. A comment on an existing
-issue is the quote, the From line and the marker.
+issue is the paraphrase, the From line and the marker.
 
 ## 5. Intake log
 

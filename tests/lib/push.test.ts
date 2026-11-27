@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({
   upsert: vi.fn(),
+  findUnique: vi.fn(),
   deleteMany: vi.fn(),
   count: vi.fn(),
   findMany: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/lib/db', () => ({
   prisma: {
     pushSubscription: {
       upsert: m.upsert,
+      findUnique: m.findUnique,
       deleteMany: m.deleteMany,
       count: m.count,
       findMany: m.findMany,
@@ -77,7 +79,23 @@ describe('vapidConfig / parseSubscription', () => {
 });
 
 describe('saveSubscription', () => {
+  it('caps new endpoints per account but still lets an owned one refresh', async () => {
+    m.findUnique.mockResolvedValue(null);
+    m.count.mockResolvedValue(20);
+    await expect(
+      saveSubscription('did:a', { endpoint: 'https://new', keys: { p256dh: 'p', auth: 'a' } }, null)
+    ).rejects.toMatchObject({ name: 'PushValidationError' });
+    expect(m.upsert).not.toHaveBeenCalled();
+
+    m.findUnique.mockResolvedValue({ did: 'did:a' });
+    m.upsert.mockResolvedValue({ id: 's1' });
+    await saveSubscription('did:a', { endpoint: 'https://new', keys: { p256dh: 'p', auth: 'a' } }, null);
+    expect(m.upsert).toHaveBeenCalledTimes(1);
+  });
+
   it('upserts by endpoint and re-owns it for the current user', async () => {
+    m.findUnique.mockResolvedValue(null);
+    m.count.mockResolvedValue(0);
     m.upsert.mockResolvedValue({ id: 's1' });
     const out = await saveSubscription('did:a', { endpoint: 'https://x', keys: { p256dh: 'p', auth: 'a' } }, 'UA');
     expect(out).toEqual({ id: 's1' });

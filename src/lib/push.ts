@@ -69,12 +69,24 @@ export function parseSubscription(input: unknown): SubscriptionInput {
   };
 }
 
+/** Most browser subscriptions one account may hold; devices come and go, so be generous but bounded. */
+export const MAX_SUBSCRIPTIONS_PER_USER = 20;
+
 /** Store (or re-own) a browser subscription for a user. */
 export async function saveSubscription(
   did: string,
   sub: SubscriptionInput,
   userAgent: string | null
 ): Promise<{ id: string }> {
+  const existing = await prisma.pushSubscription.findUnique({
+    where: { endpoint: sub.endpoint },
+    select: { did: true },
+  });
+  if (existing?.did !== did && (await countSubscriptions(did)) >= MAX_SUBSCRIPTIONS_PER_USER) {
+    throw new PushValidationError(
+      `At most ${MAX_SUBSCRIPTIONS_PER_USER} push subscriptions per account.`
+    );
+  }
   const row = await prisma.pushSubscription.upsert({
     where: { endpoint: sub.endpoint },
     create: { did, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, userAgent },

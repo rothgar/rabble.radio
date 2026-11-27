@@ -9,6 +9,7 @@
 // FEEDBACK_ADMIN_DIDS environment variable (comma separated).
 
 import { prisma } from '@/lib/db';
+import { didAllowlist, isAllowlisted } from '@/lib/did-allowlist';
 
 export const FEEDBACK_CATEGORIES = ['problem', 'idea', 'other', 'beta'] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
@@ -170,20 +171,12 @@ export async function listFeedback(limit = 100): Promise<FeedbackRow[]> {
 
 /** Parse FEEDBACK_ADMIN_DIDS (DIDs or handles, comma separated). */
 export function feedbackAdmins(env: Record<string, string | undefined> = process.env): Set<string> {
-  const raw = env.FEEDBACK_ADMIN_DIDS ?? '';
-  return new Set(
-    raw
-      .split(',')
-      .map((s) => s.trim().toLowerCase().replace(/^@/, ''))
-      .filter(Boolean)
-  );
+  return didAllowlist(env.FEEDBACK_ADMIN_DIDS);
 }
 
 export function isFeedbackAdmin(
   user: { did: string; handle: string } | null | undefined,
   env: Record<string, string | undefined> = process.env
 ): boolean {
-  if (!user) return false;
-  const admins = feedbackAdmins(env);
-  return admins.has(user.did.toLowerCase()) || admins.has(user.handle.toLowerCase());
+  return isAllowlisted(user, feedbackAdmins(env));
 }

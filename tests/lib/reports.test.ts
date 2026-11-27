@@ -105,11 +105,11 @@ describe('listReports', () => {
 });
 
 describe('reportAdmins / isReportAdmin', () => {
-  it('matches DIDs and handles from REPORT_ADMIN_DIDS, case-insensitively', () => {
-    const env = { REPORT_ADMIN_DIDS: 'did:plc:admin, @Justin.Test' };
-    expect(reportAdmins(env)).toEqual(new Set(['did:plc:admin', 'justin.test']));
+  it('matches DIDs from REPORT_ADMIN_DIDS case-insensitively, never handles', () => {
+    const env = { REPORT_ADMIN_DIDS: 'DID:plc:Admin, @Justin.Test' };
+    expect(reportAdmins(env)).toEqual(new Set(['did:plc:admin']));
     expect(isReportAdmin({ did: 'did:plc:admin', handle: 'x' }, env)).toBe(true);
-    expect(isReportAdmin({ did: 'did:plc:other', handle: 'justin.test' }, env)).toBe(true);
+    expect(isReportAdmin({ did: 'did:plc:other', handle: 'justin.test' }, env)).toBe(false);
     expect(isReportAdmin({ did: 'did:plc:other', handle: 'bob' }, env)).toBe(false);
     expect(isReportAdmin(null, env)).toBe(false);
     expect(isReportAdmin({ did: 'did:plc:admin', handle: 'x' }, {})).toBe(false);

@@ -73,3 +73,17 @@ describe('getCurrentUser', () => {
     expect(await getCurrentUser()).toBeNull();
   });
 });
+
+describe('isSafeRedirectPath', () => {
+  it('accepts same-origin paths and rejects anything the URL parser could turn into another host', async () => {
+    const { isSafeRedirectPath } = await import('@/lib/session');
+    expect(isSafeRedirectPath('/')).toBe(true);
+    expect(isSafeRedirectPath('/show/abc?x=1#top')).toBe(true);
+    expect(isSafeRedirectPath('https://evil.example')).toBe(false);
+    expect(isSafeRedirectPath('//evil.example')).toBe(false);
+    expect(isSafeRedirectPath('/\\evil.example')).toBe(false);
+    expect(isSafeRedirectPath('/\\/evil.example')).toBe(false);
+    expect(isSafeRedirectPath('/show\n')).toBe(false);
+    expect(isSafeRedirectPath('')).toBe(false);
+  });
+});

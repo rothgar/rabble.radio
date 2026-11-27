@@ -142,6 +142,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   log.info('oauth.callback.success', { did, handle });
 
   const publicUrl = process.env.PUBLIC_URL || 'https://rabble.invalid';
-  const redirectTo = new URL(loginRedirect ?? '/', publicUrl);
+  // Belt and braces with isSafeRedirectPath: never leave our own origin.
+  let redirectTo = new URL(loginRedirect ?? '/', publicUrl);
+  if (redirectTo.origin !== new URL(publicUrl).origin) redirectTo = new URL('/', publicUrl);
   return NextResponse.redirect(redirectTo, { status: 302 });
 }

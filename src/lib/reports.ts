@@ -8,6 +8,7 @@
 // REPORT_ADMIN_DIDS environment variable (comma separated).
 
 import { prisma } from '@/lib/db';
+import { didAllowlist, isAllowlisted } from '@/lib/did-allowlist';
 
 export const REPORT_REASON_MAX = 2000;
 
@@ -104,20 +105,12 @@ export async function listReports(limit = 100): Promise<ReportRow[]> {
 
 /** Parse REPORT_ADMIN_DIDS (DIDs or handles, comma separated). */
 export function reportAdmins(env: Record<string, string | undefined> = process.env): Set<string> {
-  const raw = env.REPORT_ADMIN_DIDS ?? '';
-  return new Set(
-    raw
-      .split(',')
-      .map((s) => s.trim().toLowerCase().replace(/^@/, ''))
-      .filter(Boolean)
-  );
+  return didAllowlist(env.REPORT_ADMIN_DIDS);
 }
 
 export function isReportAdmin(
   user: { did: string; handle: string } | null | undefined,
   env: Record<string, string | undefined> = process.env
 ): boolean {
-  if (!user) return false;
-  const admins = reportAdmins(env);
-  return admins.has(user.did.toLowerCase()) || admins.has(user.handle.toLowerCase());
+  return isAllowlisted(user, reportAdmins(env));
 }

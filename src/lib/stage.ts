@@ -277,6 +277,9 @@ export async function inviteToStage(
       'Only the show host can invite speakers.'
     );
   }
+  if (await isBlocked(space.id, input.targetIdentity)) {
+    throw new StageError('blocked', 403, 'That listener is blocked from this show.');
+  }
 
   // Best-effort validation that the target is currently in the room as
   // audience. If we cannot reach LiveKit we still proceed (single-replica

@@ -36,6 +36,9 @@ function parseIdentities(raw: string | null): string[] {
     .filter((s) => s.length > 0);
 }
 
+/** A room roster is at most a few dozen people; anything larger is abuse or a bug. */
+const MAX_IDENTITIES = 100;
+
 export async function GET(
   request: NextRequest
 ): Promise<NextResponse<{ users: UserBody[] } | ErrorBody>> {
@@ -47,6 +50,12 @@ export async function GET(
   const identities = parseIdentities(request.nextUrl.searchParams.get('identities'));
   if (identities.length === 0) {
     return NextResponse.json({ users: [] }, { status: 200 });
+  }
+  if (identities.length > MAX_IDENTITIES) {
+    return NextResponse.json(
+      { error: 'validation_error', message: `At most ${MAX_IDENTITIES} identities per request.` },
+      { status: 400 }
+    );
   }
 
   try {

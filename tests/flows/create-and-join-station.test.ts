@@ -52,6 +52,8 @@ vi.mock('@/lib/db', () => ({
         updatedAt: new Date('2025-01-01T00:00:00Z'),
       })),
     },
+    // The join route checks StageBlock; nobody is blocked in this flow.
+    stageBlock: { findUnique: vi.fn(async () => null) },
   },
 }));
 

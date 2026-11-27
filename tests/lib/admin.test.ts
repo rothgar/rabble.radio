@@ -70,17 +70,18 @@ beforeEach(() => {
 });
 
 describe('isAdmin', () => {
-  it('matches DIDs and handles from ADMIN_DIDS, case-insensitively', () => {
-    const env = { ADMIN_DIDS: 'did:plc:admin, @Justin.Test' };
+  it('matches DIDs from ADMIN_DIDS case-insensitively, never handles', () => {
+    const env = { ADMIN_DIDS: 'DID:plc:Admin, @Justin.Test' };
     expect(isAdmin({ did: 'did:plc:admin', handle: 'x' }, env)).toBe(true);
-    expect(isAdmin({ did: 'did:plc:other', handle: 'justin.test' }, env)).toBe(true);
+    // Handles are reassignable on Bluesky, so a listed handle grants nothing.
+    expect(isAdmin({ did: 'did:plc:other', handle: 'justin.test' }, env)).toBe(false);
     expect(isAdmin({ did: 'did:plc:other', handle: 'bob' }, env)).toBe(false);
     expect(isAdmin(null, env)).toBe(false);
     expect(isAdmin({ did: 'did:plc:admin', handle: 'x' }, {})).toBe(false);
   });
 
-  it('adminDids trims and lowercases entries', () => {
-    expect(adminDids({ ADMIN_DIDS: ' DID:PLC:A , @Bob ' })).toEqual(new Set(['did:plc:a', 'bob']));
+  it('adminDids trims and lowercases entries and drops anything that is not a DID', () => {
+    expect(adminDids({ ADMIN_DIDS: ' DID:PLC:A , @Bob ' })).toEqual(new Set(['did:plc:a']));
   });
 });
 

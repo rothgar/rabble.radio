@@ -88,6 +88,7 @@ vi.mock('@/lib/livekit', () => ({
   getLiveKitClient: mockGetLiveKitClient,
   generateToken: mockGenerateToken,
   muteParticipant: mockMuteParticipant,
+  removeParticipant: vi.fn(async () => undefined),
   roomNameForSpace: (id: string) => `space-${id}`,
 }));
 
@@ -152,6 +153,24 @@ describe('inviteToStage', () => {
     // No origin given, so the best-effort push to the new speaker's own
     // followers is skipped, same as the equivalent acceptStageInvite tests.
     expect(mockPushHostFollowersOnAir).not.toHaveBeenCalled();
+  });
+
+  it('refuses to invite an identity the host has blocked', async () => {
+    const stage = await import('@/lib/stage');
+    fakeDb.reset();
+    await stage.blockFromSpace({
+      spaceId: 'sp1',
+      hostDid: 'did:plc:host123',
+      targetIdentity: 'did:plc:listener',
+    });
+    await expect(
+      stage.inviteToStage({
+        spaceId: 'sp1',
+        hostDid: 'did:plc:host123',
+        targetIdentity: 'did:plc:listener',
+      })
+    ).rejects.toMatchObject({ code: 'blocked', status: 403 });
+    expect(await stage.listActiveSpeakers('sp1')).not.toContain('did:plc:listener');
   });
 
   it("notifies the invited guest's own followers that they are on air, not just the host's", async () => {

@@ -17,25 +17,18 @@ import { removeParticipant, roomNameForSpace } from '@/lib/livekit';
 import { recordLeave } from '@/lib/metrics';
 import { endLiveShow } from '@/lib/live';
 import { logger } from '@/lib/logger';
+import { didAllowlist, isAllowlisted } from '@/lib/did-allowlist';
 
-/** Parse ADMIN_DIDS (DIDs or handles, comma separated). */
+/** Parse ADMIN_DIDS (DIDs, comma separated). */
 export function adminDids(env: Record<string, string | undefined> = process.env): Set<string> {
-  const raw = env.ADMIN_DIDS ?? '';
-  return new Set(
-    raw
-      .split(',')
-      .map((s) => s.trim().toLowerCase().replace(/^@/, ''))
-      .filter(Boolean)
-  );
+  return didAllowlist(env.ADMIN_DIDS);
 }
 
 export function isAdmin(
   user: { did: string; handle: string } | null | undefined,
   env: Record<string, string | undefined> = process.env
 ): boolean {
-  if (!user) return false;
-  const admins = adminDids(env);
-  return admins.has(user.did.toLowerCase()) || admins.has(user.handle.toLowerCase());
+  return isAllowlisted(user, adminDids(env));
 }
 
 export interface PlatformOverview {

@@ -134,7 +134,10 @@ export async function POST(
   const spaceUrl = `${origin}/show/${space.id}`;
   const session = { did: user.did, handle: user.handle };
   const thumb =
-    typeof body.thumb === 'string' && body.thumb.length > 0
+    typeof body.thumb === 'string' &&
+    body.thumb.length > 0 &&
+    body.thumb.length <= 2048 &&
+    body.thumb.startsWith('https://')
       ? body.thumb
       : undefined;
 

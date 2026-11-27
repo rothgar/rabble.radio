@@ -35,11 +35,11 @@
     "S3_ENDPOINT": "https://0f8fe574f3489eda5a599104efd24d26.r2.cloudflarestorage.com",
     "RECORDING_BUCKET": "rabble-dev-recordings",
     "LOG_LEVEL": "info",
-    // Who can read /admin/feedback and GET /api/feedback (DIDs or handles).
+    // Who can read /admin/feedback and GET /api/feedback (DIDs only; handles are reassignable).
     "FEEDBACK_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
-    // Who can read /admin/reports and GET /api/reports (DIDs or handles).
+    // Who can read /admin/reports and GET /api/reports (DIDs only; handles are reassignable).
     "REPORT_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
-    // Who can read /admin and act on POST /api/admin/users (DIDs or handles).
+    // Who can read /admin and act on POST /api/admin/users (DIDs only; handles are reassignable).
     "ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
     // Shown to a banned user who tries to log in.
     "SUPPORT_EMAIL": "justin.garrison@siderolabs.com",

@@ -15,6 +15,7 @@ const {
   mockGetLiveKitClient,
   mockFindUserByDid,
   mockGetIceServers,
+  mockIsBlocked,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockGetSpaceById: vi.fn(),
@@ -24,6 +25,11 @@ const {
   mockGetLiveKitClient: vi.fn(),
   mockFindUserByDid: vi.fn(),
   mockGetIceServers: vi.fn(),
+  mockIsBlocked: vi.fn(async () => false),
+}));
+
+vi.mock('@/lib/stage', () => ({
+  isBlocked: mockIsBlocked,
 }));
 
 vi.mock('@/lib/metrics', () => ({
@@ -104,6 +110,21 @@ beforeEach(() => {
 });
 
 describe('POST /api/spaces/[id]/join', () => {
+  it('refuses a signed-in listener the host blocked from the show', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:blocked', handle: 'blocked.test' });
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    mockIsBlocked.mockResolvedValueOnce(true);
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(
+      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'sp1' }) }
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe('blocked');
+    expect(mockIsBlocked).toHaveBeenCalledWith('sp1', 'did:plc:blocked');
+    expect(mockGenerateToken).not.toHaveBeenCalled();
+  });
+
   it('omits iceServers when no TURN relay is configured', async () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());

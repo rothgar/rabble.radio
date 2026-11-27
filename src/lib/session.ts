@@ -74,11 +74,22 @@ export async function setSession(data: BlueskySession): Promise<void> {
 }
 
 /**
+ * True for a same-origin path: starts with one "/", and contains no "\\"
+ * (the URL parser treats a backslash as a slash, so "/\\evil.com" would
+ * resolve to https://evil.com/) and no control characters.
+ */
+export function isSafeRedirectPath(next: string): boolean {
+  if (!next.startsWith('/') || next.startsWith('//')) return false;
+  if (/[\\\u0000-\u001f]/.test(next)) return false;
+  return true;
+}
+
+/**
  * Store a post-login redirect path in the session so the OAuth callback can
- * pick it up. Only accepts relative paths (must start with "/").
+ * pick it up. Only accepts same-origin paths (see isSafeRedirectPath).
  */
 export async function saveLoginRedirect(next: string): Promise<void> {
-  if (!next.startsWith('/') || next.startsWith('//')) return;
+  if (!isSafeRedirectPath(next)) return;
   const cookieStore = await cookies();
   const session = await getIronSession<AppSessionData>(cookieStore, sessionOptions());
   session.loginRedirect = next;

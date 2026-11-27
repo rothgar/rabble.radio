@@ -136,10 +136,10 @@ describe('listFeedback', () => {
 });
 
 describe('isFeedbackAdmin', () => {
-  it('matches DIDs and handles from FEEDBACK_ADMIN_DIDS, case-insensitively', () => {
-    const env = { FEEDBACK_ADMIN_DIDS: 'did:plc:admin, @Justin.Test' };
+  it('matches DIDs from FEEDBACK_ADMIN_DIDS case-insensitively, never handles', () => {
+    const env = { FEEDBACK_ADMIN_DIDS: 'DID:plc:Admin, @Justin.Test' };
     expect(isFeedbackAdmin({ did: 'did:plc:admin', handle: 'x' }, env)).toBe(true);
-    expect(isFeedbackAdmin({ did: 'did:plc:other', handle: 'justin.test' }, env)).toBe(true);
+    expect(isFeedbackAdmin({ did: 'did:plc:other', handle: 'justin.test' }, env)).toBe(false);
     expect(isFeedbackAdmin({ did: 'did:plc:other', handle: 'bob' }, env)).toBe(false);
     expect(isFeedbackAdmin(null, env)).toBe(false);
     expect(isFeedbackAdmin({ did: 'did:plc:admin', handle: 'x' }, {})).toBe(false);

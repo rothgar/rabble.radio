@@ -27,7 +27,13 @@ async function handleLogout(request: Request): Promise<NextResponse> {
   return NextResponse.redirect(url, { status: 302 });
 }
 
+// GET exists for the /logout page's meta refresh and plain links. A link on
+// another site would also hit it with the SameSite=Lax cookie attached, so
+// refuse cross-site navigations (every current browser sends Sec-Fetch-Site).
 export async function GET(request: Request): Promise<NextResponse> {
+  if (request.headers.get('sec-fetch-site') === 'cross-site') {
+    return NextResponse.redirect(new URL('/', request.url), { status: 303 });
+  }
   return handleLogout(request);
 }
 

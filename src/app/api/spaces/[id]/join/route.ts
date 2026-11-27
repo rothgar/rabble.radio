@@ -28,6 +28,7 @@ import {
 } from '@/lib/livekit';
 import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { isBlocked } from '@/lib/stage';
 import { prisma } from '@/lib/db';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 import { newAnonymousIdentity } from '@/lib/anonymous';
@@ -86,6 +87,14 @@ export async function POST(
   }
   if (!space) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
+  // A listener the host blocked from this show stays out.
+  if (!anonymous && (await isBlocked(space.id, user.did))) {
+    return NextResponse.json(
+      { error: 'blocked', message: 'You have been removed from this show.' },
+      { status: 403 }
+    );
   }
 
   const role: SpaceRole =

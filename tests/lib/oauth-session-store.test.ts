@@ -3,7 +3,6 @@
 // Targeted unit tests for the Prisma-backed ATProto OAuth session store.
 // Mocks Prisma so this runs without a real database.
 
-import type { NodeSavedSession } from '@atproto/oauth-client-node';
 import { JoseKey } from '@atproto/jwk-jose';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPrismaSessionStore, withDpopKey, type SimpleStore } from '@/lib/oauth-session-store';
@@ -22,7 +21,8 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-const sampleSession: NodeSavedSession = {
+// Shape of what @atproto/oauth-client hands the session store (dpopJwk + tokenSet).
+const sampleSession = {
   authMethod: { method: 'none' },
   dpopJwk: { kty: 'EC', crv: 'P-256', x: 'abc', y: 'def' } as const,
   tokenSet: {

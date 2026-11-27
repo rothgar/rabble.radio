@@ -2,16 +2,13 @@
 //
 // Verifies the OAuth client metadata builder used for local development. The
 // real OAuth flow requires a running PDS + browser interaction; here we
-// confirm the loopback metadata has the shape Bluesky expects.
+// confirm the loopback mode is picked when PUBLIC_URL is unset.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // The modules under test pull in @/lib/db transitively; stub it so no real
 // PrismaClient is constructed (its engine load rejects asynchronously).
 vi.mock('@/lib/db', () => ({ prisma: {} }));
-import {
-  buildAtprotoLoopbackClientMetadata,
-} from '@atproto/oauth-client-node';
 import { importPKCS8 } from 'jose';
 
 /**
@@ -35,28 +32,6 @@ function restoreEnv(prev: Record<string, string | undefined>): void {
     else process.env[k] = v;
   }
 }
-
-describe('OAuth client metadata (loopback)', () => {
-  it('builds metadata with a http://127.0.0.1 client_id', () => {
-    const meta = buildAtprotoLoopbackClientMetadata({
-      scope: 'atproto transition:generic',
-    });
-    expect(meta.client_id).toMatch(/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])/);
-    expect(meta.scope).toContain('atproto');
-    expect(Array.isArray(meta.redirect_uris)).toBe(true);
-    expect(meta.redirect_uris.length).toBeGreaterThan(0);
-    expect(meta.token_endpoint_auth_method).toBe('none');
-  });
-
-  it('each redirect_uri is a loopback URL', () => {
-    const meta = buildAtprotoLoopbackClientMetadata({
-      scope: 'atproto',
-    });
-    for (const uri of meta.redirect_uris) {
-      expect(uri).toMatch(/^http:\/\/(127\.0\.0\.1|\[::1\])/);
-    }
-  });
-});
 
 describe('oauthMode()', () => {
   const prev: Record<string, string | undefined> = {};

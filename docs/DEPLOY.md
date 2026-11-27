@@ -33,7 +33,7 @@ runs any combination by hand (iOS is off by default there too). Runs on
 `main` queue behind each other and never cancel one in progress.
 
 Worker secrets (`SESSION_SECRET`, `JWKS_PRIVATE_KEY`, `LIVEKIT_*`, `S3_*`,
-`VAPID_PRIVATE_KEY`, `FEEDBACK_READ_TOKEN`) are not touched by a deploy; set them once with
+`VAPID_PRIVATE_KEY`, `FEEDBACK_READ_TOKEN`, `CRASH_REPORT_SECRET`) are not touched by a deploy; set them once with
 `wrangler secret put NAME --name rabble-dev`.
 
 ## One-time setup
@@ -185,6 +185,7 @@ dry run. Before the first real deploy:
    | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | An R2 API token, Object Read & Write, limited to `rabble-prod-recordings`. LiveKit egress uploads recordings with it. |
    | `VAPID_PRIVATE_KEY` | `node scripts/gen-vapid.mjs` prints both keys. The private one is the secret; put the public one in `env.production.vars` as `VAPID_PUBLIC_KEY` in `wrangler.jsonc` and commit it. Without it web push is off and everything else works. |
    | `FEEDBACK_READ_TOKEN` | `openssl rand -hex 32`. The daily feedback intake reads rabble.rodeo only; give the QA box a second discobox secret routed to `GET rabble.radio/api/feedback` when production feedback should be triaged too. |
+   | `CRASH_REPORT_SECRET` | `openssl rand -hex 32`. `POST /api/crashes` (issue #184) checks it against the `X-Rabble-App-Secret` header; until it is set the check is a no-op. The Android and iOS builds need the same value (`-PrabbleCrashSecret=` for Gradle, `RABBLE_CRASH_SECRET` for the Xcode build) or their crash reports get a 401. |
 
    `wrangler secret list --env production` shows what is set.
 

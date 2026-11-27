@@ -1,6 +1,6 @@
 // tests/api/crashes.test.ts
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const { mockGetCurrentUser, mockLoggerError } = vi.hoisted(() => ({
@@ -15,19 +15,27 @@ vi.mock('@/lib/logger', () => ({
 
 import { POST } from '@/app/api/crashes/route';
 
-function post(body: unknown): Promise<Response> {
+function post(body: unknown, headers?: Record<string, string>): Promise<Response> {
   return POST(
     new NextRequest('http://localhost/api/crashes', {
       method: 'POST',
       body: typeof body === 'string' ? body : JSON.stringify(body),
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...headers },
     })
   );
 }
 
+const ORIGINAL_SECRET = process.env.CRASH_REPORT_SECRET;
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentUser.mockResolvedValue(null);
+  delete process.env.CRASH_REPORT_SECRET;
+});
+
+afterEach(() => {
+  if (ORIGINAL_SECRET === undefined) delete process.env.CRASH_REPORT_SECRET;
+  else process.env.CRASH_REPORT_SECRET = ORIGINAL_SECRET;
 });
 
 describe('POST /api/crashes', () => {
@@ -123,5 +131,26 @@ describe('POST /api/crashes', () => {
     const first = mockLoggerError.mock.calls[0][1].err.message;
     const second = mockLoggerError.mock.calls[1][1].err.message;
     expect(first).not.toBe(second);
+  });
+
+  it('accepts any request when CRASH_REPORT_SECRET is not configured', async () => {
+    const res = await post({ platform: 'android', message: 'boom' });
+    expect(res.status).toBe(204);
+  });
+
+  it('rejects a missing or wrong app secret once CRASH_REPORT_SECRET is configured', async () => {
+    process.env.CRASH_REPORT_SECRET = 'sekrit';
+    const missing = await post({ platform: 'android', message: 'boom' });
+    expect(missing.status).toBe(401);
+    const wrong = await post({ platform: 'android', message: 'boom' }, { 'x-rabble-app-secret': 'nope' });
+    expect(wrong.status).toBe(401);
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it('accepts the matching app secret', async () => {
+    process.env.CRASH_REPORT_SECRET = 'sekrit';
+    const res = await post({ platform: 'android', message: 'boom' }, { 'x-rabble-app-secret': 'sekrit' });
+    expect(res.status).toBe(204);
+    expect(mockLoggerError).toHaveBeenCalledTimes(1);
   });
 });

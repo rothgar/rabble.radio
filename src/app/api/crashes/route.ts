@@ -10,14 +10,35 @@
 //   Body: { platform: 'android' | 'ios', message, exceptionClass?, stack?,
 //     appVersion?, osVersion?, device?, screen?, fatal? }. Only platform
 //   and message are required; everything else is an optional string.
-//   Response: 204 on success, 400 on a bad body.
+//   Unauthenticated and otherwise unthrottled, so anyone can put arbitrary
+//   text into the error logs `scripts/log-triage.mjs` turns into issues
+//   (issue #184). The Android/iOS builds embed `CRASH_REPORT_SECRET` and
+//   send it as X-Rabble-App-Secret; while the Worker secret of the same
+//   name is unset this check is a no-op (dev, and until the owner sets it
+//   in production). Extractable from the APK/IPA like any client secret,
+//   so this only stops casual abuse, not a targeted attacker — a
+//   Cloudflare rate-limiting rule on the path is the other half and is
+//   dashboard-only (no code here).
+//   Response: 204 on success, 400 on a bad body, 401 missing/wrong secret.
 
+import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const APP_SECRET_HEADER = 'x-rabble-app-secret';
+
+/** True unless CRASH_REPORT_SECRET is configured and the header doesn't match it. */
+function hasAppSecret(request: NextRequest): boolean {
+  const expected = process.env.CRASH_REPORT_SECRET;
+  if (!expected) return true;
+  const given = Buffer.from(request.headers.get(APP_SECRET_HEADER) ?? '');
+  const want = Buffer.from(expected);
+  return given.length === want.length && timingSafeEqual(given, want);
+}
 
 const MESSAGE_MAX = 2000;
 const STACK_MAX = 8000;
@@ -43,6 +64,10 @@ function badRequest(message: string): NextResponse {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (!hasAppSecret(request)) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   let body: CrashBody;
   try {
     body = (await request.json()) as CrashBody;

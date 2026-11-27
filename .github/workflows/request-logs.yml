@@ -71,7 +71,6 @@ jobs:
           fi
           node scripts/request-logs.mjs "${args[@]}" 2>&1 | tee timelines.txt
       - name: Comment on the issue
-        if: ${{ !cancelled() }}
         env:
           ISSUE: ${{ inputs.issue }}
           SERVICE: ${{ inputs.service }}

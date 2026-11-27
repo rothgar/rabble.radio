@@ -12,11 +12,14 @@ const TELEMETRY = (account) =>
 
 export const filter = (key, operation, value, type = 'string') => ({ kind: 'filter', key, operation, type, value });
 
+// The API wants the window as epoch milliseconds; callers may pass ISO strings.
+const ms = (v) => (typeof v === 'number' ? v : Date.parse(v));
+
 /** Run one events query. `filters` are and-ed after the service filter. */
 export async function telemetryQuery({ account, token, service, filters, timeframe, limit = 2000, queryId }) {
   const body = {
     queryId: queryId ?? `workers-logs-${service}`,
-    timeframe,
+    timeframe: { from: ms(timeframe.from), to: ms(timeframe.to) },
     view: 'events',
     limit,
     parameters: {
@@ -31,9 +34,17 @@ export async function telemetryQuery({ account, token, service, filters, timefra
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(60000),
   });
-  const json = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let json = {};
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // not JSON: the status and a snippet of the body are the message
+  }
   if (!res.ok || json.success === false) {
-    const msg = (json.errors ?? []).map((e) => `${e.code}: ${e.message}`).join('; ') || `HTTP ${res.status}`;
+    const msg =
+      (json.errors ?? []).map((e) => `${e.code}: ${e.message}`).join('; ') ||
+      `HTTP ${res.status} ${text.replace(/\s+/g, ' ').slice(0, 300)}`;
     throw new Error(`observability query for ${service} failed: ${msg}`);
   }
   return json.result?.events?.events ?? json.result?.events ?? [];

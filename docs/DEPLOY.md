@@ -111,6 +111,14 @@ already turn `rabble-prod`'s error-level logs and elevated P95 wall time into
 (`.github/workflows/log-triage.yml`); these consoles are for looking at
 either environment, not alerting — alerting is production only.
 
+When such an issue asks which D1 call hung, `scripts/request-logs.mjs` prints
+a request's log timeline from Workers Logs and flags any `db.query.start`
+without a `done`: `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node
+scripts/request-logs.mjs --service rabble-dev --route /api/me/shows --from
+<iso> --to <iso>` (or `--request <id>`). Its output is redacted and safe to
+paste on the issue; Workers Logs keeps only a few days, so run it soon after
+the triage comment.
+
 ## Rollback and uptime
 
 Both deploy workflows record the live Worker version before deploying. If

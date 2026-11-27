@@ -170,6 +170,23 @@ async function resolveSpace(spaceId: string): Promise<{
 }
 
 /**
+ * Resolve a space and require that `hostDid` owns it, throwing
+ * StageError('forbidden', 403, …) with `verb` worked into the message
+ * (e.g. "invite speakers") if not. Used by every host-only action below.
+ */
+async function requireHost(
+  spaceId: string,
+  hostDid: string,
+  verb: string
+): Promise<Awaited<ReturnType<typeof resolveSpace>>> {
+  const space = await resolveSpace(spaceId);
+  if (space.hostId !== hostDid) {
+    throw new StageError('forbidden', 403, `Only the show host can ${verb}.`);
+  }
+  return space;
+}
+
+/**
  * List the participants currently in the LiveKit room and return only those
  * that are audience (cannot publish). If the LiveKit call fails we degrade
  * gracefully — the invite is still recorded — but the caller is told.
@@ -269,14 +286,7 @@ export async function inviteToStage(
     );
   }
 
-  const space = await resolveSpace(input.spaceId);
-  if (space.hostId !== input.hostDid) {
-    throw new StageError(
-      'forbidden',
-      403,
-      'Only the show host can invite speakers.'
-    );
-  }
+  const space = await requireHost(input.spaceId, input.hostDid, 'invite speakers');
   if (await isBlocked(space.id, input.targetIdentity)) {
     throw new StageError('blocked', 403, 'That listener is blocked from this show.');
   }
@@ -452,14 +462,7 @@ export async function removeFromStage(
     );
   }
 
-  const space = await resolveSpace(input.spaceId);
-  if (space.hostId !== input.hostDid) {
-    throw new StageError(
-      'forbidden',
-      403,
-      'Only the show host can remove speakers.'
-    );
-  }
+  const space = await requireHost(input.spaceId, input.hostDid, 'remove speakers');
 
   await unmarkSpeaker(space.id, input.targetIdentity);
   // Clear any pending invite just in case.
@@ -515,14 +518,7 @@ export async function kickFromSpace(
       'targetIdentity is required.'
     );
   }
-  const space = await resolveSpace(input.spaceId);
-  if (space.hostId !== input.hostDid) {
-    throw new StageError(
-      'forbidden',
-      403,
-      'Only the show host can kick participants.'
-    );
-  }
+  const space = await requireHost(input.spaceId, input.hostDid, 'kick participants');
   await unmarkSpeaker(space.id, input.targetIdentity);
   await deleteInvite(space.id, input.targetIdentity);
   await removeParticipant(space.roomName, input.targetIdentity);
@@ -562,14 +558,7 @@ export async function blockFromSpace(
       'targetIdentity is required.'
     );
   }
-  const space = await resolveSpace(input.spaceId);
-  if (space.hostId !== input.hostDid) {
-    throw new StageError(
-      'forbidden',
-      403,
-      'Only the show host can block participants.'
-    );
-  }
+  const space = await requireHost(input.spaceId, input.hostDid, 'block participants');
   await prisma.stageBlock.upsert({
     where: { spaceId_identity: { spaceId: space.id, identity: input.targetIdentity } },
     create: { spaceId: space.id, identity: input.targetIdentity },
@@ -603,14 +592,7 @@ export async function muteSpeaker(
       'targetIdentity is required.'
     );
   }
-  const space = await resolveSpace(input.spaceId);
-  if (space.hostId !== input.hostDid) {
-    throw new StageError(
-      'forbidden',
-      403,
-      'Only the show host can mute speakers.'
-    );
-  }
+  const space = await requireHost(input.spaceId, input.hostDid, 'mute speakers');
   await muteParticipant(space.roomName, input.targetIdentity, input.muted);
   return { ok: true, muted: input.muted };
 }

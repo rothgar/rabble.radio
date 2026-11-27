@@ -63,6 +63,30 @@ describe('GET /music/[file]', () => {
     const res = await GET(req(), ctx('carefree.mp3'));
     expect(res.status).toBe(404);
   });
+
+  it('504s instead of hanging when the R2 head() never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      m.head.mockImplementation(() => new Promise(() => undefined));
+      const pending = GET(req(), ctx('carefree.mp3'));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).toBe(504);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('504s instead of hanging when the R2 get() never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      m.get.mockImplementation(() => new Promise(() => undefined));
+      const pending = GET(req(), ctx('carefree.mp3'));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).toBe(504);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('HEAD /music/[file]', () => {

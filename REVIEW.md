@@ -515,6 +515,21 @@ code, and mistakes already made there.
   porting iOS's `Wordmark` (icon + text, one accessibility element) to
   Android's `Wordmark` in `Common.kt` for issue #157.
 
+## src/lib/admin.ts (getPlatformActivity week-bucket boundary)
+
+- The 12-week series queries compute `week = floor((now - col) / 7days)` in
+  SQL and only keep buckets 0..11 (`seriesFromBuckets`, `WEEKS_OF_SERIES`).
+  Admitting rows with `col >= seriesStartIso` (the naive range) lets a row
+  whose timestamp lands exactly on `seriesStartIso` compute `week = 12` —
+  inside the WHERE clause but outside the array `seriesFromBuckets` ever
+  reads, so it is silently dropped from the output instead of landing in the
+  oldest bucket (issue #178's review, round 1). Fixed by admitting `col >
+  seriesStartIso` (strictly exclusive) so every admitted row's week is
+  provably in 0..11. Any future "N buckets of fixed width, bucketed in SQL,
+  consumed as a dense 0..N-1 array in JS" query needs the same exclusive
+  lower bound, or a clamp where the array is built — the WHERE clause and
+  the array's index range must agree exactly, not just be "close enough".
+
 ## src/components/SiteHeader.tsx and src/components/NocturneShell.tsx (brand link touch target)
 
 - A fix that adds `min-h-touch` to a tappable element without `min-w-touch`

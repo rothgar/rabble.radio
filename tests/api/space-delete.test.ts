@@ -6,21 +6,27 @@
 // out of scope here (handled by a separate job).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NextRequest } from 'next/server';
+import { makeSpace } from '../helpers/factories';
+import { jsonRequest } from '../helpers/request';
+import { mockSession, prismaStub } from '../helpers/mocks';
+
+// The route is imported dynamically inside each test below, so (unlike
+// tests/api/reactions.test.ts, which imports it statically) these vi.mock
+// factories run lazily at test time: they can call the tests/helpers/mocks
+// builders directly, since by then the rest of this file's top level has
+// already executed.
+const mockGetCurrentUser = mockSession();
+const prisma = prismaStub({ space: ['delete'] });
 
 const {
-  mockGetCurrentUser,
   mockResolveSpaceForUser,
   mockSetSpaceLive,
   mockDeleteLiveStatus,
-  mockPrismaSpaceDelete,
   mockLogger,
 } = vi.hoisted(() => ({
-  mockGetCurrentUser: vi.fn(),
   mockResolveSpaceForUser: vi.fn(),
   mockSetSpaceLive: vi.fn(),
   mockDeleteLiveStatus: vi.fn(),
-  mockPrismaSpaceDelete: vi.fn(),
   mockLogger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -45,41 +51,11 @@ vi.mock('@/lib/atproto', () => ({
   deleteLiveStatus: mockDeleteLiveStatus,
 }));
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
-    space: {
-      delete: mockPrismaSpaceDelete,
-    },
-  },
-}));
+vi.mock('@/lib/db', () => ({ prisma }));
 
 vi.mock('@/lib/logger', () => ({
   logger: mockLogger,
 }));
-
-function makeSpace(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'sp1',
-    slug: 'my-room-abc12345',
-    title: 'My room',
-    description: null,
-    hostId: 'did:plc:host123',
-    isLive: false,
-    status: 'active',
-    scheduledAt: null,
-    expiresAt: null,
-    createdAt: new Date('2025-01-02T00:00:00Z'),
-    updatedAt: new Date('2025-01-02T00:00:00Z'),
-    host: {
-      id: 'u1',
-      did: 'did:plc:host123',
-      handle: 'alice.bsky.social',
-      displayName: 'Alice',
-      avatarUrl: null,
-    },
-    ...overrides,
-  };
-}
 
 const HOST = {
   did: 'did:plc:host123',
@@ -91,16 +67,14 @@ beforeEach(() => {
   // leftover mockResolvedValueOnce values from earlier tests do not leak.
   vi.resetAllMocks();
   // Space deletion always succeeds unless a test wants to simulate failure.
-  mockPrismaSpaceDelete.mockResolvedValue({ id: 'sp1' });
+  prisma.space.delete.mockResolvedValue({ id: 'sp1' });
   // External cleanup helpers succeed by default.
   mockSetSpaceLive.mockResolvedValue(undefined);
   mockDeleteLiveStatus.mockResolvedValue({ ok: true });
 });
 
 function makeRequest(id: string) {
-  return new NextRequest(`http://localhost/api/spaces/${id}`, {
-    method: 'DELETE',
-  });
+  return jsonRequest('DELETE', `http://localhost/api/spaces/${id}`);
 }
 
 /**
@@ -125,7 +99,7 @@ describe('DELETE /api/spaces/[id]', () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error).toBe('unauthorized');
-    expect(mockPrismaSpaceDelete).not.toHaveBeenCalled();
+    expect(prisma.space.delete).not.toHaveBeenCalled();
     expect(mockResolveSpaceForUser).not.toHaveBeenCalled();
   });
 
@@ -140,7 +114,7 @@ describe('DELETE /api/spaces/[id]', () => {
     expect(body.ok).toBe(false);
     expect(body.error).toBe('not_found');
     expect(mockResolveSpaceForUser).not.toHaveBeenCalled();
-    expect(mockPrismaSpaceDelete).not.toHaveBeenCalled();
+    expect(prisma.space.delete).not.toHaveBeenCalled();
   });
 
   it('returns 403 when user is not the host', async () => {
@@ -157,7 +131,7 @@ describe('DELETE /api/spaces/[id]', () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error).toBe('forbidden');
-    expect(mockPrismaSpaceDelete).not.toHaveBeenCalled();
+    expect(prisma.space.delete).not.toHaveBeenCalled();
     expect(mockSetSpaceLive).not.toHaveBeenCalled();
   });
 
@@ -172,7 +146,7 @@ describe('DELETE /api/spaces/[id]', () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error).toBe('not_found');
-    expect(mockPrismaSpaceDelete).not.toHaveBeenCalled();
+    expect(prisma.space.delete).not.toHaveBeenCalled();
   });
 
   it('deletes an offline space and returns ok', async () => {
@@ -194,8 +168,8 @@ describe('DELETE /api/spaces/[id]', () => {
     expect(mockSetSpaceLive).not.toHaveBeenCalled();
     expect(mockDeleteLiveStatus).not.toHaveBeenCalled();
     // The space row is removed.
-    expect(mockPrismaSpaceDelete).toHaveBeenCalledTimes(1);
-    expect(mockPrismaSpaceDelete).toHaveBeenCalledWith({
+    expect(prisma.space.delete).toHaveBeenCalledTimes(1);
+    expect(prisma.space.delete).toHaveBeenCalledWith({
       where: { id: 'sp1' },
     });
   });
@@ -224,11 +198,9 @@ describe('DELETE /api/spaces/[id]', () => {
 
     // Ordering: setSpaceLive → deleteLiveStatus → prisma.space.delete.
     expect(callIndex(mockSetSpaceLive)).toBeLessThan(callIndex(mockDeleteLiveStatus));
-    expect(callIndex(mockDeleteLiveStatus)).toBeLessThan(
-      callIndex(mockPrismaSpaceDelete)
-    );
+    expect(callIndex(mockDeleteLiveStatus)).toBeLessThan(callIndex(prisma.space.delete));
 
-    expect(mockPrismaSpaceDelete).toHaveBeenCalledWith({
+    expect(prisma.space.delete).toHaveBeenCalledWith({
       where: { id: 'sp1' },
     });
   });
@@ -257,7 +229,7 @@ describe('DELETE /api/spaces/[id]', () => {
     expect(mockDeleteLiveStatus).toHaveBeenCalledTimes(1);
     // The route should log a warning rather than propagate the error.
     expect(mockLogger.warn).toHaveBeenCalled();
-    expect(mockPrismaSpaceDelete).toHaveBeenCalledWith({
+    expect(prisma.space.delete).toHaveBeenCalledWith({
       where: { id: 'sp1' },
     });
   });

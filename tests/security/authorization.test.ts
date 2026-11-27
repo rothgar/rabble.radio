@@ -9,6 +9,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { makeSpace } from '../helpers/factories';
+import { jsonRequest } from '../helpers/request';
+import { prismaStub } from '../helpers/mocks';
 
 // Hoisted mocks
 const {
@@ -23,7 +26,6 @@ const {
   mockSetSpaceLive,
   mockPublishLiveStatus,
   mockDeleteLiveStatus,
-  mockUpsert,
   mockGetProfile,
   mockAuthorize,
   mockCallback,
@@ -39,11 +41,15 @@ const {
   mockSetSpaceLive: vi.fn(),
   mockPublishLiveStatus: vi.fn(),
   mockDeleteLiveStatus: vi.fn(),
-  mockUpsert: vi.fn(),
   mockGetProfile: vi.fn(),
   mockAuthorize: vi.fn(),
   mockCallback: vi.fn(),
 }));
+
+// This file's routes are all imported dynamically inside each test, so
+// (unlike tests/api/reactions.test.ts) this vi.mock factory runs lazily at
+// test time and can call the tests/helpers/mocks builder directly.
+const prisma = prismaStub({ user: ['upsert'] });
 
 // @/lib/session uses cookies() + iron-session, which are mocked below. Mock
 // getCurrentUser (which the auth helper inspects) but preserve the real
@@ -101,9 +107,7 @@ vi.mock('@/lib/auth', () => ({
   appName: 'Rabble',
 }));
 
-vi.mock('@/lib/db', () => ({
-  prisma: { user: { upsert: mockUpsert } },
-}));
+vi.mock('@/lib/db', () => ({ prisma }));
 
 vi.mock('@atproto/api', () => ({
   Agent: class {
@@ -246,33 +250,6 @@ describe('LiveKit token grants', () => {
 // Host-only route authorization (non-host returns 403)
 // ---------------------------------------------------------------------------
 
-function makeSpace() {
-  return {
-    id: 'sp1',
-    slug: 'room',
-    title: 'Room',
-    description: null,
-    hostId: 'did:plc:host123',
-    isLive: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    host: {
-      did: 'did:plc:host123',
-      handle: 'alice.bsky.social',
-      displayName: 'Alice',
-      avatarUrl: null,
-    },
-  };
-}
-
-function jsonRequest(url: string, body: unknown): NextRequest {
-  return new NextRequest(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
 describe('POST /api/spaces/[id]/live — host only', () => {
   it('returns 403 when non-host tries to start live', async () => {
     mockGetCurrentUser.mockResolvedValueOnce({
@@ -285,7 +262,7 @@ describe('POST /api/spaces/[id]/live — host only', () => {
     });
     const { POST } = await import('@/app/api/spaces/[id]/live/route');
     const res = await POST(
-      jsonRequest('http://localhost/api/spaces/sp1/live', { action: 'start' }),
+      jsonRequest('POST', 'http://localhost/api/spaces/sp1/live', { action: 'start' }),
       { params: Promise.resolve({ id: 'sp1' }) }
     );
     expect(res.status).toBe(403);
@@ -310,7 +287,7 @@ describe('POST /api/spaces/[id]/stage — host-only actions', () => {
     );
     const { POST } = await import('@/app/api/spaces/[id]/stage/route');
     const res = await POST(
-      jsonRequest('http://localhost/api/spaces/sp1/stage', {
+      jsonRequest('POST', 'http://localhost/api/spaces/sp1/stage', {
         action: 'invite',
         targetIdentity: 'did:plc:listener2',
       }),
@@ -334,7 +311,7 @@ describe('POST /api/spaces/[id]/stage — host-only actions', () => {
     );
     const { POST } = await import('@/app/api/spaces/[id]/stage/route');
     const res = await POST(
-      jsonRequest('http://localhost/api/spaces/sp1/stage', {
+      jsonRequest('POST', 'http://localhost/api/spaces/sp1/stage', {
         action: 'remove',
         targetIdentity: 'did:plc:speaker',
       }),

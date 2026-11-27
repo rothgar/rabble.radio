@@ -14,6 +14,8 @@
 // content-length, same root cause as src/lib/downloads.ts), and
 // src/app/music/[file]/route.ts keeps `next dev` working.
 
+import { withR2Timeout, R2TimeoutError } from '@/lib/r2-timeout';
+
 export interface MusicTrack {
   /** File name under music/ in the bucket, also the URL path segment. */
   file: string;
@@ -200,11 +202,30 @@ export async function serveMusic(
   if (!track) return Response.json({ error: 'not_found' }, { status: 404 });
   if (!bucket) return Response.json({ error: 'storage_unavailable' }, { status: 503 });
   const key = `music/${file}`;
-  const head = await bucket.head(key);
-  if (!head) return Response.json({ error: 'not_found' }, { status: 404 });
-  const range = parseRange(rangeHeader, head.size);
-  const object = await bucket.get(key, range ? { range } : undefined);
-  if (!object) return Response.json({ error: 'not_found' }, { status: 404 });
+  // head() and get() share one timeout budget: two independent timeouts
+  // would let a request that stalls on both take 2x R2_TIMEOUT_MS.
+  let head: { size: number } | null;
+  let object: R2ObjectLike | null;
+  let range: { offset: number; length: number } | null;
+  try {
+    ({ head, object, range } = await withR2Timeout(
+      (async () => {
+        const h = await bucket.head(key);
+        if (!h) return { head: null, object: null, range: null };
+        const r = parseRange(rangeHeader, h.size);
+        const o = await bucket.get(key, r ? { range: r } : undefined);
+        return { head: h, object: o, range: r };
+      })(),
+      'music.r2_timeout',
+      { file }
+    ));
+  } catch (err) {
+    if (err instanceof R2TimeoutError) {
+      return Response.json({ error: 'storage_timeout' }, { status: 504 });
+    }
+    throw err;
+  }
+  if (!head || !object) return Response.json({ error: 'not_found' }, { status: 404 });
   const headers: Record<string, string> = {
     'content-type': 'audio/mpeg',
     'accept-ranges': 'bytes',

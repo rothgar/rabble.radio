@@ -1,8 +1,9 @@
 // tests/lib/atproto.test.ts
 //
 // Verifies the atproto helper builds the right putRecord/deleteRecord
-// payloads and parses responses. The OAuth client is mocked to return a
-// session whose `fetchHandler` we capture and assert against.
+// payloads and parses responses through the `@atproto/api` Agent. The OAuth
+// client is mocked to return a session whose `fetchHandler` we capture and
+// assert against.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -29,11 +30,29 @@ import {
 
 const session = { did: 'did:plc:host123', handle: 'alice.bsky.social' };
 
+// A syntactically valid CID (the `Agent` validates XRPC responses against
+// the lexicon, including `cid`'s format) and TID, for response fixtures.
+const VALID_CID =
+  'bafyreie5cz5vcfwsx2wxzvqglpqzyyr4lnvxrfm2w2apxdpdqcngozv2vu';
+const VALID_TID = '3jzfcijpj2z2a';
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+function jsonErrorResponse(
+  status: number,
+  error: string,
+  message: string
+): Response {
+  return jsonResponse({ error, message }, status);
+}
+
+async function decodeBody(body: unknown): Promise<Record<string, unknown>> {
+  return JSON.parse(new TextDecoder().decode(body as Uint8Array));
 }
 
 beforeEach(() => {
@@ -71,7 +90,7 @@ describe('publishLiveStatus', () => {
     fetchHandlerMock.mockResolvedValueOnce(
       jsonResponse({
         uri: 'at://did:plc:host123/app.bsky.actor.status/self',
-        cid: 'bafyreie...',
+        cid: VALID_CID,
       })
     );
 
@@ -89,35 +108,31 @@ describe('publishLiveStatus', () => {
     expect(fetchHandlerMock).toHaveBeenCalledTimes(1);
     const [calledPathname, calledInit] = fetchHandlerMock.mock.calls[0];
     expect(String(calledPathname)).toBe('/xrpc/com.atproto.repo.putRecord');
-    expect(calledInit.method).toBe('POST');
+    expect(String(calledInit.method).toLowerCase()).toBe('post');
     // Authorization is intentionally NOT set here — the session's fetchHandler
     // adds the DPoP-bound Authorization header.
-    expect(
-      (calledInit.headers as Record<string, string>).authorization
-    ).toBeUndefined();
-    expect((calledInit.headers as Record<string, string>).accept).toBe(
+    expect((calledInit.headers as Headers).get('authorization')).toBeNull();
+    expect((calledInit.headers as Headers).get('content-type')).toBe(
       'application/json'
     );
-    expect(
-      (calledInit.headers as Record<string, string>)['content-type']
-    ).toBe('application/json');
-    const body = JSON.parse(calledInit.body as string);
+    const body = await decodeBody(calledInit.body);
     expect(body.repo).toBe('did:plc:host123');
     expect(body.collection).toBe('app.bsky.actor.status');
     expect(body.rkey).toBe('self');
-    expect(body.record.$type).toBe('app.bsky.actor.status');
-    expect(body.record.status).toBe('live');
-    expect(body.record.embed.$type).toBe('app.bsky.embed.external');
-    expect(body.record.embed.external.uri).toBe(
-      'https://example.com/spaces/abc'
-    );
-    expect(body.record.embed.external.title).toBe('My space');
-    expect(typeof body.record.createdAt).toBe('string');
+    const record = body.record as Record<string, unknown>;
+    expect(record.$type).toBe('app.bsky.actor.status');
+    expect(record.status).toBe('live');
+    const embed = record.embed as Record<string, unknown>;
+    expect(embed.$type).toBe('app.bsky.embed.external');
+    const external = embed.external as Record<string, unknown>;
+    expect(external.uri).toBe('https://example.com/spaces/abc');
+    expect(external.title).toBe('My space');
+    expect(typeof record.createdAt).toBe('string');
   });
 
   it('returns ok=false when PDS returns an error', async () => {
     fetchHandlerMock.mockResolvedValueOnce(
-      new Response('boom', { status: 500 })
+      jsonErrorResponse(500, 'InternalServerError', 'boom')
     );
     const result = await publishLiveStatus({
       session,
@@ -125,7 +140,7 @@ describe('publishLiveStatus', () => {
       title: 'Room',
     });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/500/);
+    expect(result.error).toMatch(/boom/);
   });
 
   it('returns ok=false when fetch throws', async () => {
@@ -165,18 +180,16 @@ describe('publishLiveStatus', () => {
 describe('deleteLiveStatus', () => {
   it('calls com.atproto.repo.deleteRecord for status/self', async () => {
     fetchHandlerMock.mockResolvedValueOnce(
-      jsonResponse({ commit: { cid: 'c', rev: 'r' } })
+      jsonResponse({ commit: { cid: VALID_CID, rev: VALID_TID } })
     );
     const result = await deleteLiveStatus({ session });
     expect(result.ok).toBe(true);
 
     const [calledPathname, calledInit] = fetchHandlerMock.mock.calls[0];
     expect(String(calledPathname)).toBe('/xrpc/com.atproto.repo.deleteRecord');
-    expect(calledInit.method).toBe('POST');
-    expect(
-      (calledInit.headers as Record<string, string>).authorization
-    ).toBeUndefined();
-    const body = JSON.parse(calledInit.body as string);
+    expect(String(calledInit.method).toLowerCase()).toBe('post');
+    expect((calledInit.headers as Headers).get('authorization')).toBeNull();
+    const body = await decodeBody(calledInit.body);
     expect(body).toEqual({
       repo: 'did:plc:host123',
       collection: 'app.bsky.actor.status',
@@ -186,11 +199,11 @@ describe('deleteLiveStatus', () => {
 
   it('returns ok=false when deleteRecord fails', async () => {
     fetchHandlerMock.mockResolvedValueOnce(
-      new Response('bad', { status: 400 })
+      jsonErrorResponse(400, 'InvalidRequest', 'bad request')
     );
     const result = await deleteLiveStatus({ session });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/400/);
+    expect(result.error).toMatch(/bad request/);
   });
 
   it('returns ok=false when fetch throws', async () => {
@@ -210,47 +223,55 @@ describe('deleteLiveStatus', () => {
 
 describe('fetchBlockedDids', () => {
   function blocksResponse(dids: string[], cursor?: string): Response {
-    return new Response(
-      JSON.stringify({ blocks: dids.map((did) => ({ did })), cursor }),
-      { status: 200 }
-    );
+    return jsonResponse({
+      blocks: dids.map((did) => ({
+        did,
+        handle: `${did.split(':').pop()}.test`,
+      })),
+      cursor,
+    });
   }
 
   it('calls getBlocks with no actor param, through the OAuth session', async () => {
-    fetchHandlerMock.mockResolvedValueOnce(blocksResponse(['did:a', 'did:b']));
+    fetchHandlerMock.mockResolvedValueOnce(
+      blocksResponse(['did:plc:blocka', 'did:plc:blockb'])
+    );
     const out = await fetchBlockedDids('did:plc:host123');
-    expect(out).toEqual(['did:a', 'did:b']);
+    expect(out).toEqual(['did:plc:blocka', 'did:plc:blockb']);
 
     const [calledPathname, calledInit] = fetchHandlerMock.mock.calls[0];
     expect(String(calledPathname)).toMatch(/^\/xrpc\/app\.bsky\.graph\.getBlocks\?/);
     expect(String(calledPathname)).not.toMatch(/actor=/);
-    expect(calledInit.method).toBe('GET');
-    expect(
-      (calledInit.headers as Record<string, string>).authorization
-    ).toBeUndefined();
+    expect(String(calledInit.method).toLowerCase()).toBe('get');
+    expect((calledInit.headers as Headers).get('authorization')).toBeNull();
   });
 
   it('pages through the cursor', async () => {
     fetchHandlerMock
-      .mockResolvedValueOnce(blocksResponse(['did:a'], 'c1'))
-      .mockResolvedValueOnce(blocksResponse(['did:b']));
+      .mockResolvedValueOnce(blocksResponse(['did:plc:blocka'], 'c1'))
+      .mockResolvedValueOnce(blocksResponse(['did:plc:blockb']));
     const out = await fetchBlockedDids('did:plc:host123');
-    expect(out).toEqual(['did:a', 'did:b']);
+    expect(out).toEqual(['did:plc:blocka', 'did:plc:blockb']);
     const second = new URL(`https://x${fetchHandlerMock.mock.calls[1][0]}`);
     expect(second.searchParams.get('cursor')).toBe('c1');
   });
 
   it('stops at the cap', async () => {
     fetchHandlerMock.mockImplementation(async () =>
-      blocksResponse(Array.from({ length: 100 }, (_, i) => `did:${i}`), 'more')
+      blocksResponse(
+        Array.from({ length: 100 }, (_, i) => `did:plc:block${i}`),
+        'more'
+      )
     );
     const out = await fetchBlockedDids('did:plc:host123', 150);
     expect(out).toHaveLength(150);
   });
 
   it('throws on HTTP errors', async () => {
-    fetchHandlerMock.mockResolvedValueOnce(new Response('boom', { status: 500 }));
-    await expect(fetchBlockedDids('did:plc:host123')).rejects.toThrow(/500/);
+    fetchHandlerMock.mockResolvedValueOnce(
+      jsonErrorResponse(500, 'InternalServerError', 'boom')
+    );
+    await expect(fetchBlockedDids('did:plc:host123')).rejects.toThrow(/boom/);
   });
 });
 
@@ -367,6 +388,7 @@ describe('publishAppProfile', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         uri: 'at://did:plc:app123/community.lexicon.app.profile/self',
+        cid: VALID_CID,
       })
     );
 
@@ -384,23 +406,28 @@ describe('publishAppProfile', () => {
     expect(String(url)).toBe(
       'https://bsky.social/xrpc/com.atproto.repo.putRecord'
     );
-    expect((init.headers as Record<string, string>).authorization).toBe(
+    expect((init.headers as Headers).get('authorization')).toBe(
       'Bearer jwt-token'
     );
-    const body = JSON.parse(init.body as string);
+    expect((init.headers as Headers).get('content-type')).toBe(
+      'application/json'
+    );
+    const body = await decodeBody(init.body);
     expect(body.repo).toBe('did:plc:app123');
     expect(body.collection).toBe('community.lexicon.app.profile');
     expect(body.rkey).toBe('self');
-    expect(body.record.name).toBe('Rabble');
+    expect((body.record as Record<string, unknown>).name).toBe('Rabble');
   });
 
   it('returns ok=false when the PDS errors', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+    fetchMock.mockResolvedValueOnce(
+      jsonErrorResponse(500, 'InternalServerError', 'boom')
+    );
     const result = await publishAppProfile({
       session,
       profile: { name: 'Rabble', links: [{ uri: 'https://rabble.radio' }] },
     });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/500/);
+    expect(result.error).toMatch(/boom/);
   });
 });

@@ -1,10 +1,11 @@
 // src/lib/atproto.ts
 //
 // Authenticated ATProto helper for the MVP. Publishes and deletes the host's
-// `app.bsky.actor.status` self record (the "go live" banner) by calling
-// `com.atproto.repo.putRecord` / `deleteRecord` directly with the OAuth
-// access token. This avoids tying the helper to the Agent class API which
-// changes between @atproto/api versions.
+// `app.bsky.actor.status` self record (the "go live" banner) through
+// `@atproto/api`'s `Agent`, built from the OAuth session's (or app password
+// session's) `fetchHandler`.
+
+import { Agent } from '@atproto/api';
 
 export interface BlueskySessionLike {
   did?: string;
@@ -36,30 +37,6 @@ export interface LiveStatusResult {
 
 const COLLECTION = 'app.bsky.actor.status';
 const RKEY = 'self';
-
-interface PutRecordInput {
-  repo: string;
-  collection: string;
-  rkey: string;
-  record: Record<string, unknown>;
-  /** Optional commit token for update validation. */
-  swapCommit?: string;
-  /** Override the PDS service URL. Defaults to the public PDS. */
-  service?: string;
-}
-
-interface PutRecordResponse {
-  uri?: string;
-  cid?: string;
-  commit?: { cid?: string; rev?: string };
-}
-
-interface DeleteRecordInput {
-  repo: string;
-  collection: string;
-  rkey: string;
-  service?: string;
-}
 
 export const PDS_SERVICE_URL = 'https://bsky.social';
 
@@ -133,48 +110,14 @@ async function resolveOAuthSession(did: string): Promise<OAuthSessionLike> {
   return session;
 }
 
-async function callXrpc<T>(input: {
-  method: 'PUT' | 'GET' | 'POST' | 'DELETE';
-  nsid: string;
-  fetch: (
-    input: string,
-    init?: RequestInit
-  ) => Promise<Response>;
-  body?: Record<string, unknown>;
-  query?: Record<string, string>;
-}): Promise<T> {
-  const pathname = input.query
-    ? `/xrpc/${input.nsid}?${new URLSearchParams(input.query).toString()}`
-    : `/xrpc/${input.nsid}`;
-  const headers: Record<string, string> = {
-    accept: 'application/json',
-  };
-  if (input.body !== undefined) {
-    headers['content-type'] = 'application/json';
-  }
-  // Note: we deliberately do NOT set the Authorization header here. The
-  // session's fetchHandler adds a DPoP-bound Authorization header based on
-  // the current token set (and refreshes the token on 401 invalid_token).
-  const response = await input.fetch(pathname, {
-    method: input.method,
-    headers,
-    body: input.body !== undefined ? JSON.stringify(input.body) : undefined,
-  });
-  if (!response.ok) {
-    let detail = '';
-    try {
-      detail = await response.text();
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      `XRPC ${input.nsid} failed with ${response.status}${detail ? `: ${detail}` : ''}`
-    );
-  }
-  if (response.status === 204) {
-    return undefined as unknown as T;
-  }
-  return (await response.json()) as T;
+/**
+ * Build an Agent around a session's `fetchHandler`. The session's handler
+ * adds whatever Authorization the auth method needs (a DPoP-bound header for
+ * OAuth, a bearer token for an app password) — the `Agent` never sees or
+ * sets credentials itself.
+ */
+function agentFor(session: { fetchHandler: OAuthSessionLike['fetchHandler'] }): Agent {
+  return new Agent(session.fetchHandler.bind(session));
 }
 
 /**
@@ -196,17 +139,12 @@ export async function publishLiveStatus(
   }
   try {
     const session = await resolveOAuthSession(input.session.did);
-    const params: PutRecordInput = {
+    const agent = agentFor(session);
+    const { data } = await agent.com.atproto.repo.putRecord({
       repo: input.session.did,
       collection: COLLECTION,
       rkey: RKEY,
       record: buildLiveStatusRecord(input),
-    };
-    const data = await callXrpc<PutRecordResponse>({
-      method: 'POST',
-      nsid: 'com.atproto.repo.putRecord',
-      fetch: session.fetchHandler.bind(session),
-      body: params as unknown as Record<string, unknown>,
     });
     log.info('atproto.publish.success', { uri: data.uri });
     return { ok: true, record: data, uri: data.uri };
@@ -236,16 +174,11 @@ export async function deleteLiveStatus(
   }
   try {
     const session = await resolveOAuthSession(input.session.did);
-    const params: DeleteRecordInput = {
+    const agent = agentFor(session);
+    await agent.com.atproto.repo.deleteRecord({
       repo: input.session.did,
       collection: COLLECTION,
       rkey: RKEY,
-    };
-    await callXrpc<unknown>({
-      method: 'POST',
-      nsid: 'com.atproto.repo.deleteRecord',
-      fetch: session.fetchHandler.bind(session),
-      body: params as unknown as Record<string, unknown>,
     });
     log.info('atproto.delete.success');
     return { ok: true };
@@ -291,7 +224,7 @@ export interface AppProfileInput {
  * Session for a script running outside the browser, authenticated with an
  * app password via `com.atproto.server.createSession` rather than the
  * web app's OAuth flow. Its `fetchHandler` matches `OAuthSessionLike` so it
- * can go through the same `callXrpc` path as the OAuth-backed helpers above.
+ * can go through the same `agentFor` path as the OAuth-backed helpers above.
  */
 export interface AppPasswordSession {
   did: string;
@@ -371,14 +304,14 @@ export async function createAppPasswordSession(input: {
 function fetchHandlerForAppPasswordSession(
   session: AppPasswordSession
 ): OAuthSessionLike['fetchHandler'] {
-  return async (pathname, init) =>
-    fetch(`${session.service}${pathname}`, {
-      ...init,
-      headers: {
-        ...(init?.headers as Record<string, string> | undefined),
-        authorization: `Bearer ${session.accessJwt}`,
-      },
-    });
+  return async (pathname, init) => {
+    // `init.headers` can be a `Headers` instance (the Agent builds one), so
+    // merge through the `Headers` API rather than a plain-object spread,
+    // which silently drops a `Headers` instance's entries.
+    const headers = new Headers(init?.headers);
+    headers.set('authorization', `Bearer ${session.accessJwt}`);
+    return fetch(`${session.service}${pathname}`, { ...init, headers });
+  };
 }
 
 /**
@@ -391,16 +324,12 @@ export async function publishAppProfile(input: {
   profile: AppProfileInput;
 }): Promise<LiveStatusResult> {
   try {
-    const data = await callXrpc<PutRecordResponse>({
-      method: 'POST',
-      nsid: 'com.atproto.repo.putRecord',
-      fetch: fetchHandlerForAppPasswordSession(input.session),
-      body: {
-        repo: input.session.did,
-        collection: APP_PROFILE_COLLECTION,
-        rkey: RKEY,
-        record: buildAppProfileRecord(input.profile),
-      },
+    const agent = new Agent(fetchHandlerForAppPasswordSession(input.session));
+    const { data } = await agent.com.atproto.repo.putRecord({
+      repo: input.session.did,
+      collection: APP_PROFILE_COLLECTION,
+      rkey: RKEY,
+      record: buildAppProfileRecord(input.profile),
     });
     return { ok: true, record: data, uri: data.uri };
   } catch (err) {
@@ -414,11 +343,6 @@ export async function publishAppProfile(input: {
   }
 }
 
-interface GetBlocksPage {
-  blocks?: Array<{ did?: string }>;
-  cursor?: string;
-}
-
 const BLOCKS_PAGE_SIZE = 100;
 
 /**
@@ -429,16 +353,13 @@ const BLOCKS_PAGE_SIZE = 100;
  */
 export async function fetchBlockedDids(did: string, max = 2000): Promise<string[]> {
   const session = await resolveOAuthSession(did);
+  const agent = agentFor(session);
   const out: string[] = [];
   let cursor: string | undefined;
   while (out.length < max) {
-    const query: Record<string, string> = { limit: String(BLOCKS_PAGE_SIZE) };
-    if (cursor) query.cursor = cursor;
-    const page = await callXrpc<GetBlocksPage>({
-      method: 'GET',
-      nsid: 'app.bsky.graph.getBlocks',
-      fetch: session.fetchHandler.bind(session),
-      query,
+    const { data: page } = await agent.app.bsky.graph.getBlocks({
+      limit: BLOCKS_PAGE_SIZE,
+      cursor,
     });
     const got: string[] = [];
     for (const b of page.blocks ?? []) {

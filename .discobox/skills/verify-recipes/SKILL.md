@@ -42,6 +42,38 @@ construct `new PrismaClient({ adapter: new PrismaD1(db) })` directly — no
 need for `next dev` or a request context. Run the script from inside the
 repo root (bare `import`s need its `node_modules`); delete it afterwards.
 
+## Verifying custom-worker.ts (security headers, downloads)
+
+`next dev` (the `web` boot service) never runs `custom-worker.ts` — that
+file only wraps `.open-next/worker.js`'s `fetch`, which exists after an
+OpenNext build. Anything added there (`withSecurityHeaders`, the R2
+download fast path) is invisible on `:3000`; a `curl` against it there will
+not show the header or behaviour you just added. Build and preview the real
+Worker instead:
+
+```bash
+pnpm cf:build                                  # ~2-3 min; OpenNext + the Workers bundle
+nohup pnpm exec opennextjs-cloudflare preview > /tmp/cf-preview.log 2>&1 &
+sleep 8   # "Ready on http://localhost:8787"
+curl -sD - -o /dev/null http://localhost:8787/ | grep -i content-security-policy
+```
+
+This runs under `wrangler dev` against the same local D1/LiveKit, on
+`:8787`, alongside the `:3000` `next dev` service (different process, no
+port clash). `logger.*` calls don't reliably land in `/tmp/cf-preview.log`
+under wrangler's dev runtime; read them back from its local observability
+API instead:
+
+```bash
+curl -s -X POST http://localhost:8787/cdn-cgi/local/explorer/api/local/observability/query \
+  -H 'Content-Type: application/json' \
+  -d '{"sql":"SELECT message, level FROM logs WHERE message LIKE '"'"'%your.event.name%'"'"' ORDER BY ts_ms DESC LIMIT 10"}'
+```
+
+`message` is a JSON-encoded array wrapping the logger's own JSON string.
+Kill the preview (`pkill -f "opennextjs-cloudflare preview"`) and
+`rm -rf .open-next` when done — neither belongs in the tree or left running.
+
 ## Data
 
 The local D1 is SQLite under `.wrangler/state/`. Query it with wrangler:

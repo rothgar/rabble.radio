@@ -1,5 +1,6 @@
 package radio.rabble.android.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.layout.ContentScale
@@ -25,6 +26,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,6 +69,60 @@ fun ErrorPanel(message: String, onRetry: () -> Unit) {
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
         Button(onClick = onRetry) { Text("Retry") }
+    }
+}
+
+/**
+ * The "R" monogram: heavy slab stem, a bowl that becomes a dot, and two radio
+ * wave arcs. Same geometry as assets/brand/monogram.svg and the iOS
+ * `Monogram` (ios/Rabble/Theme.swift), drawn on a 64-unit canvas.
+ */
+@Composable
+fun Monogram(size: Dp = 28.dp, letter: Color = RabbleColors.Ink, wave: Color = RabbleColors.Accent) {
+    Canvas(Modifier.size(size)) {
+        scale(this.size.width / 64f, this.size.width / 64f, pivot = Offset.Zero) {
+            val slabs = Path().apply {
+                addRect(Rect(Offset(9f, 10f), Size(11f, 45f)))
+                addRoundRect(RoundRect(Rect(Offset(6f, 10f), Size(18f, 5f)), CornerRadius(1.5f, 1.5f)))
+                addRoundRect(RoundRect(Rect(Offset(6f, 50f), Size(20f, 5f)), CornerRadius(1.5f, 1.5f)))
+                addRoundRect(RoundRect(Rect(Offset(28f, 50f), Size(18f, 5f)), CornerRadius(1.5f, 1.5f)))
+            }
+            drawPath(slabs, color = letter)
+
+            val bowl = Path().apply {
+                moveTo(14f, 15.5f)
+                lineTo(25.5f, 15.5f)
+                arcTo(Rect(Offset(16.5f, 15.5f), Size(18f, 18f)), -90f, 180f, false)
+                lineTo(14f, 33.5f)
+            }
+            drawPath(bowl, color = letter, style = Stroke(width = 11f, join = StrokeJoin.Round))
+
+            val leg = Path().apply {
+                moveTo(22.5f, 34f)
+                lineTo(34f, 50.8f)
+            }
+            drawPath(leg, color = letter, style = Stroke(width = 11f))
+
+            val waves = Path().apply {
+                arcTo(Rect(Offset(5.6f, 4.5f), Size(40f, 40f)), -53f, 106f, true)
+                moveTo(42.1f, 3.2f)
+                arcTo(Rect(Offset(-1.4f, -2.5f), Size(54f, 54f)), -52f, 104f, false)
+            }
+            drawPath(waves, color = wave, style = Stroke(width = 5f, cap = StrokeCap.Round))
+        }
+    }
+}
+
+/** Monogram plus the lower-case "rabble radio" wordmark, one accessibility element. */
+@Composable
+fun Wordmark(monogramSize: Dp = 36.dp) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.clearAndSetSemantics { contentDescription = "Rabble Radio" },
+    ) {
+        Monogram(size = monogramSize)
+        Text("rabble radio", style = MaterialTheme.typography.headlineSmall)
     }
 }
 

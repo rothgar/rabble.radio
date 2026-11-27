@@ -12,7 +12,7 @@ interface MonogramProps {
  * right side becomes two radio waves. Path data is shared with
  * src/app/show/[id]/opengraph-image.tsx via src/lib/brand-mark.ts.
  */
-export function Monogram({ className = 'h-8 w-8', wave = 'var(--color-accent)' }: MonogramProps): ReactElement {
+export function Monogram({ className = 'h-10 w-10', wave = 'var(--color-accent)' }: MonogramProps): ReactElement {
   return (
     <svg viewBox={MONOGRAM_VIEW_BOX} className={className} aria-hidden="true" focusable="false">
       <path fill="currentColor" d={MONOGRAM_LETTER_PATH} />
@@ -34,7 +34,7 @@ interface WordmarkProps {
 export function Wordmark({ className = '', compact = false }: WordmarkProps): ReactElement {
   return (
     <span className={`inline-flex items-center gap-2 text-[var(--color-text)] ${className}`}>
-      <Monogram className="h-8 w-8 shrink-0" />
+      <Monogram className="h-10 w-10 shrink-0" />
       <span className={`font-display text-heading leading-none ${compact ? 'hidden sm:inline' : ''}`}>
         rabble radio
       </span>

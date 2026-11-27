@@ -128,7 +128,7 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RabbleColors.Bg),
-                title = { Text("rabble radio", style = MaterialTheme.typography.headlineSmall) },
+                title = { Wordmark() },
                 actions = {
                     ThemeAction()
                     FeedbackAction(api)

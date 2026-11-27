@@ -134,7 +134,7 @@ enum RabbleFont {
 /// The "R" monogram whose right side becomes two radio waves. Same geometry
 /// as assets/brand/monogram.svg (64x64 units).
 struct Monogram: View {
-    var size: CGFloat = 28
+    var size: CGFloat = 36
     var letter: Color = RabbleColors.ink
     var wave: Color = RabbleColors.accent
 
@@ -173,7 +173,7 @@ struct Monogram: View {
 struct Wordmark: View {
     var body: some View {
         HStack(spacing: 8) {
-            Monogram(size: 28)
+            Monogram(size: 36)
             Text("rabble radio").font(RabbleFont.display(20, relativeTo: .headline)).foregroundStyle(RabbleColors.text)
         }
         .accessibilityElement(children: .ignore)

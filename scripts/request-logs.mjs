@@ -16,13 +16,14 @@
 //
 // --route finds every request on that path in the window that the runtime
 // reported an error for (hung, exception, cancelled) and prints each one's
-// timeline. The token needs Account, Workers Observability, Read (the CI
+// timeline; without --route, every failed request in the window is listed
+// by path and the first --max (default 5) get timelines. The token needs Account, Workers Observability, Read (the CI
 // token in docs/DEPLOY.md has it). Workers Logs keeps a few days only.
 //
 // Output is safe to paste on a public issue: request headers are never read,
 // DIDs and e-mail addresses are redacted. Nothing is written anywhere.
 
-import { filter, formatTimeline, requestEvents, requestIdOf, requestPath, requestTimeline, telemetryQuery } from './lib/workers-logs.mjs';
+import { failedFilter, formatTimeline, requestEvents, requestIdOf, requestPath, requestTimeline, telemetryQuery } from './lib/workers-logs.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -36,6 +37,7 @@ const requestIds = all('request');
 const route = opt('route');
 const from = opt('from');
 const to = opt('to', new Date().toISOString());
+const max = Number(opt('max', '5'));
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const account = process.env.CLOUDFLARE_ACCOUNT_ID;
 
@@ -43,8 +45,8 @@ if (!token || !account) {
   console.error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
   process.exit(2);
 }
-if (requestIds.length === 0 && !(route && from)) {
-  console.error('give --request <id> (repeatable) or --route <path> --from <iso> [--to <iso>]');
+if (requestIds.length === 0 && !from) {
+  console.error('give --request <id> (repeatable) or --from <iso> [--to <iso>] [--route <path>]');
   process.exit(2);
 }
 
@@ -52,13 +54,31 @@ async function main() {
   let ids = requestIds;
   const timeframe = from ? { from, to } : { from: new Date(Date.now() - 7 * 86400e3).toISOString(), to };
   if (ids.length === 0) {
-    const found = await telemetryQuery({ account, token, service, filters: [filter('$metadata.error', 'exists', undefined)], timeframe });
-    ids = [...new Set(found.filter((e) => requestPath(e) === route && requestIdOf(e)).map(requestIdOf))];
-    if (ids.length === 0) {
-      console.log(`no failed requests on ${route} for ${service} between ${timeframe.from} and ${timeframe.to}`);
-      return;
+    const found = await telemetryQuery({ account, token, service, filters: [failedFilter()], timeframe });
+    const byPath = new Map();
+    for (const e of found) {
+      const id = requestIdOf(e);
+      if (!id) continue;
+      const p = requestPath(e) || '(no path)';
+      if (!byPath.has(p)) byPath.set(p, new Set());
+      byPath.get(p).add(id);
     }
-    console.log(`${ids.length} failed request(s) on ${route}: ${ids.join(' ')}`);
+    if (route) {
+      ids = [...(byPath.get(route) ?? [])];
+      if (ids.length === 0) {
+        const others = [...byPath].map(([p, s]) => `${p} (${s.size})`).join(', ');
+        console.log(`no failed requests on ${route} for ${service} between ${timeframe.from} and ${timeframe.to}${others ? `; failed elsewhere: ${others}` : ''}`);
+        return;
+      }
+      console.log(`${ids.length} failed request(s) on ${route}: ${ids.join(' ')}`);
+    } else {
+      if (byPath.size === 0) {
+        console.log(`no failed requests for ${service} between ${timeframe.from} and ${timeframe.to}`);
+        return;
+      }
+      for (const [p, s] of byPath) console.log(`${String(s.size).padStart(4)} failed on ${p}: ${[...s].slice(0, 5).join(' ')}${s.size > 5 ? ' …' : ''}`);
+      ids = [...new Set([...byPath.values()].flatMap((s) => [...s]))].slice(0, max);
+    }
   }
   for (const id of ids) {
     const events = await requestEvents({ account, token, service, requestId: id, timeframe });

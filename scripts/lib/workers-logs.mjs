@@ -50,6 +50,13 @@ export async function telemetryQuery({ account, token, service, filters, timefra
   return json.result?.events?.events ?? json.result?.events ?? [];
 }
 
+/** The filter log-triage uses: an error-level line or a runtime error. */
+export const failedFilter = () => ({
+  kind: 'group',
+  filterCombination: 'or',
+  filters: [filter('$metadata.level', 'eq', 'error'), filter('$metadata.error', 'exists', undefined)],
+});
+
 /** Every event of one request. */
 export function requestEvents({ account, token, service, requestId, timeframe }) {
   return telemetryQuery({

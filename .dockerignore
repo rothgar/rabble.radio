@@ -19,5 +19,4 @@ tests
 **/*.test.tsx
 **/*.spec.ts
 **/*.spec.tsx
-.kimchi
 

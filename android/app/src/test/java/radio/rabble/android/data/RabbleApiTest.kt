@@ -105,6 +105,19 @@ class RabbleApiTest {
         assertNull(response.role)
     }
 
+    // reportCrash
+
+    @Test
+    fun `reportCrash sends no app secret header when CRASH_REPORT_SECRET is unset`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        api.reportCrash("java.lang.NullPointerException", "boom", "stack", "ShowScreen")
+
+        val request = server.takeRequest()
+        assertEquals("/api/crashes", request.path)
+        assertNull(request.getHeader("X-Rabble-App-Secret"))
+    }
+
     companion object {
         private const val minimalJoinResponseJson = """{"token":"tok","wsUrl":"wss://live.rabble.radio"}"""
     }

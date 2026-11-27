@@ -21,6 +21,13 @@ android {
         val baseUrl = (project.findProperty("rabbleBaseUrl") as String?)
             ?: "https://rabble.radio"
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+
+        // Sent as X-Rabble-App-Secret on POST /api/crashes (issue #184), which
+        // the server checks against its own CRASH_REPORT_SECRET once the owner
+        // sets one (docs/DEPLOY.md); empty until then, on both sides.
+        //   ./gradlew assembleDebug -PrabbleCrashSecret=<the same value>
+        val crashSecret = (project.findProperty("rabbleCrashSecret") as String?) ?: ""
+        buildConfigField("String", "CRASH_REPORT_SECRET", "\"$crashSecret\"")
     }
 
     // Release signing reads from CI env vars (ANDROID_RELEASE_KEYSTORE_PATH/

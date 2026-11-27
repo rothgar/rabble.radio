@@ -41,11 +41,16 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         RabbleBaseURL: $(RABBLE_BASE_URL)
+        RabbleCrashSecret: $(RABBLE_CRASH_SECRET)
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: radio.rabble.ios
         RABBLE_BASE_URL: https://rabble.radio
+        # Sent as X-Rabble-App-Secret on POST /api/crashes (issue #184), which
+        # the server checks against its own CRASH_REPORT_SECRET once the
+        # owner sets one (docs/DEPLOY.md); empty until then, on both sides.
+        RABBLE_CRASH_SECRET: ""
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
   RabbleUITests:

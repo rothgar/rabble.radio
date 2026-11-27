@@ -14,6 +14,9 @@ import java.io.IOException
 class ApiException(val status: Int, val code: String, message: String?) :
     IOException(message ?: code)
 
+/** Header POST /api/crashes checks against the server's CRASH_REPORT_SECRET (issue #184). */
+private const val CRASH_SECRET_HEADER = "X-Rabble-App-Secret"
+
 /** Thin client for the rabble.radio JSON API. */
 class RabbleApi(
     private val baseUrl: String,
@@ -155,7 +158,10 @@ class RabbleApi(
                 .put("device", Build.MODEL)
                 .put("screen", screen)
                 .put("fatal", true)
-            client.newCall(post("/api/crashes", body)).execute().use { }
+            var req = post("/api/crashes", body)
+            val secret = radio.rabble.android.BuildConfig.CRASH_REPORT_SECRET
+            if (secret.isNotEmpty()) req = req.newBuilder().header(CRASH_SECRET_HEADER, secret).build()
+            client.newCall(req).execute().use { }
         }
 
     /** "Notify me" on a scheduled show. Returns the resulting state. */

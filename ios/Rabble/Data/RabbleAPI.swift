@@ -7,6 +7,9 @@ struct APIError: LocalizedError {
     var errorDescription: String? { message ?? code }
 }
 
+/// Header POST /api/crashes checks against the server's CRASH_REPORT_SECRET (issue #184).
+private let crashSecretHeader = "X-Rabble-App-Secret"
+
 /// Thin client for the rabble.radio JSON API. Session cookies come from
 /// HTTPCookieStorage, where SessionStore puts them after the web sign-in.
 final class RabbleAPI {
@@ -141,7 +144,9 @@ final class RabbleAPI {
             "screen": screen,
             "fatal": true,
         ]
-        _ = try await raw(path: "/api/crashes", method: "POST", json: body)
+        let secret = Bundle.main.object(forInfoDictionaryKey: "RabbleCrashSecret") as? String ?? ""
+        let headers: [String: String] = secret.isEmpty ? [:] : [crashSecretHeader: secret]
+        _ = try await raw(path: "/api/crashes", method: "POST", json: body, headers: headers)
     }
 
     /// "Notify me" on a show that is off air. Returns the resulting state.
@@ -193,14 +198,15 @@ final class RabbleAPI {
     }
 
     @discardableResult
-    private func raw(path: String, method: String, json: [String: Any]?) async throws -> Data {
-        try await raw(url: baseURL.appending(path: path), method: method, json: json)
+    private func raw(path: String, method: String, json: [String: Any]?, headers: [String: String] = [:]) async throws -> Data {
+        try await raw(url: baseURL.appending(path: path), method: method, json: json, headers: headers)
     }
 
-    private func raw(url: URL, method: String, json: [String: Any]?) async throws -> Data {
+    private func raw(url: URL, method: String, json: [String: Any]?, headers: [String: String] = [:]) async throws -> Data {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (name, value) in headers { req.setValue(value, forHTTPHeaderField: name) }
         if let json {
             req.httpBody = try JSONSerialization.data(withJSONObject: json)
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")

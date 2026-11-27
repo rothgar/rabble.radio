@@ -8,6 +8,10 @@
 // session join as anonymous listeners: a listen-only token under a synthetic
 // `anon:<uuid>` identity that counts toward the room's listener total but is
 // never rendered as an active participant and cannot be invited to stage.
+// That identity is kept in the `ANON_ID_COOKIE` cookie (set below) so a
+// refresh reuses the same ShowParticipation row instead of minting a new
+// one on every join (issue #184); a cookie that isn't a plausible anonymous
+// identity is ignored and a fresh one is minted.
 //
 // While the show is off air (space.isLive === false) audience tokens carry
 // `canSubscribe: false`, so only the host and the co-hosts on stage can hear
@@ -39,6 +43,17 @@ import { recordJoin } from '@/lib/metrics';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const ANON_ID_COOKIE = 'rabble_anon_id';
+const ANON_ID_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+/** `anon:` plus the uuid (or the non-crypto fallback) newAnonymousIdentity() mints. */
+const ANON_ID_PATTERN = /^anon:[A-Za-z0-9-]{1,80}$/;
+
+/** The caller's existing anonymous identity, from its cookie, or a freshly minted one. */
+function anonymousIdentityFor(request: NextRequest): string {
+  const cookie = request.cookies.get(ANON_ID_COOKIE)?.value;
+  return cookie && ANON_ID_PATTERN.test(cookie) ? cookie : newAnonymousIdentity();
+}
+
 interface JoinResponseBody {
   token: string;
   wsUrl: string;
@@ -68,7 +83,7 @@ export async function POST(
   const log = createLogger({ correlationId });
   const sessionUser = await getCurrentUser();
   const anonymous = sessionUser === null;
-  const user = sessionUser ?? { did: newAnonymousIdentity(), handle: '' };
+  const user = sessionUser ?? { did: anonymousIdentityFor(request), handle: '' };
 
   const { id } = await context.params;
   if (!id) {
@@ -154,7 +169,7 @@ export async function POST(
       anonymous,
       relay: iceServers !== undefined,
     });
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         token,
         wsUrl,
@@ -170,6 +185,16 @@ export async function POST(
       } satisfies JoinResponseBody,
       { status: 200 }
     );
+    if (anonymous) {
+      response.cookies.set(ANON_ID_COOKIE, user.did, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: ANON_ID_MAX_AGE_SECONDS,
+      });
+    }
+    return response;
   } catch (err) {
     if (err instanceof LiveKitConfigError) {
       log.error('livekit.join.config_error', { err, spaceId: space.id });

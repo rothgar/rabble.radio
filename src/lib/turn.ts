@@ -28,8 +28,15 @@ export interface TurnConfig {
   apiToken: string;
 }
 
-/** Lifetime of minted credentials. A show rarely runs longer than a day. */
-export const DEFAULT_TURN_TTL_SECONDS = 24 * 60 * 60;
+// Lifetime of minted credentials (issue #184). Cloudflare re-checks this
+// credential on every TURN Refresh the browser's ICE agent sends to keep
+// the relay allocation alive for as long as the call runs — iceServers are
+// fetched once at join and never refreshed client-side (ActiveRoomProvider,
+// SpacePageClient) — so it has to outlive the show, not just the join
+// request. 24h was the original, deliberately generous, value; 6h still
+// cuts an abusive anonymous join's credential lifetime well down without
+// cutting off the shows that run past an hour.
+export const DEFAULT_TURN_TTL_SECONDS = 6 * 60 * 60;
 
 const CLOUDFLARE_TURN_API = 'https://rtc.live.cloudflare.com/v1/turn/keys';
 const REQUEST_TIMEOUT_MS = 5_000;

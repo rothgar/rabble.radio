@@ -4,6 +4,7 @@
 // livekit modules.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 import { makeSpace } from '../helpers/factories';
 import { jsonRequest } from '../helpers/request';
 import { mockSession, prismaStub } from '../helpers/mocks';
@@ -177,6 +178,41 @@ describe('POST /api/spaces/[id]/join', () => {
     );
     // No profile lookup for anonymous listeners.
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('reuses the anonymous identity from the rabble_anon_id cookie, and sets it back', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const req = new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' });
+    req.cookies.set('rabble_anon_id', 'anon:existing-uuid');
+    const res = await POST(req, { params: Promise.resolve({ id: 'sp1' }) });
+    const body = await res.json();
+    expect(body.identity).toBe('anon:existing-uuid');
+    expect(res.cookies.get('rabble_anon_id')?.value).toBe('anon:existing-uuid');
+  });
+
+  it('ignores a malformed rabble_anon_id cookie and mints a fresh identity', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const req = new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' });
+    req.cookies.set('rabble_anon_id', 'not-an-anon-id');
+    const res = await POST(req, { params: Promise.resolve({ id: 'sp1' }) });
+    const body = await res.json();
+    expect(body.identity).toMatch(/^anon:/);
+    expect(body.identity).not.toBe('not-an-anon-id');
+  });
+
+  it('sets a fresh rabble_anon_id cookie when the caller sent none', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(null);
+    mockGetSpaceById.mockResolvedValueOnce(makeSpace());
+    const { POST } = await import('@/app/api/spaces/[id]/join/route');
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    const body = await res.json();
+    expect(res.cookies.get('rabble_anon_id')?.value).toBe(body.identity);
   });
 
   it('never grants host to an anonymous caller even if the host DID were guessable', async () => {

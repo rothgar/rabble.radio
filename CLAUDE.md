@@ -19,7 +19,7 @@ Always prefix shell commands with `rtk` (see ~/CLAUDE.md).
 - `src/components/` UI; `src/components/ui/` holds the Button, Card, PageLayout primitives
 - `src/lib/` server logic (spaces, hosts, tags, livekit, session, atproto)
 - `tests/` mirrors `src/`: `tests/lib`, `tests/api`, `tests/components`, `tests/app`, `tests/security`
-- `prisma/` schema and migrations; `k8s/` manifests; `docs/` setup guides
+- `prisma/` schema and migrations; `docs/` setup guides
 
 ## Conventions
 

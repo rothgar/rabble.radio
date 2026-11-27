@@ -20,10 +20,10 @@ interface SpaceResponse {
 
 /** Mirrors `defaultPublicOrigin`'s own fallback chain in src/lib/spaces.ts
  * (`NEXT_PUBLIC_APP_URL || PUBLIC_URL || https://rabble.invalid`) without
- * importing that module. Self-hosted deployments are documented
- * (docs/KUBERNETES.md) to set only `PUBLIC_URL`; an unset or malformed
- * value degrades to a host that always 404s, so metadata falls back to the
- * site-wide default instead of throwing. */
+ * importing that module. A self-hosted deployment is expected to set only
+ * `PUBLIC_URL`; an unset or malformed value degrades to a host that always
+ * 404s, so metadata falls back to the site-wide default instead of
+ * throwing. */
 function resolveAppOrigin(): string {
   const raw = process.env.NEXT_PUBLIC_APP_URL || process.env.PUBLIC_URL;
   if (!raw) return 'https://rabble.invalid';

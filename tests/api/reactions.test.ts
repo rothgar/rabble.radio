@@ -3,8 +3,15 @@
 // Exercises POST /api/spaces/[id]/reactions with mocked session and spaces.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NextRequest } from 'next/server';
+import { makeSpace } from '../helpers/factories';
+import { jsonRequest } from '../helpers/request';
 
+// `POST` is imported statically below, so its dependency chain (and the
+// vi.mock factories for '@/lib/session' and '@/lib/db') resolves before any
+// other top-level code in this file runs. That rules out tests/helpers/mocks:
+// its builders are plain imports, and a vi.mock factory can only reference
+// vi.hoisted() output at that point (see tests/api/join.test.ts for a file
+// where the route import is dynamic and the builders apply cleanly).
 const {
   mockGetCurrentUser,
   mockGetSpaceById,
@@ -47,10 +54,6 @@ import { POST } from '@/app/api/spaces/[id]/reactions/route';
 
 const USER = { did: 'did:plc:user1', handle: 'alice.bsky.social' };
 
-function makeSpace(overrides: Record<string, unknown> = {}) {
-  return { id: 'sp1', hostId: 'did:plc:host123', ...overrides };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentUser.mockResolvedValue(USER);
@@ -59,15 +62,9 @@ beforeEach(() => {
 });
 
 async function post(id = 'sp1', body?: unknown): Promise<Response> {
-  return POST(
-    new NextRequest('http://localhost/api/spaces/' + id + '/reactions', {
-      method: 'POST',
-      ...(body !== undefined
-        ? { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }
-        : {}),
-    }),
-    { params: Promise.resolve({ id }) }
-  );
+  return POST(jsonRequest('POST', 'http://localhost/api/spaces/' + id + '/reactions', body), {
+    params: Promise.resolve({ id }),
+  });
 }
 
 describe('POST /api/spaces/[id]/reactions', () => {

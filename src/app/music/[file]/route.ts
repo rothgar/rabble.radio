@@ -8,6 +8,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { trackByFile } from '@/lib/music';
+import { withR2Timeout, R2TimeoutError } from '@/lib/r2-timeout';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -58,13 +59,32 @@ export async function GET(
     return NextResponse.json({ error: 'storage_unavailable' }, { status: 503 });
   }
   const key = `music/${file}`;
-  const head = await bucket.head(key);
-  if (!head) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  // head() and get() are raced against one shared budget, not one each:
+  // stacking two independent timeouts would let a request that stalls on
+  // both calls take up to 2x R2_TIMEOUT_MS before answering, defeating the
+  // point of bounding it.
+  let head: { size: number } | null;
+  let object: R2ObjectLike | null;
+  let range: { offset: number; length: number } | null;
+  try {
+    ({ head, object, range } = await withR2Timeout(
+      (async () => {
+        const h = await bucket.head(key);
+        if (!h) return { head: null, object: null, range: null };
+        const r = parseRange(request.headers.get('range'), h.size);
+        const o = await bucket.get(key, r ? { range: r } : undefined);
+        return { head: h, object: o, range: r };
+      })(),
+      'music.r2_timeout',
+      { file }
+    ));
+  } catch (err) {
+    if (err instanceof R2TimeoutError) {
+      return NextResponse.json({ error: 'storage_timeout' }, { status: 504 });
+    }
+    throw err;
   }
-  const range = parseRange(request.headers.get('range'), head.size);
-  const object = await bucket.get(key, range ? { range } : undefined);
-  if (!object) {
+  if (!head || !object) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
   const headers: Record<string, string> = {

@@ -4,26 +4,30 @@
 // livekit modules.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NextRequest } from 'next/server';
+import { makeSpace } from '../helpers/factories';
+import { jsonRequest } from '../helpers/request';
+import { mockSession, prismaStub } from '../helpers/mocks';
+
+// The route is imported dynamically inside each test below, so these
+// vi.mock factories run lazily at test time and can call the
+// tests/helpers/mocks builders directly.
+const mockGetCurrentUser = mockSession();
+const prisma = prismaStub({ user: ['findUnique'] });
 
 const {
-  mockGetCurrentUser,
   mockGetSpaceById,
   mockGetSpaceBySlug,
   mockCreateRoom,
   mockGenerateToken,
   mockGetLiveKitClient,
-  mockFindUserByDid,
   mockGetIceServers,
   mockIsBlocked,
 } = vi.hoisted(() => ({
-  mockGetCurrentUser: vi.fn(),
   mockGetSpaceById: vi.fn(),
   mockGetSpaceBySlug: vi.fn(),
   mockCreateRoom: vi.fn(),
   mockGenerateToken: vi.fn(),
   mockGetLiveKitClient: vi.fn(),
-  mockFindUserByDid: vi.fn(),
   mockGetIceServers: vi.fn(),
   mockIsBlocked: vi.fn(async () => false),
 }));
@@ -48,13 +52,7 @@ vi.mock('@/lib/session', () => ({
   getCurrentUser: mockGetCurrentUser,
 }));
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
-    user: {
-      findUnique: mockFindUserByDid,
-    },
-  },
-}));
+vi.mock('@/lib/db', () => ({ prisma }));
 
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: mockGetSpaceById,
@@ -74,26 +72,6 @@ vi.mock('@/lib/livekit', () => ({
   },
 }));
 
-function makeSpace(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'sp1',
-    slug: 'my-room-abc12345',
-    title: 'My room',
-    description: null,
-    hostId: 'did:plc:host123',
-    isLive: false,
-    createdAt: new Date('2025-01-02T00:00:00Z'),
-    updatedAt: new Date('2025-01-02T00:00:00Z'),
-    host: {
-      did: 'did:plc:host123',
-      handle: 'alice.bsky.social',
-      displayName: 'Alice',
-      avatarUrl: null,
-    },
-    ...overrides,
-  };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   mockCreateRoom.mockResolvedValue(undefined);
@@ -102,7 +80,7 @@ beforeEach(() => {
     token: 'jwt.token.here',
     wsUrl: 'ws://livekit:7880',
   });
-  mockFindUserByDid.mockResolvedValue({
+  prisma.user.findUnique.mockResolvedValue({
     displayName: 'Alice',
     avatarUrl: 'https://cdn.example/avatar.png',
   });
@@ -115,10 +93,9 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
     mockIsBlocked.mockResolvedValueOnce(true);
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const res = await POST(
-      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe('blocked');
     expect(mockIsBlocked).toHaveBeenCalledWith('sp1', 'did:plc:blocked');
@@ -129,10 +106,9 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const res = await POST(
-      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect('iceServers' in body).toBe(false);
@@ -152,10 +128,9 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const res = await POST(
-      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.iceServers).toEqual(iceServers);
@@ -167,10 +142,9 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const res = await POST(
-      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.token).toBe('jwt.token.here');
@@ -181,9 +155,7 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const req = new NextRequest('http://localhost/api/spaces/sp1/join', {
-      method: 'POST',
-    });
+    const req = jsonRequest('POST', 'http://localhost/api/spaces/sp1/join');
     const res = await POST(req, {
       params: Promise.resolve({ id: 'sp1' }),
     });
@@ -203,17 +175,16 @@ describe('POST /api/spaces/[id]/join', () => {
       })
     );
     // No profile lookup for anonymous listeners.
-    expect(mockFindUserByDid).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
   it('never grants host to an anonymous caller even if the host DID were guessable', async () => {
     mockGetCurrentUser.mockResolvedValueOnce(null);
     mockGetSpaceById.mockResolvedValueOnce(makeSpace({ hostId: 'anon:spoof' }));
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const res = await POST(
-      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
     const body = await res.json();
     expect(body.role).toBe('audience');
     expect(body.anonymous).toBe(true);
@@ -228,9 +199,7 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetSpaceBySlug.mockResolvedValueOnce(null);
 
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const req = new NextRequest('http://localhost/api/spaces/missing/join', {
-      method: 'POST',
-    });
+    const req = jsonRequest('POST', 'http://localhost/api/spaces/missing/join');
     const res = await POST(req, {
       params: Promise.resolve({ id: 'missing' }),
     });
@@ -246,9 +215,7 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
 
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const req = new NextRequest('http://localhost/api/spaces/sp1/join', {
-      method: 'POST',
-    });
+    const req = jsonRequest('POST', 'http://localhost/api/spaces/sp1/join');
     const res = await POST(req, {
       params: Promise.resolve({ id: 'sp1' }),
     });
@@ -272,7 +239,7 @@ describe('POST /api/spaces/[id]/join', () => {
       name: 'alice.bsky.social',
       canSubscribe: true,
     });
-    expect(mockFindUserByDid).toHaveBeenCalledWith({
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { did: 'did:plc:host123' },
       select: { displayName: true, avatarUrl: true },
     });
@@ -286,9 +253,7 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetSpaceById.mockResolvedValueOnce(makeSpace());
 
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const req = new NextRequest('http://localhost/api/spaces/sp1/join', {
-      method: 'POST',
-    });
+    const req = jsonRequest('POST', 'http://localhost/api/spaces/sp1/join');
     const res = await POST(req, {
       params: Promise.resolve({ id: 'sp1' }),
     });
@@ -316,10 +281,9 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetSpaceById.mockResolvedValueOnce(makeSpace({ isLive: true, status: 'live' }));
 
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const res = await POST(
-      new NextRequest('http://localhost/api/spaces/sp1/join', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'sp1' }) }
-    );
+    const res = await POST(jsonRequest('POST', 'http://localhost/api/spaces/sp1/join'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.onAir).toBe(true);
@@ -337,10 +301,7 @@ describe('POST /api/spaces/[id]/join', () => {
     mockGetSpaceBySlug.mockResolvedValueOnce(makeSpace());
 
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const req = new NextRequest(
-      'http://localhost/api/spaces/my-room-abc12345/join',
-      { method: 'POST' }
-    );
+    const req = jsonRequest('POST', 'http://localhost/api/spaces/my-room-abc12345/join');
     const res = await POST(req, {
       params: Promise.resolve({ id: 'my-room-abc12345' }),
     });
@@ -357,9 +318,7 @@ describe('POST /api/spaces/[id]/join', () => {
     mockCreateRoom.mockRejectedValueOnce(new Error('connection refused'));
 
     const { POST } = await import('@/app/api/spaces/[id]/join/route');
-    const req = new NextRequest('http://localhost/api/spaces/sp1/join', {
-      method: 'POST',
-    });
+    const req = jsonRequest('POST', 'http://localhost/api/spaces/sp1/join');
     const res = await POST(req, {
       params: Promise.resolve({ id: 'sp1' }),
     });

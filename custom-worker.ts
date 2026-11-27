@@ -3,6 +3,7 @@
 // route, so the sweep shares the app's database and LiveKit configuration.
 // @ts-expect-error generated at build time by `opennextjs-cloudflare build`
 import { default as handler } from './.open-next/worker.js';
+import { withSecurityHeaders } from './src/lib/security-headers';
 
 // Minimal local types: this file is excluded from the app's tsconfig so the
 // Workers global types do not leak into the Next.js program.
@@ -14,7 +15,9 @@ interface Ctx {
 }
 
 export default {
-  fetch: handler.fetch,
+  async fetch(request: Request, env: Env, ctx: Ctx): Promise<Response> {
+    return withSecurityHeaders(await handler.fetch(request, env, ctx));
+  },
 
   async scheduled(_event: unknown, env: Env, ctx: Ctx) {
     const base = env.PUBLIC_URL ?? 'https://rabble.rodeo';

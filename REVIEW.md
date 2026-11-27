@@ -545,6 +545,22 @@ code, and mistakes already made there.
   script must recompute the hash (`openssl dgst -sha256 -binary | openssl
   base64`, or the equivalent in Node) and update `THEME_SCRIPT_HASH` in the
   same change.
+
+## src/app/api/spaces/[id]/live/route.ts (err.message leaks outside the error envelope)
+
+- Issue #185 scrubbed `err.message` from every non-2xx `jsonError` call
+  across `src/app/api`, but a leak with the identical shape survives in a
+  *200* body here: `recordingError`, set from `startRecording`'s catch
+  block, used to return `err.message` (or a fallback) verbatim in the
+  success response alongside `ok: true`, carrying a LiveKit/Egress internal
+  error string to the browser the same way the scrubbed 5xx bodies did —
+  just outside the `jsonError` call a `grep` for that helper would find.
+  Fixed to a fixed `'recording_failed'` code, matching the sibling
+  `'recording_unavailable'` branch just above it; the real error still goes
+  to `logger.error('recording.start.failed', ...)`. Caught in issue #185's
+  security review. Any future pass removing a leaked-message pattern from
+  this codebase should also check success-response fields set inside a
+  catch block, not just the client-facing error envelopes.
 ## src/components/SiteHeader.tsx and src/components/NocturneShell.tsx (brand link touch target)
 
 - A fix that adds `min-h-touch` to a tappable element without `min-w-touch`

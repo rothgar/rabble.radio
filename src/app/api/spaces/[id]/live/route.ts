@@ -20,8 +20,14 @@
 //   { ok: false, error: string, message?: string }
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { originFromRequest, resolveSpaceForUser, setSpaceLive, toPublicSpace } from '@/lib/spaces';
-import { getCurrentUser } from '@/lib/session';
+import {
+  defaultPublicOrigin,
+  originFromRequest,
+  resolveSpaceForUser,
+  setSpaceLive,
+  toPublicSpace,
+} from '@/lib/spaces';
+import { jsonError, readJson, requireUser } from '@/lib/api';
 import { publishLiveStatus } from '@/lib/atproto';
 import {
   createRecording,
@@ -51,61 +57,37 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: 'unauthorized' },
-      { status: 401 }
-    );
-  }
+  const user = await requireUser({ ok: false });
+  if (user instanceof NextResponse) return user;
 
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json(
-      { ok: false, error: 'not_found' },
-      { status: 404 }
-    );
+    return jsonError(404, 'not_found', undefined, { ok: false });
   }
 
-  let body: LiveBody;
-  try {
-    body = (await request.json()) as LiveBody;
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: 'invalid_json', message: 'Body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<LiveBody>(request, 'Body must be JSON.', { ok: false });
+  if (body instanceof NextResponse) return body;
 
   const action = typeof body.action === 'string' ? body.action : '';
   if (action !== 'start' && action !== 'end') {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: 'validation_error',
-        message: "action must be 'start' or 'end'.",
-      },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', "action must be 'start' or 'end'.", { ok: false });
   }
 
   const resolved = await resolveSpaceForUser(id, user.did);
   if (!resolved) {
-    return NextResponse.json(
-      { ok: false, error: 'not_found' },
-      { status: 404 }
-    );
+    return jsonError(404, 'not_found', undefined, { ok: false });
   }
   const { space, isHost } = resolved;
   if (!isHost) {
-    return NextResponse.json(
-      { ok: false, error: 'forbidden', message: 'Only the host can toggle live state.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the host can toggle live state.', { ok: false });
   }
 
+  // The response's `space` reflects the request's own origin (fine: it's
+  // only shown back to this browser), but anything written to Bluesky or a
+  // push payload must use the canonical public origin, never the request
+  // Host.
   const origin = originFromRequest(request);
-  const spaceUrl = `${origin}/show/${space.id}`;
+  const spaceUrl = `${defaultPublicOrigin()}/show/${space.id}`;
   const session = { did: user.did, handle: user.handle };
   const thumb =
     typeof body.thumb === 'string' &&
@@ -136,14 +118,8 @@ export async function POST(
         // believe it is live when the banner is missing.
         await setSpaceLive(space.id, false).catch(() => undefined);
         await endShowSession({ spaceId: space.id });
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'atproto_failed',
-            message: result.error ?? 'Failed to publish live status.',
-          },
-          { status: 502 }
-        );
+        logger.warn('live.start.atproto_failed', { spaceId: space.id, error: result.error });
+        return jsonError(502, 'atproto_failed', 'Failed to publish live status.', { ok: false });
       }
 
       // Let the audience hear the stage. Listeners who joined during the
@@ -160,18 +136,20 @@ export async function POST(
       });
 
       // Web Push to everyone who asked to be notified. Best-effort and
-      // awaited: the Worker may not keep running after the response.
+      // awaited: the Worker may not keep running after the response. The
+      // notification's URL must be the canonical public origin, never the
+      // request Host.
       await pushRemindersOnAir(
         { id: space.id, title: space.title, host: { handle: user.handle, displayName: null } },
-        origin
+        defaultPublicOrigin()
       );
       await pushHostFollowersOnAir(
         { id: space.id, title: space.title, host: { did: user.did, handle: user.handle, displayName: null } },
-        origin
+        defaultPublicOrigin()
       );
       await pushShowFollowersOnAir(
         { id: space.id, title: space.title, host: { handle: user.handle, displayName: null } },
-        origin
+        defaultPublicOrigin()
       );
 
       // Recording is best-effort: if the Egress service is unreachable or
@@ -202,8 +180,7 @@ export async function POST(
           }
         }
       } catch (err) {
-        recordingError =
-          err instanceof Error ? err.message : 'recording_failed';
+        recordingError = 'recording_failed';
         logger.error('recording.start.failed', { err, spaceId: space.id });
       }
 
@@ -232,13 +209,7 @@ export async function POST(
       { status: 200 }
     );
   } catch (err) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: 'live_failed',
-        message: err instanceof Error ? err.message : 'Live action failed.',
-      },
-      { status: 500 }
-    );
+    logger.error('live.action_failed', { err, spaceId: space.id, action });
+    return jsonError(500, 'live_failed', 'Live action failed.', { ok: false });
   }
 }

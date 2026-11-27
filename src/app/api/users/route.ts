@@ -10,16 +10,12 @@
 //   { users: Array<{ did, handle, displayName, avatarUrl }> }
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/session';
+import { jsonError, requireUser } from '@/lib/api';
 import { getUsersByDid } from '@/lib/users';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-interface ErrorBody {
-  error: string;
-  message?: string;
-}
 
 interface UserBody {
   did: string;
@@ -41,21 +37,16 @@ const MAX_IDENTITIES = 100;
 
 export async function GET(
   request: NextRequest
-): Promise<NextResponse<{ users: UserBody[] } | ErrorBody>> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+): Promise<NextResponse> {
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   const identities = parseIdentities(request.nextUrl.searchParams.get('identities'));
   if (identities.length === 0) {
     return NextResponse.json({ users: [] }, { status: 200 });
   }
   if (identities.length > MAX_IDENTITIES) {
-    return NextResponse.json(
-      { error: 'validation_error', message: `At most ${MAX_IDENTITIES} identities per request.` },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', `At most ${MAX_IDENTITIES} identities per request.`);
   }
 
   try {
@@ -68,12 +59,7 @@ export async function GET(
     }));
     return NextResponse.json({ users }, { status: 200 });
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: 'lookup_failed',
-        message: err instanceof Error ? err.message : 'Failed to resolve users.',
-      },
-      { status: 500 }
-    );
+    logger.error('users.lookup_failed', { err, did: user.did });
+    return jsonError(500, 'lookup_failed', 'Failed to resolve users.');
   }
 }

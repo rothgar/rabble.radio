@@ -699,6 +699,17 @@ export async function resolveSpaceForUser(
   return { space, isHost: space.hostId === userDid };
 }
 
+/**
+ * Resolve a space identifier (id or slug) with no user context. Routes that
+ * don't need a host/viewer comparison use this instead of hand-rolling the
+ * `getSpaceById(id) ?? getSpaceBySlug(id)` fallback.
+ */
+export async function resolveSpace(identifier: string): Promise<SpaceWithHost | null> {
+  const space = await getSpaceById(identifier);
+  if (space) return space;
+  return getSpaceBySlug(identifier);
+}
+
 // ---------- Public view helpers ----------
 
 export function toPublicHost(host: SpaceWithHost['host']): PublicHost {

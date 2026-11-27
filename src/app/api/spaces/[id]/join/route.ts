@@ -26,8 +26,9 @@ import {
   roomNameForSpace,
   type SpaceRole,
 } from '@/lib/livekit';
-import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
+import { resolveSpace } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError } from '@/lib/api';
 import { isBlocked } from '@/lib/stage';
 import { prisma } from '@/lib/db';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
@@ -59,15 +60,10 @@ interface JoinResponseBody {
   iceServers?: IceServer[];
 }
 
-interface ErrorBody {
-  error: string;
-  message?: string;
-}
-
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
-): Promise<NextResponse<JoinResponseBody | ErrorBody>> {
+): Promise<NextResponse> {
   const correlationId = correlationIdFromRequest(request);
   const log = createLogger({ correlationId });
   const sessionUser = await getCurrentUser();
@@ -76,25 +72,19 @@ export async function POST(
 
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
   // Resolve by primary key first, then fall back to slug so shareable URLs
   // work either way. Match the behaviour of GET /api/spaces/[id].
-  let space = await getSpaceById(id);
+  const space = await resolveSpace(id);
   if (!space) {
-    space = await getSpaceBySlug(id);
-  }
-  if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
   // A listener the host blocked from this show stays out.
   if (!anonymous && (await isBlocked(space.id, user.did))) {
-    return NextResponse.json(
-      { error: 'blocked', message: 'You have been removed from this show.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'blocked', 'You have been removed from this show.');
   }
 
   const role: SpaceRole =
@@ -108,17 +98,9 @@ export async function POST(
     // If LiveKit is unreachable we still want the call to fail cleanly rather
     // than hang. Surface a 503 so the UI can show a retry button.
     log.error('livekit.join.create_room_failed', { err, spaceId: space.id, did: user.did });
-    return NextResponse.json(
-      {
-        error: 'livekit_unavailable',
-        message:
-          err instanceof Error
-            ? err.message
-            : 'Could not reach the LiveKit server.',
-        correlationId,
-      },
-      { status: 503 }
-    );
+    return jsonError(503, 'livekit_unavailable', 'Could not reach the LiveKit server.', {
+      correlationId,
+    });
   }
 
   // Ensure the client is reachable; if not, this throws LiveKitConfigError.
@@ -191,20 +173,11 @@ export async function POST(
   } catch (err) {
     if (err instanceof LiveKitConfigError) {
       log.error('livekit.join.config_error', { err, spaceId: space.id });
-      return NextResponse.json(
-        { error: 'livekit_misconfigured', message: err.message, correlationId },
-        { status: 500 }
-      );
+      return jsonError(500, 'livekit_misconfigured', 'LiveKit is not configured correctly.', {
+        correlationId,
+      });
     }
     log.error('livekit.join.token_failed', { err, spaceId: space.id });
-    return NextResponse.json(
-      {
-        error: 'token_failed',
-        message:
-          err instanceof Error ? err.message : 'Failed to mint LiveKit token.',
-        correlationId,
-      },
-      { status: 500 }
-    );
+    return jsonError(500, 'token_failed', 'Failed to mint LiveKit token.', { correlationId });
   }
 }

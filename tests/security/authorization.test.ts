@@ -71,10 +71,12 @@ vi.mock('@/lib/session', async () => {
 
 vi.mock('@/lib/spaces', () => ({
   resolveSpaceForUser: mockResolveSpaceForUser,
+  resolveSpace: async (id: string) => (await mockGetSpaceById(id)) ?? (await mockGetSpaceBySlug(id)),
   setSpaceLive: mockSetSpaceLive,
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: mockGetSpaceBySlug,
   originFromRequest: (request: Request) => new URL(request.url).origin,
+  defaultPublicOrigin: () => 'https://rabble.invalid',
 }));
 
 vi.mock('@/lib/atproto', () => ({

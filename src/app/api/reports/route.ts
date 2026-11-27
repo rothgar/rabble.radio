@@ -9,8 +9,8 @@
 //   REPORT_ADMIN_DIDS only. Response: { reports: [...] }
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/session';
-import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
+import { jsonError, readJson, requireUser } from '@/lib/api';
+import { resolveSpace } from '@/lib/spaces';
 import { createReport, isReportAdmin, listReports, ReportValidationError } from '@/lib/reports';
 import { listActiveSpeakers } from '@/lib/stage';
 import { logger } from '@/lib/logger';
@@ -28,47 +28,29 @@ interface ReportBody {
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
-  let body: ReportBody;
-  try {
-    body = (await request.json()) as ReportBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<ReportBody>(request);
+  if (body instanceof NextResponse) return body;
 
   const spaceId = str(body.spaceId);
   const targetIdentity = str(body.targetIdentity);
   if (!spaceId || !targetIdentity) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'spaceId and targetIdentity are required.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'spaceId and targetIdentity are required.');
   }
 
-  const space = (await getSpaceById(spaceId)) ?? (await getSpaceBySlug(spaceId));
+  const space = await resolveSpace(spaceId);
   if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   if (space.hostId !== user.did) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'Only the show host can report a speaker.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the show host can report a speaker.');
   }
 
   const speakers = await listActiveSpeakers(space.id);
   if (!speakers.includes(targetIdentity)) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'targetIdentity is not a current speaker in this show.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'targetIdentity is not a current speaker in this show.');
   }
 
   try {
@@ -88,28 +70,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ id: row.id }, { status: 201 });
   } catch (err) {
     if (err instanceof ReportValidationError) {
-      return NextResponse.json(
-        { error: 'validation_error', message: err.message },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', err.message);
     }
     logger.error('report.store_failed', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return NextResponse.json(
-      { error: 'report_failed', message: 'Could not save your report.' },
-      { status: 500 }
-    );
+    return jsonError(500, 'report_failed', 'Could not save your report.');
   }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   if (!isReportAdmin(user)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    return jsonError(403, 'forbidden');
   }
   const limitRaw = Number(request.nextUrl.searchParams.get('limit') ?? '100');
   const limit = Number.isFinite(limitRaw) ? limitRaw : 100;

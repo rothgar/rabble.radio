@@ -17,6 +17,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError, readJson, requireUser } from '@/lib/api';
 import {
   createFeedback,
   FeedbackValidationError,
@@ -42,15 +43,8 @@ interface FeedbackBody {
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  let body: FeedbackBody;
-  try {
-    body = (await request.json()) as FeedbackBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<FeedbackBody>(request);
+  if (body instanceof NextResponse) return body;
   const user = await getCurrentUser().catch(() => null);
   try {
     const row = await createFeedback({
@@ -75,18 +69,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ id: row.id }, { status: 201 });
   } catch (err) {
     if (err instanceof FeedbackValidationError) {
-      return NextResponse.json(
-        { error: 'validation_error', message: err.message },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', err.message);
     }
     logger.error('feedback.store_failed', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return NextResponse.json(
-      { error: 'feedback_failed', message: 'Could not save your report.' },
-      { status: 500 }
-    );
+    return jsonError(500, 'feedback_failed', 'Could not save your report.');
   }
 }
 
@@ -103,12 +91,10 @@ function hasReadToken(request: NextRequest): boolean {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!hasReadToken(request)) {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-    }
+    const user = await requireUser();
+    if (user instanceof NextResponse) return user;
     if (!isFeedbackAdmin(user)) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+      return jsonError(403, 'forbidden');
     }
   }
   const limitRaw = Number(request.nextUrl.searchParams.get('limit') ?? '100');
@@ -116,10 +102,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const sinceRaw = request.nextUrl.searchParams.get('since');
   const since = sinceRaw ? new Date(sinceRaw) : null;
   if (since && Number.isNaN(since.getTime())) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'since must be an ISO date.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'since must be an ISO date.');
   }
   const feedback = (await listFeedback(limit)).filter((f) => !since || f.createdAt > since);
   return NextResponse.json(

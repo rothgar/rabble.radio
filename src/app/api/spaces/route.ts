@@ -32,6 +32,7 @@ import {
 } from '@/lib/spaces';
 import { createHostToken } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError, readJson, requireUser } from '@/lib/api';
 import { decoratePublicSpaces } from '@/lib/space-extras';
 import { normalizeTags } from '@/lib/tags';
 import { prisma } from '@/lib/db';
@@ -84,20 +85,11 @@ function isOnScheduleBoundary(d: Date): boolean {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
-  let body: CreateSpaceBody;
-  try {
-    body = (await request.json()) as CreateSpaceBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<CreateSpaceBody>(request);
+  if (body instanceof NextResponse) return body;
 
   let startNow = false;
   let rawTitle = '';
@@ -175,7 +167,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (spaceId) {
       const resolved = await resolveSpaceForUser(spaceId, user.did);
       if (!resolved || !resolved.isHost) {
-        return NextResponse.json({ error: 'not_found' }, { status: 404 });
+        return jsonError(404, 'not_found');
       }
       existing = resolved.space;
     } else if (!rawTitle) {
@@ -191,8 +183,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           : await reopenSpace(existing.id);
         reopened = true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to reopen show.';
-        return NextResponse.json({ error: 'create_failed', message }, { status: 500 });
+        logger.error('spaces.reopen_failed', { err, spaceId: existing.id });
+        return jsonError(500, 'create_failed', 'Failed to reopen show.');
       }
     }
   }
@@ -213,8 +205,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         isDefaultTitled: startNow && !rawTitle,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create space.';
-      return NextResponse.json({ error: 'create_failed', message }, { status: 500 });
+      logger.error('spaces.create_failed', { err, did: user.did });
+      return jsonError(500, 'create_failed', 'Failed to create space.');
     }
   }
 
@@ -242,16 +234,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         err,
         spaceId: space.id,
       });
-      return NextResponse.json(
-        {
-          error: 'token_failed',
-          message:
-            err instanceof Error
-              ? err.message
-              : 'Failed to create host token.',
-        },
-        { status: 500 }
-      );
+      return jsonError(500, 'token_failed', 'Failed to create host token.');
     }
 
     logger.info(reopened ? 'spaces.start_now.reopened' : 'spaces.start_now.created', {

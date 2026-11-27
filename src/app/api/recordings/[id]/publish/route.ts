@@ -8,7 +8,7 @@
 // /api/recordings/[id]/audio.
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/session';
+import { jsonError, readJson, requireUser } from '@/lib/api';
 import {
   getRecordingById,
   RecordingStateError,
@@ -24,60 +24,39 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
-  let body: { published?: unknown };
-  try {
-    body = (await request.json()) as { published?: unknown };
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<{ published?: unknown }>(request);
+  if (body instanceof NextResponse) return body;
   if (typeof body.published !== 'boolean') {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'published must be a boolean.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'published must be a boolean.');
   }
 
   const recording = await getRecordingById(id);
   if (!recording) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   if (recording.hostDid !== user.did) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'Only the host can publish this recording.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the host can publish this recording.');
   }
 
   try {
     const updated = await setRecordingPublished(id, body.published);
     if (!updated) {
-      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+      return jsonError(404, 'not_found');
     }
     logger.info('recording.publish', { id, published: body.published, did: user.did });
     return NextResponse.json({ recording: toPublicRecording(updated) }, { status: 200 });
   } catch (err) {
     if (err instanceof RecordingStateError) {
-      return NextResponse.json({ error: err.code, message: err.message }, { status: 409 });
+      return jsonError(409, err.code, err.message);
     }
     logger.error('recording.publish.failed', { err, id });
-    return NextResponse.json(
-      {
-        error: 'publish_failed',
-        message: err instanceof Error ? err.message : 'Failed to update recording.',
-      },
-      { status: 500 }
-    );
+    return jsonError(500, 'publish_failed', 'Failed to update recording.');
   }
 }

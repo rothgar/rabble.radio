@@ -19,6 +19,7 @@ vi.mock('@/lib/spaces', () => ({
   getSpaceById: vi.fn(),
   getSpaceBySlug: vi.fn(),
   originFromRequest: (request: Request) => new URL(request.url).origin,
+  defaultPublicOrigin: () => 'https://rabble.invalid',
   resolveSpaceForUser: m.resolveSpaceForUser,
   setSpaceLive: vi.fn(),
   updateSpace: m.updateSpace,
@@ -169,7 +170,7 @@ describe('PATCH /api/spaces/[id]', () => {
     const res = await PATCH(patch({ title: 'Renamed' }), ctx);
     expect(res.status).toBe(200);
     expect(m.publishLiveStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Renamed', spaceUrl: 'http://localhost/show/sp1' })
+      expect.objectContaining({ title: 'Renamed', spaceUrl: 'https://rabble.invalid/show/sp1' })
     );
   });
 });

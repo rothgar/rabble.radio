@@ -6,7 +6,7 @@
 //     follow (any show); each spaceId is returned once per poll.
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/session';
+import { requireUser } from '@/lib/api';
 import { listReminders, takeDueReminders, type DueReminder } from '@/lib/reminders';
 import { takeDueHostFollows } from '@/lib/host-follows';
 import { takeDueShowFollows } from '@/lib/show-follows';
@@ -15,8 +15,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   if (request.nextUrl.searchParams.get('due') === '1') {
     const [showDue, hostDue, showFollowDue] = await Promise.all([
       takeDueReminders(user.did),

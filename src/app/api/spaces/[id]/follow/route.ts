@@ -9,26 +9,22 @@
 // moment the host goes on air (src/lib/push.ts#pushShowFollowersOnAir).
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/session';
-import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
+import { jsonError, readJson, requireUser } from '@/lib/api';
+import { resolveSpace } from '@/lib/spaces';
 import { hasShowFollow, setShowFollow } from '@/lib/show-follows';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-async function resolve(id: string) {
-  return (await getSpaceById(id)) ?? (await getSpaceBySlug(id));
-}
-
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
-  const space = id ? await resolve(id) : null;
-  if (!space) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  const space = id ? await resolveSpace(id) : null;
+  if (!space) return jsonError(404, 'not_found');
   return NextResponse.json({ following: await hasShowFollow(space.id, user.did) }, { status: 200 });
 }
 
@@ -36,28 +32,18 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
-  const space = id ? await resolve(id) : null;
-  if (!space) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  const space = id ? await resolveSpace(id) : null;
+  if (!space) return jsonError(404, 'not_found');
   if (space.host.did === user.did) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'You cannot follow your own show.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'You cannot follow your own show.');
   }
-  let body: { on?: unknown };
-  try {
-    body = (await request.json()) as { on?: unknown };
-  } catch {
-    return NextResponse.json({ error: 'invalid_json', message: 'Body must be JSON.' }, { status: 400 });
-  }
+  const body = await readJson<{ on?: unknown }>(request, 'Body must be JSON.');
+  if (body instanceof NextResponse) return body;
   if (typeof body.on !== 'boolean') {
-    return NextResponse.json(
-      { error: 'validation_error', message: "'on' must be a boolean." },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', "'on' must be a boolean.");
   }
   const following = await setShowFollow(space.id, user.did, body.on);
   return NextResponse.json({ following }, { status: 200 });

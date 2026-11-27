@@ -41,7 +41,8 @@ const { mockGetPendingInvite, mockListActiveSpeakers, mockGetSpaceById } = vi.ho
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: vi.fn(async () => null),
-  originFromRequest: (request: Request) => new URL(request.url).origin,
+  resolveSpace: async (id: string) => mockGetSpaceById(id),
+  defaultPublicOrigin: () => 'https://rabble.invalid',
 }));
 
 vi.mock('@/lib/stage', () => ({
@@ -144,7 +145,7 @@ describe('POST /api/spaces/[id]/stage', () => {
       spaceId: 'sp1',
       hostDid: HOST.did,
       targetIdentity: 'did:plc:listener',
-      origin: 'http://localhost',
+      origin: 'https://rabble.invalid',
     });
   });
 
@@ -177,7 +178,7 @@ describe('POST /api/spaces/[id]/stage', () => {
       displayName: LISTENER.handle,
       handle: LISTENER.handle,
       profileDisplayName: undefined,
-      origin: 'http://localhost',
+      origin: 'https://rabble.invalid',
     });
   });
 

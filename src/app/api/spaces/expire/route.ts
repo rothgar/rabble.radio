@@ -3,19 +3,23 @@
 // POST /api/spaces/expire
 //
 // Sweep stale (unscheduled, expired, untouched for >5m) active spaces and
-// transition them to `status = 'expired'`. Intended to be called by an
-// external scheduler/cron in production; for MVP no auth is required since
-// the endpoint only mutates rows that are already past their TTL.
+// transition them to `status = 'expired'`. Called by the Worker's cron
+// trigger (custom-worker.ts) every five minutes; outside callers get 403
+// (src/lib/cron.ts).
 //
 // Response: { expired: number }
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { expireStaleSpaces } from '@/lib/spaces';
+import { isCronRequest } from '@/lib/cron';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function POST(_request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (!isCronRequest(request)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
   try {
     const expired = await expireStaleSpaces();
     return NextResponse.json({ expired }, { status: 200 });

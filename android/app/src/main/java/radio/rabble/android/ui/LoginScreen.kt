@@ -58,7 +58,6 @@ fun LoginScreen(baseUrl: String, session: SessionStore, onDone: () -> Unit) {
                     settings.domStorageEnabled = true
                     settings.setSupportMultipleWindows(true)
                     CookieManager.getInstance().setAcceptCookie(true)
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     // The login page's "create an account" links are target="_blank". Without
                     // a WebChromeClient, WebView has nowhere to open them and treats them as a
                     // same-view navigation, stranding the OAuth flow. Route them to a throwaway

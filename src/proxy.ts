@@ -108,6 +108,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     response.cookies.set(COOKIE_NAME, empty, {
       httpOnly: true,
       sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
       path: '/',
       maxAge: 60 * 60 * 24 * 30,
     });

@@ -240,7 +240,8 @@ const SHORT_TITLES = [
   [/Too many subrequests/i, 'Too many subrequests'],
 ];
 function title(g) {
-  let what = g.kind === 'event' || g.kind === 'outcome' ? g.what : normalize(g.what.split('\n')[0]);
+  // Titles are public and unredacted elsewhere: scrub them like the body.
+  let what = redact(g.kind === 'event' || g.kind === 'outcome' ? g.what : normalize(g.what.split('\n')[0]));
   for (const [re, short] of SHORT_TITLES) if (re.test(what)) { what = short; break; }
   if (what.length > 80) what = what.slice(0, 80).replace(/\s+\S*$/, '') + '…';
   if (g.kind === 'outcome') what += ` on ${[...g.urls.keys()][0] ?? 'a request'}`;

@@ -76,7 +76,8 @@ await check('show page', async () => {
   expect(a.status === 200, `GET /api/spaces/${s.id} -> ${a.status}`);
   const j = await a.json();
   const title = j.space?.title ?? j.title;
-  expect(title === s.title, `show api title "${title}" != list title "${s.title}"`);
+  // Titles are user content and this detail lands in public issues: ids only.
+  expect(title === s.title, `show api title != list title for /show/${s.id}`);
   return `/show/${s.id} (${s.status})`;
 });
 

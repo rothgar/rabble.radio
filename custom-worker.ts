@@ -18,11 +18,15 @@ export default {
 
   async scheduled(_event: unknown, env: Env, ctx: Ctx) {
     const base = env.PUBLIC_URL ?? 'https://rabble.rodeo';
-    const request = new Request(`${base}/api/spaces/expire`, {
-      method: 'POST',
-      headers: { 'x-rabble-cron': '1' },
-    });
-    ctx.waitUntil(handler.fetch(request, env, ctx));
+    // Per-isolate token checked by src/lib/cron.ts: the sweep routes accept
+    // only requests this handler makes in-process, never outside callers.
+    const g = globalThis as Record<string, unknown>;
+    if (typeof g.__rabbleCronToken !== 'string') g.__rabbleCronToken = crypto.randomUUID();
+    const headers = { 'x-rabble-cron': g.__rabbleCronToken as string };
+    for (const path of ['/api/spaces/expire', '/api/spaces/recording/expire']) {
+      const request = new Request(`${base}${path}`, { method: 'POST', headers });
+      ctx.waitUntil(handler.fetch(request, env, ctx));
+    }
   },
 };
 

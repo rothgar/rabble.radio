@@ -79,6 +79,11 @@ model Space {
   /// look it up directly instead of recomputing and matching that title.
   /// Cleared the moment a host edits the title themselves.
   isDefaultTitled Boolean @default(false)
+  /// AT URI of the `community.lexicon.calendar.event` record published in the
+  /// host's own repo for a scheduled show (issue #154), null when none has
+  /// been published (or it was never a scheduled show).
+  calendarEventUri String?
+  calendarEventCid String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

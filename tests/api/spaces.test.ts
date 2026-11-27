@@ -21,6 +21,9 @@ const {
   mockGetCurrentUser,
   mockFindUserByDid,
   mockPublishLiveStatus,
+  mockPublishCalendarEvent,
+  mockUpdateCalendarEventStatus,
+  mockSetCalendarEvent,
   mockCreateHostToken,
   mockRoomNameForSpace,
   mockStartRecording,
@@ -43,6 +46,9 @@ const {
   mockGetCurrentUser: vi.fn(),
   mockFindUserByDid: vi.fn(),
   mockPublishLiveStatus: vi.fn(),
+  mockPublishCalendarEvent: vi.fn(),
+  mockUpdateCalendarEventStatus: vi.fn(),
+  mockSetCalendarEvent: vi.fn(),
   mockCreateHostToken: vi.fn(),
   mockRoomNameForSpace: vi.fn(),
   mockStartRecording: vi.fn(),
@@ -68,12 +74,15 @@ vi.mock('@/lib/spaces', () => ({
   getSpaceBySlug: mockGetSpaceBySlug,
   resolveSpace: async (id: string) => (await mockGetSpaceById(id)) ?? (await mockGetSpaceBySlug(id)),
   originFromRequest: (request: Request) => new URL(request.url).origin,
+  defaultPublicOrigin: () => 'https://rabble.invalid',
   tryExpireStaleSpaces: mockTryExpireStaleSpaces,
   setSpaceLive: mockSetSpaceLive,
   toPublicSpace: mockToPublicSpace,
   findDefaultHostedSpace: mockFindDefaultHostedSpace,
   reopenSpace: mockReopenSpace,
   resolveSpaceForUser: mockResolveSpaceForUser,
+  setCalendarEvent: mockSetCalendarEvent,
+  SPACE_STATUS: { SCHEDULED: 'scheduled', ACTIVE: 'active', LIVE: 'live', ENDED: 'ended', EXPIRED: 'expired' },
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -90,6 +99,12 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/atproto', () => ({
   publishLiveStatus: mockPublishLiveStatus,
+  publishCalendarEvent: mockPublishCalendarEvent,
+  updateCalendarEventStatus: mockUpdateCalendarEventStatus,
+  CALENDAR_EVENT_STATUS: {
+    scheduled: 'community.lexicon.calendar.event#scheduled',
+    cancelled: 'community.lexicon.calendar.event#cancelled',
+  },
 }));
 
 vi.mock('@/lib/recording', () => ({
@@ -171,6 +186,7 @@ beforeEach(() => {
   mockRoomNameForSpace.mockImplementation(
     (spaceId: string) => `space-${spaceId}`
   );
+  mockUpdateCalendarEventStatus.mockResolvedValue({ ok: true });
   // Default user profile lookup for the start-now flow.
   mockFindUserByDid.mockResolvedValue({
     displayName: 'Alice',
@@ -413,8 +429,24 @@ describe('POST /api/spaces', () => {
     mockCreateSpace.mockResolvedValueOnce(
       makeSpaceRow({
         id: 'sp_sched',
+        title: 'Later',
         status: 'scheduled',
         scheduledAt: scheduled,
+      })
+    );
+    mockPublishCalendarEvent.mockResolvedValueOnce({
+      ok: true,
+      uri: 'at://did:plc:host123/community.lexicon.calendar.event/sp_sched',
+      cid: 'bafyreie1',
+    });
+    mockSetCalendarEvent.mockResolvedValueOnce(
+      makeSpaceRow({
+        id: 'sp_sched',
+        title: 'Later',
+        status: 'scheduled',
+        scheduledAt: scheduled,
+        calendarEventUri: 'at://did:plc:host123/community.lexicon.calendar.event/sp_sched',
+        calendarEventCid: 'bafyreie1',
       })
     );
 
@@ -440,6 +472,53 @@ describe('POST /api/spaces', () => {
       scheduledAt: scheduled,
       isDefaultTitled: false,
     });
+    expect(mockPublishCalendarEvent).toHaveBeenCalledWith({
+      session: { did: 'did:plc:host123', handle: 'alice.bsky.social' },
+      spaceUrl: 'https://rabble.invalid/show/sp_sched',
+      title: 'Later',
+      description: null,
+      startsAt: scheduled.toISOString(),
+      rkey: 'sp_sched',
+    });
+    expect(mockSetCalendarEvent).toHaveBeenCalledWith('sp_sched', {
+      uri: 'at://did:plc:host123/community.lexicon.calendar.event/sp_sched',
+      cid: 'bafyreie1',
+    });
+  });
+
+  it('still creates the scheduled space when the calendar event publish fails', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+    });
+    const scheduled = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    scheduled.setUTCMinutes(0, 0, 0);
+    mockCreateSpace.mockResolvedValueOnce(
+      makeSpaceRow({ id: 'sp_sched', status: 'scheduled', scheduledAt: scheduled })
+    );
+    mockPublishCalendarEvent.mockResolvedValueOnce({
+      ok: false,
+      error: 'PDS unavailable',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Later',
+        scheduledAt: scheduled.toISOString(),
+      }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.space.id).toBe('sp_sched');
+    expect(mockSetCalendarEvent).not.toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'spaces.create.calendar_event_failed',
+      expect.objectContaining({ spaceId: 'sp_sched', error: 'PDS unavailable' })
+    );
   });
 
   it('startNow: true creates an off-air space and returns the host token', async () => {
@@ -717,6 +796,85 @@ describe('POST /api/spaces', () => {
     expect(denied.status).toBe(404);
     expect(mockReopenSpace).toHaveBeenCalledTimes(1);
     expect(mockCreateSpace).not.toHaveBeenCalled();
+  });
+
+  it('cancels a still-scheduled show\'s calendar event when it is reopened early (startNow + spaceId)', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:host123', handle: 'alice.bsky.social' });
+    const scheduledAt = new Date('2026-02-01T18:00:00.000Z');
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpaceRow({
+        id: 'sp2',
+        title: 'Later',
+        status: 'scheduled',
+        scheduledAt,
+        calendarEventUri: 'at://did:plc:host123/community.lexicon.calendar.event/sp2',
+      }),
+      isHost: true,
+    });
+    mockReopenSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp2', status: 'active' }));
+    mockSetCalendarEvent.mockResolvedValueOnce(makeSpaceRow({ id: 'sp2', status: 'active' }));
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 't',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp2',
+      identity: 'did:plc:host123',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true, spaceId: 'sp2' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+
+    expect(mockUpdateCalendarEventStatus).toHaveBeenCalledWith({
+      session: { did: 'did:plc:host123', handle: 'alice.bsky.social' },
+      rkey: 'sp2',
+      title: 'Later',
+      description: null,
+      spaceUrl: 'https://rabble.invalid/show/sp2',
+      startsAt: scheduledAt.toISOString(),
+      status: 'community.lexicon.calendar.event#cancelled',
+    });
+    expect(mockSetCalendarEvent).toHaveBeenCalledWith('sp2', null);
+  });
+
+  it('still reopens the show when cancelling its calendar event fails', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({ did: 'did:plc:host123', handle: 'alice.bsky.social' });
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpaceRow({
+        id: 'sp2',
+        status: 'scheduled',
+        scheduledAt: new Date('2026-02-01T18:00:00.000Z'),
+        calendarEventUri: 'at://did:plc:host123/community.lexicon.calendar.event/sp2',
+      }),
+      isHost: true,
+    });
+    mockReopenSpace.mockResolvedValueOnce(makeSpaceRow({ id: 'sp2', status: 'active' }));
+    mockSetCalendarEvent.mockResolvedValueOnce(makeSpaceRow({ id: 'sp2', status: 'active' }));
+    mockUpdateCalendarEventStatus.mockResolvedValueOnce({ ok: false, error: 'PDS unavailable' });
+    mockCreateHostToken.mockResolvedValueOnce({
+      token: 't',
+      wsUrl: 'ws://livekit:7880',
+      roomName: 'space-sp2',
+      identity: 'did:plc:host123',
+    });
+
+    const { POST } = await import('@/app/api/spaces/route');
+    const req = new NextRequest('http://localhost/api/spaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ startNow: true, spaceId: 'sp2' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    expect(mockSetCalendarEvent).toHaveBeenCalledWith('sp2', null);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'spaces.reopen.calendar_event_failed',
+      expect.objectContaining({ spaceId: 'sp2' })
+    );
   });
 
   it('a title is still required when not starting now', async () => {

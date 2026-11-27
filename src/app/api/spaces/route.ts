@@ -22,14 +22,22 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   createSpace,
+  defaultPublicOrigin,
   defaultShowTitle,
   findDefaultHostedSpace,
   getSpacesForUser,
   originFromRequest,
   reopenSpace,
   resolveSpaceForUser,
+  setCalendarEvent,
+  SPACE_STATUS,
   toPublicSpace,
 } from '@/lib/spaces';
+import {
+  CALENDAR_EVENT_STATUS,
+  publishCalendarEvent,
+  updateCalendarEventStatus,
+} from '@/lib/atproto';
 import { createHostToken } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
 import { jsonError, readJson, requireUser } from '@/lib/api';
@@ -186,6 +194,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         logger.error('spaces.reopen_failed', { err, spaceId: existing.id });
         return jsonError(500, 'create_failed', 'Failed to reopen show.');
       }
+
+      // Reopening a still-`scheduled` show (startNow + spaceId, issue #44)
+      // starts it now instead of at its scheduledAt, so any calendar event
+      // already published for it would otherwise be left on the host's PDS
+      // forever advertising the old time. Cancel it the same way DELETE
+      // does; best-effort, same tolerance as the publish itself.
+      if (existing.status === SPACE_STATUS.SCHEDULED && existing.calendarEventUri) {
+        const result = await updateCalendarEventStatus({
+          session: { did: user.did, handle: user.handle },
+          rkey: existing.id,
+          title: existing.title,
+          description: existing.description,
+          // Public on Bluesky, so always the canonical origin, never
+          // whatever Host header this request carried.
+          spaceUrl: `${defaultPublicOrigin()}/show/${existing.id}`,
+          startsAt: (existing.scheduledAt ?? existing.createdAt).toISOString(),
+          status: CALENDAR_EVENT_STATUS.cancelled,
+        });
+        if (!result.ok) {
+          logger.warn('spaces.reopen.calendar_event_failed', {
+            spaceId: existing.id,
+            error: result.error,
+          });
+        }
+        space = await setCalendarEvent(existing.id, null);
+      }
     }
   }
 
@@ -211,6 +245,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const origin = originFromRequest(request);
+
+  // ---- Publish the calendar event for a scheduled space ------------------
+  // Best-effort: scheduling already succeeds in D1 above, so a failed
+  // publish here should not block it (unlike going live, where the banner
+  // publish is load-bearing).
+  if (!startNow && scheduledAt) {
+    const result = await publishCalendarEvent({
+      session: { did: user.did, handle: user.handle },
+      // Public on Bluesky, so always the canonical origin, never whatever
+      // Host header this request carried.
+      spaceUrl: `${defaultPublicOrigin()}/show/${space.id}`,
+      title: space.title,
+      description: space.description,
+      startsAt: scheduledAt.toISOString(),
+      rkey: space.id,
+    });
+    if (result.ok && result.uri) {
+      space = await setCalendarEvent(space.id, {
+        uri: result.uri,
+        cid: result.cid ?? null,
+      });
+    } else if (!result.ok) {
+      logger.warn('spaces.create.calendar_event_failed', {
+        spaceId: space.id,
+        error: result.error,
+      });
+    }
+  }
 
   // ---- Start-now flow ---------------------------------------------------
   if (startNow) {

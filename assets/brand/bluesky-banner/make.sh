@@ -18,10 +18,11 @@ html,body{margin:0;width:3000px;height:1000px;overflow:hidden}
 body{background:$BG;color:$INK;font-family:Inter,system-ui,sans-serif;position:relative}
 /* faint radio-wave arcs bleeding off the right edge, the mark's motif at page scale */
 .waves{position:absolute;right:-480px;top:-540px;width:1900px;height:1900px}
-.wrap{position:absolute;left:220px;top:0;height:1000px;display:flex;align-items:center}
-.text{display:flex;flex-direction:column;gap:40px}
-.word{font-family:Fraunces;font-weight:900;font-size:340px;line-height:.86;letter-spacing:-.015em;font-variation-settings:"SOFT" 100,"WONK" 0;margin:0}
-.tag{font-size:84px;font-weight:500;color:$MUTED;margin:0;letter-spacing:-.005em}
+/* text starts where it sat beside the mark, clear of the avatar Bluesky lays over the lower-left corner */
+.wrap{position:absolute;left:850px;top:0;height:1000px;display:flex;align-items:center}
+.text{display:flex;flex-direction:column;gap:34px}
+.word{font-family:Fraunces;font-weight:900;font-size:300px;line-height:.86;letter-spacing:-.015em;font-variation-settings:"SOFT" 100,"WONK" 0;margin:0}
+.tag{font-size:76px;font-weight:500;color:$MUTED;margin:0;letter-spacing:-.005em}
 .row{display:flex;align-items:center;gap:28px;margin-top:10px}
 .live{display:inline-flex;align-items:center;gap:22px;background:$LIVE_BG;color:$LIVE_FG;font-weight:600;font-size:46px;letter-spacing:.08em;padding:18px 40px;border-radius:16px}
 .live i{width:26px;height:26px;border-radius:50%;background:#fff;display:inline-block}

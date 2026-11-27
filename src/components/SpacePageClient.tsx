@@ -20,6 +20,7 @@ import { FollowHostButton } from '@/components/FollowHostButton';
 import { ShowFollowButton } from '@/components/ShowFollowButton';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
 import { AddToCalendar } from '@/components/AddToCalendar';
+import { postJson } from '@/lib/post-json';
 
 export interface SpacePageClientProps {
   spaceId: string;
@@ -240,104 +241,35 @@ export function SpacePageClient({
     if (params.get('listen') === '1' && !isHost && isLive) setAutoListen(true);
   }, [isHost, isLive]);
 
+  const postStage = useCallback(
+    async (action: string, targetIdentity: string, label: string) => {
+      try {
+        await postJson(`/api/spaces/${spaceId}/stage`, { action, targetIdentity }, `${label} failed`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : `${label} failed.`);
+      }
+    },
+    [spaceId]
+  );
+
   const hostActions = useMemo(() => {
     if (!isHost) return undefined;
     return {
-      onInvite: async (targetIdentity: string) => {
-        try {
-          const res = await fetch(`/api/spaces/${spaceId}/stage`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ action: 'invite', targetIdentity }),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            setError(body?.message ?? body?.error ?? `Invite failed (HTTP ${res.status}).`);
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Invite failed.');
-        }
-      },
-      onRemoveFromStage: async (targetIdentity: string) => {
-        try {
-          const res = await fetch(`/api/spaces/${spaceId}/stage`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ action: 'remove', targetIdentity }),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            setError(body?.message ?? body?.error ?? `Remove failed (HTTP ${res.status}).`);
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Remove failed.');
-        }
-      },
-      onMuteToggle: async (targetIdentity: string, nextMuted: boolean) => {
-        try {
-          const res = await fetch(`/api/spaces/${spaceId}/stage`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              action: nextMuted ? 'mute' : 'unmute',
-              targetIdentity,
-            }),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            setError(body?.message ?? body?.error ?? `Mute failed (HTTP ${res.status}).`);
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Mute failed.');
-        }
-      },
-      onRemoveFromSpace: async (targetIdentity: string) => {
-        try {
-          const res = await fetch(`/api/spaces/${spaceId}/stage`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ action: 'kick', targetIdentity }),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            setError(body?.message ?? body?.error ?? `Kick failed (HTTP ${res.status}).`);
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Kick failed.');
-        }
-      },
-      onBlock: async (targetIdentity: string) => {
-        try {
-          const res = await fetch(`/api/spaces/${spaceId}/stage`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ action: 'block', targetIdentity }),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            setError(body?.message ?? body?.error ?? `Block failed (HTTP ${res.status}).`);
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Block failed.');
-        }
-      },
+      onInvite: (targetIdentity: string) => postStage('invite', targetIdentity, 'Invite'),
+      onRemoveFromStage: (targetIdentity: string) => postStage('remove', targetIdentity, 'Remove'),
+      onMuteToggle: (targetIdentity: string, nextMuted: boolean) =>
+        postStage(nextMuted ? 'mute' : 'unmute', targetIdentity, 'Mute'),
+      onRemoveFromSpace: (targetIdentity: string) => postStage('kick', targetIdentity, 'Kick'),
+      onBlock: (targetIdentity: string) => postStage('block', targetIdentity, 'Block'),
       onReport: async (targetIdentity: string, reason: string, targetHandle?: string) => {
         try {
-          const res = await fetch('/api/reports', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ spaceId, targetIdentity, reason, targetHandle }),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            setError(body?.message ?? body?.error ?? `Report failed (HTTP ${res.status}).`);
-          }
+          await postJson('/api/reports', { spaceId, targetIdentity, reason, targetHandle }, 'Report failed');
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Report failed.');
         }
       },
     };
-  }, [isHost, spaceId]);
+  }, [isHost, postStage, spaceId]);
 
   const onJoin = useCallback(async () => {
     if (joining) return;

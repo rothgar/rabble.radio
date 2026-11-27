@@ -1,7 +1,22 @@
 // tests/lib/music.test.ts
 
-import { describe, expect, it } from 'vitest';
-import { attribution, getMood, guestName, isValidMood, MOODS, musicUrl, playlistFor, trackByFile } from '@/lib/music';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  attribution,
+  getMood,
+  guestName,
+  isValidMood,
+  MOODS,
+  musicFileFromPath,
+  musicUrl,
+  playlistFor,
+  serveMusic,
+  trackByFile,
+} from '@/lib/music';
+
+function object(size = 1000) {
+  return { body: new ReadableStream(), size, httpEtag: '"abc"' };
+}
 
 describe('music catalog', () => {
   it('has distinct moods, each with attributed tracks and unique files', () => {
@@ -51,5 +66,67 @@ describe('music catalog', () => {
 
   it('formats a guest name standing in for the track', () => {
     expect(guestName(trackByFile('wallpaper.mp3')!)).toBe('Wallpaper by Kevin MacLeod');
+  });
+});
+
+describe('musicFileFromPath', () => {
+  it('matches only one-segment /music paths', () => {
+    expect(musicFileFromPath('/music/carefree.mp3')).toBe('carefree.mp3');
+    expect(musicFileFromPath('/music/a/b')).toBeNull();
+    expect(musicFileFromPath('/music')).toBeNull();
+    expect(musicFileFromPath('/api/health')).toBeNull();
+  });
+
+  it('rejects a malformed percent sequence instead of throwing', () => {
+    expect(musicFileFromPath('/music/%')).toBeNull();
+  });
+});
+
+describe('serveMusic', () => {
+  it('reports content-length on a whole-track GET', async () => {
+    const head = vi.fn(async () => ({ size: 1000 }));
+    const get = vi.fn(async () => object());
+    const res = await serveMusic('carefree.mp3', 'GET', null, { head, get });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe('1000');
+    expect(get).toHaveBeenCalledWith('music/carefree.mp3', undefined);
+  });
+
+  it('reports content-length on a ranged GET', async () => {
+    const head = vi.fn(async () => ({ size: 1000 }));
+    const get = vi.fn(async () => object(100));
+    const res = await serveMusic('carefree.mp3', 'GET', 'bytes=200-299', { head, get });
+    expect(res.status).toBe(206);
+    expect(res.headers.get('content-length')).toBe('100');
+    expect(res.headers.get('content-range')).toBe('bytes 200-299/1000');
+    expect(get).toHaveBeenCalledWith('music/carefree.mp3', { range: { offset: 200, length: 100 } });
+  });
+
+  it('reports content-length on a HEAD request, with no body', async () => {
+    const head = vi.fn(async () => ({ size: 1000 }));
+    const get = vi.fn(async () => object());
+    const res = await serveMusic('carefree.mp3', 'HEAD', null, { head, get });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe('1000');
+    expect(res.body).toBeNull();
+  });
+
+  it('reports content-length on a ranged HEAD request, with no body', async () => {
+    const head = vi.fn(async () => ({ size: 1000 }));
+    const get = vi.fn(async () => object(100));
+    const res = await serveMusic('carefree.mp3', 'HEAD', 'bytes=200-299', { head, get });
+    expect(res.status).toBe(206);
+    expect(res.headers.get('content-length')).toBe('100');
+    expect(res.headers.get('content-range')).toBe('bytes 200-299/1000');
+    expect(res.body).toBeNull();
+  });
+
+  it('404s for uncatalogued files and missing objects, 503 without a bucket', async () => {
+    const head = vi.fn(async () => ({ size: 1000 }));
+    expect((await serveMusic('../secret.mp3', 'GET', null, { head, get: vi.fn() })).status).toBe(404);
+    expect((await serveMusic('carefree.mp3', 'GET', null, { head: vi.fn(async () => null), get: vi.fn() })).status).toBe(
+      404
+    );
+    expect((await serveMusic('carefree.mp3', 'GET', null, undefined)).status).toBe(503);
   });
 });

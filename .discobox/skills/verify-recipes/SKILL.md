@@ -117,6 +117,49 @@ can see each other's state.
 Audio itself (someone actually speaking) has no headless surface: say so in
 the PR when a change is about audio quality or device handling.
 
+## Driving custom-worker.ts (the deployed Worker entrypoint)
+
+`next dev` never runs `custom-worker.ts` — it only runs the Next.js app, so a
+fix that depends on `custom-worker.ts` answering a path before Next.js sees it
+(the content-length-stripping workaround `src/lib/downloads.ts` and
+`src/lib/music.ts` share, issues #192/#194) can't be verified on :3000. The
+unpatched behaviour (no `content-length`) will still reproduce there, which is
+expected, not a regression.
+
+To drive the real entrypoint, build and preview it locally:
+
+```bash
+pnpm cf:build                                            # opennextjs-cloudflare build
+pnpm exec wrangler dev --local --port 8787 --config wrangler.jsonc &
+```
+
+This is the actual `.open-next/worker.js` + `custom-worker.ts`, under
+`workerd`, with the same local D1/R2/LiveKit bindings `next dev` uses. The R2
+buckets this builds against (`rabble-dev-recordings`) are empty of anything
+under `music/` or `builds/`: upload a throwaway object first —
+
+```bash
+pnpm exec wrangler r2 object put rabble-dev-recordings/music/<file> --local --file=/path/to/some.mp3
+curl -sI http://localhost:8787/music/<file>          # content-length now present
+curl -sI -X HEAD http://localhost:8787/music/<file>
+curl -sD - -o /dev/null -r 0-99 http://localhost:8787/music/<file>
+pnpm exec wrangler r2 object delete rabble-dev-recordings/music/<file> --local   # clean up after
+```
+
+`rm -rf .open-next` afterwards; it's a build artifact, not meant to be
+committed. `pkill -f "wrangler dev"` to stop the preview — it binds its own
+port, so it doesn't conflict with the boot `web` service on :3000.
+
+Gotcha found verifying #194: a bare `%` anywhere in the path 500s under this
+local Worker runtime, on routes that don't touch R2 at all (`/station/%`,
+`/show/%`) — the OpenNext/Workers runtime itself faults on the malformed
+request before any route code runs, even one with its own decode guard. The
+same path 400s cleanly under `next dev`. This is pre-existing and generic,
+not something a single route's code can fix; Cloudflare's edge likely never
+forwards a malformed percent-sequence this far in real traffic anyway, since
+`wrangler dev --local` has no edge in front of `workerd`. Don't chase it as
+part of an unrelated route fix.
+
 ## What needs a logged-in user
 
 Login is Bluesky OAuth against a real account; a box has none. But a session

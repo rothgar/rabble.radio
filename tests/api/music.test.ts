@@ -8,11 +8,11 @@ vi.mock('@opennextjs/cloudflare', () => ({
   getCloudflareContext: () => ({ env: { RECORDINGS: { get: m.get, head: m.head } } }),
 }));
 
-import { GET, parseRange } from '@/app/music/[file]/route';
+import { GET, HEAD, parseRange } from '@/app/music/[file]/route';
 
 const ctx = (file: string) => ({ params: Promise.resolve({ file }) });
-const req = (range?: string) =>
-  new NextRequest('https://rabble.rodeo/music/carefree.mp3', { headers: range ? { range } : {} });
+const req = (range?: string, method = 'GET') =>
+  new NextRequest('https://rabble.rodeo/music/carefree.mp3', { method, headers: range ? { range } : {} });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -62,5 +62,22 @@ describe('GET /music/[file]', () => {
     m.head.mockResolvedValueOnce(null);
     const res = await GET(req(), ctx('carefree.mp3'));
     expect(res.status).toBe(404);
+  });
+});
+
+describe('HEAD /music/[file]', () => {
+  it('reports content-length with no body', async () => {
+    const res = await HEAD(req(undefined, 'HEAD'), ctx('carefree.mp3'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe('1000');
+    expect(res.body).toBeNull();
+  });
+
+  it('reports content-length for a ranged HEAD, with no body', async () => {
+    const res = await HEAD(req('bytes=200-299', 'HEAD'), ctx('carefree.mp3'));
+    expect(res.status).toBe(206);
+    expect(res.headers.get('content-length')).toBe('100');
+    expect(res.headers.get('content-range')).toBe('bytes 200-299/1000');
+    expect(res.body).toBeNull();
   });
 });

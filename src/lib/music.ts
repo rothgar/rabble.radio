@@ -8,6 +8,11 @@
 // All tracks are by Kevin MacLeod (incompetech.com), licensed under
 // Creative Commons: By Attribution 4.0 — https://creativecommons.org/licenses/by/4.0/
 // Attribution is shown wherever a track plays.
+//
+// Two entry points share serveMusic(): custom-worker.ts answers /music/*
+// before Next.js (since Next 16.4.6 every route-handler Response loses its
+// content-length, same root cause as src/lib/downloads.ts), and
+// src/app/music/[file]/route.ts keeps `next dev` working.
 
 export interface MusicTrack {
   /** File name under music/ in the bucket, also the URL path segment. */
@@ -131,4 +136,93 @@ export function attribution(track: MusicTrack): string {
 /** The track's title and artist, standing in for a guest's name on the tile. */
 export function guestName(track: MusicTrack): string {
   return `${track.title} by ${track.artistName}`;
+}
+
+/** Minimal shape of the R2 binding, kept local to avoid the Workers globals. */
+export interface R2ObjectLike {
+  body: ReadableStream;
+  size: number;
+  httpEtag: string;
+}
+export interface R2BucketLike {
+  get(key: string, options?: { range?: { offset: number; length: number } }): Promise<R2ObjectLike | null>;
+  head(key: string): Promise<{ size: number } | null>;
+}
+
+/** The file name for a /music/<file> path, or null when it is not one. */
+export function musicFileFromPath(pathname: string): string | null {
+  const m = /^\/music\/([^/]+)$/.exec(pathname);
+  if (!m) return null;
+  // decodeURIComponent throws on a malformed percent sequence (REVIEW.md:
+  // src/app/station/[tag]/page.tsx) rather than letting trackByFile reject it.
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+/** Parse a single `bytes=a-b` range against a known size; null when absent or unusable. */
+export function parseRange(header: string | null, size: number): { offset: number; length: number } | null {
+  if (!header) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m) return null;
+  const [, a, b] = m;
+  if (a === '' && b === '') return null;
+  let start: number;
+  let end: number;
+  if (a === '') {
+    const suffix = Number(b);
+    if (suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(a);
+    end = b === '' ? size - 1 : Math.min(Number(b), size - 1);
+  }
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) return null;
+  return { offset: start, length: end - start + 1 };
+}
+
+/**
+ * Build the response for one track. 404 for an uncatalogued file or a
+ * missing object, 503 without the bucket. HEAD and a ranged GET both get an
+ * accurate content-length; HEAD gets no body, so the size is visible without
+ * a transfer.
+ */
+export async function serveMusic(
+  file: string,
+  method: string,
+  rangeHeader: string | null,
+  bucket: R2BucketLike | undefined
+): Promise<Response> {
+  const track = trackByFile(file);
+  if (!track) return Response.json({ error: 'not_found' }, { status: 404 });
+  if (!bucket) return Response.json({ error: 'storage_unavailable' }, { status: 503 });
+  const key = `music/${file}`;
+  const head = await bucket.head(key);
+  if (!head) return Response.json({ error: 'not_found' }, { status: 404 });
+  const range = parseRange(rangeHeader, head.size);
+  const object = await bucket.get(key, range ? { range } : undefined);
+  if (!object) return Response.json({ error: 'not_found' }, { status: 404 });
+  const headers: Record<string, string> = {
+    'content-type': 'audio/mpeg',
+    'accept-ranges': 'bytes',
+    'cache-control': 'public, max-age=31536000, immutable',
+    etag: object.httpEtag,
+    'x-music-title': track.title,
+  };
+  const status = range ? 206 : 200;
+  if (range) {
+    headers['content-length'] = String(range.length);
+    headers['content-range'] = `bytes ${range.offset}-${range.offset + range.length - 1}/${head.size}`;
+  } else {
+    headers['content-length'] = String(head.size);
+  }
+  if (method === 'HEAD') {
+    // Drop the stream so it is not left open.
+    void object.body.cancel().catch(() => undefined);
+    return new Response(null, { status, headers });
+  }
+  return new Response(object.body, { status, headers });
 }

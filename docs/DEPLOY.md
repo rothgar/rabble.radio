@@ -78,9 +78,11 @@ gh variable set IOS_TESTFLIGHT --body true
 - The web job is also the repo's CI: a failing typecheck, lint or test stops
   the deploy and the run shows up red on the merge commit. Pull requests do
   not run it; workers verify in their box before opening one.
-- The Android APK is a debug build pointed at `https://rabble.rodeo`, the
-  same thing `node scripts/upload-android-build.mjs` used to upload by hand.
-  That script still works for a local build.
+- The Android APK is a debug build pointed at `https://rabble.radio`, like
+  every app build: both apps default to production and a build against the
+  dev site is a deliberate one-off (`-PrabbleBaseUrl=https://rabble.rodeo`,
+  or `RABBLE_BASE_URL` for iOS). `node scripts/upload-android-build.mjs`
+  still uploads a local build by hand.
 - GitHub-hosted macOS runners may lag the Xcode on the Mac mini. If the
   archive fails on a toolchain error, set `IOS_RUNNER` to a self-hosted
   runner on the Mac mini: Settings, Actions, Runners, New self-hosted runner,
@@ -118,8 +120,8 @@ and uploads it to the production bucket (served at
 https://rabble.radio/downloads/rabble-android.apk), then runs
 `scripts/qa-live.mjs --base https://rabble.radio`; a failure opens or
 updates the "QA: production checks failing after deploy" issue. iOS is not
-part of it: TestFlight builds point at `RABBLE_BASE_URL` in
-`ios/project.yml`, still rabble.rodeo; change it there when the apps move.
+part of it: TestFlight builds come from the development deploy and already
+point at rabble.radio (`RABBLE_BASE_URL` in `ios/project.yml`).
 
 The same run's `android-release` job builds a signed `.aab` against
 `https://rabble.radio` with `./gradlew bundleRelease` and keeps it as the

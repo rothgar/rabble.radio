@@ -14,10 +14,12 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Base URL of the rabble.radio deployment. Override for local dev with
+        // Base URL the app talks to: production. Override for a one-off build
+        // against the dev site or a local server:
+        //   ./gradlew assembleDebug -PrabbleBaseUrl=https://rabble.rodeo
         //   ./gradlew assembleDebug -PrabbleBaseUrl=http://10.0.2.2:3000
         val baseUrl = (project.findProperty("rabbleBaseUrl") as String?)
-            ?: "https://rabble.rodeo"
+            ?: "https://rabble.radio"
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
     }
 

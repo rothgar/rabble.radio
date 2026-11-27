@@ -6,7 +6,7 @@
 #
 # RABBLE_BASE_URL overrides the app's RabbleBaseURL build setting so the
 # simulator talks to a server seeded with demo data (`node
-# scripts/seed-demo.mjs --local`) instead of https://rabble.rodeo; defaults
+# scripts/seed-demo.mjs --local`) instead of https://rabble.radio; defaults
 # to a dev server on the Mac mini itself.
 set -u
 cd "$(dirname "$0")/.."

@@ -55,7 +55,7 @@ relationship, which cannot be driven headlessly), opening a room with
 `-showId demo_space_1 -autoJoin`
 (Connecting… through to the ON AIR badge and listener count), and the
 "Leave the show?" confirmation. It needs a server seeded with demo data
-(`node scripts/seed-demo.mjs --local`), not `https://rabble.rodeo`, so
+(`node scripts/seed-demo.mjs --local`), not `https://rabble.radio`, so
 results do not depend on a real show being live: `RABBLE_BASE_URL`
 overrides the app's `RabbleBaseURL` build setting for the run, defaulting to
 `http://localhost:3000` (a dev server on the Mac mini itself). Pass it to

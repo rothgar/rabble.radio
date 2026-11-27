@@ -51,7 +51,7 @@ final class AppEnvironment: ObservableObject {
 
     init() {
         let configured = Bundle.main.object(forInfoDictionaryKey: "RabbleBaseURL") as? String
-        let url = URL(string: configured?.isEmpty == false ? configured! : "https://rabble.rodeo")!
+        let url = URL(string: configured?.isEmpty == false ? configured! : "https://rabble.radio")!
         baseURL = url
         session = SessionStore(baseURL: url)
         api = RabbleAPI(baseURL: url, session: session)

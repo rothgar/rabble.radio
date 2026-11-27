@@ -159,7 +159,9 @@ from the recordings bucket (key `builds/rabble-android.apk`). Upload a new
 build with `node scripts/upload-android-build.mjs` (reads the R2 token from
 `.env`), then install it on a phone from
 `https://rabble.rodeo/downloads/rabble-android.apk` (allow "install unknown
-apps" for the browser). File names are allow-listed in
+apps" for the browser). Every app build talks to `https://rabble.radio`
+unless built with `-PrabbleBaseUrl=...` (Android) or `RABBLE_BASE_URL`
+(iOS) for a one-off against the dev site. File names are allow-listed in
 `src/app/downloads/[file]/route.ts`.
 
 ## Show metrics

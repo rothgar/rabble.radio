@@ -30,6 +30,7 @@ import { normalizeTags } from '@/lib/tags';
 import { isValidMood } from '@/lib/music';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { check, ValidationError, validationErrorResponse } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -107,87 +108,42 @@ export async function PATCH(
     musicOnStage?: boolean;
     podcastFeedEnabled?: boolean;
   } = {};
-  if (body.title !== undefined) {
-    if (typeof body.title !== 'string' || body.title.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Title is required.' },
-        { status: 400 }
-      );
+  try {
+    if (body.title !== undefined) {
+      check(typeof body.title === 'string' && body.title.trim().length > 0, 'Title is required.');
+      check(body.title.trim().length <= 200, 'Title must be 200 characters or fewer.');
+      patch.title = body.title.trim();
     }
-    if (body.title.trim().length > 200) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Title must be 200 characters or fewer.' },
-        { status: 400 }
+    if (body.description !== undefined) {
+      check(body.description === null || typeof body.description === 'string', 'Description must be a string.');
+      check(
+        !(typeof body.description === 'string' && body.description.trim().length > 2000),
+        'Description must be 2000 characters or fewer.'
       );
+      patch.description = body.description;
     }
-    patch.title = body.title.trim();
-  }
-  if (body.description !== undefined) {
-    if (body.description !== null && typeof body.description !== 'string') {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Description must be a string.' },
-        { status: 400 }
-      );
+    if (body.tags !== undefined) {
+      check(Array.isArray(body.tags), 'Tags must be an array.');
+      const tags = normalizeTags(body.tags);
+      check(!(body.tags.length > 0 && tags.length === 0), 'Tags must be valid YouTube categories.');
+      patch.tags = tags;
     }
-    if (typeof body.description === 'string' && body.description.trim().length > 2000) {
-      return NextResponse.json(
-        {
-          error: 'validation_error',
-          message: 'Description must be 2000 characters or fewer.',
-        },
-        { status: 400 }
-      );
+    if (body.musicMood !== undefined) {
+      check(isValidMood(body.musicMood), 'Unknown music mood.');
+      patch.musicMood = body.musicMood;
     }
-    patch.description = body.description;
-  }
-  if (body.tags !== undefined) {
-    if (!Array.isArray(body.tags)) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Tags must be an array.' },
-        { status: 400 }
-      );
+    if (body.musicOnStage !== undefined) {
+      check(typeof body.musicOnStage === 'boolean', 'musicOnStage must be a boolean.');
+      patch.musicOnStage = body.musicOnStage;
     }
-    const tags = normalizeTags(body.tags);
-    if (body.tags.length > 0 && tags.length === 0) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Tags must be valid YouTube categories.' },
-        { status: 400 }
-      );
+    if (body.podcastFeedEnabled !== undefined) {
+      check(typeof body.podcastFeedEnabled === 'boolean', 'podcastFeedEnabled must be a boolean.');
+      patch.podcastFeedEnabled = body.podcastFeedEnabled;
     }
-    patch.tags = tags;
-  }
-  if (body.musicMood !== undefined) {
-    if (!isValidMood(body.musicMood)) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Unknown music mood.' },
-        { status: 400 }
-      );
-    }
-    patch.musicMood = body.musicMood;
-  }
-  if (body.musicOnStage !== undefined) {
-    if (typeof body.musicOnStage !== 'boolean') {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'musicOnStage must be a boolean.' },
-        { status: 400 }
-      );
-    }
-    patch.musicOnStage = body.musicOnStage;
-  }
-  if (body.podcastFeedEnabled !== undefined) {
-    if (typeof body.podcastFeedEnabled !== 'boolean') {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'podcastFeedEnabled must be a boolean.' },
-        { status: 400 }
-      );
-    }
-    patch.podcastFeedEnabled = body.podcastFeedEnabled;
-  }
-  if (Object.keys(patch).length === 0) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'Nothing to update.' },
-      { status: 400 }
-    );
+    check(Object.keys(patch).length > 0, 'Nothing to update.');
+  } catch (err) {
+    if (err instanceof ValidationError) return validationErrorResponse(err);
+    throw err;
   }
 
   const resolved = await resolveSpaceForUser(id, user.did);

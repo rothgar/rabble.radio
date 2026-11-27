@@ -99,6 +99,83 @@ export async function GET(
   );
 }
 
+interface ActionContext {
+  user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+  id: string;
+  targetIdentity?: string;
+  request: NextRequest;
+}
+
+interface ActionDef {
+  needsTarget: boolean;
+  run: (ctx: ActionContext) => Promise<SuccessTokenBody | OkBody>;
+}
+
+const ACTIONS: Record<string, ActionDef> = {
+  invite: {
+    needsTarget: true,
+    run: async ({ user, id, targetIdentity, request }) => {
+      await inviteToStage({
+        spaceId: id,
+        hostDid: user.did,
+        targetIdentity: targetIdentity as string,
+        origin: originFromRequest(request),
+      });
+      return { ok: true };
+    },
+  },
+  accept: {
+    needsTarget: false,
+    run: ({ user, id, request }) =>
+      acceptStageInvite({
+        spaceId: id,
+        userDid: user.did,
+        displayName: user.handle,
+        handle: user.handle,
+        profileDisplayName: user.displayName,
+        origin: originFromRequest(request),
+      }),
+  },
+  leave: {
+    needsTarget: false,
+    run: ({ user, id }) =>
+      leaveStage({ spaceId: id, userDid: user.did, displayName: user.handle }),
+  },
+  remove: {
+    needsTarget: true,
+    run: ({ user, id, targetIdentity }) =>
+      removeFromStage({ spaceId: id, hostDid: user.did, targetIdentity: targetIdentity as string }),
+  },
+  kick: {
+    needsTarget: true,
+    run: async ({ user, id, targetIdentity }) => {
+      await kickFromSpace({ spaceId: id, hostDid: user.did, targetIdentity: targetIdentity as string });
+      return { ok: true };
+    },
+  },
+  block: {
+    needsTarget: true,
+    run: async ({ user, id, targetIdentity }) => {
+      await blockFromSpace({ spaceId: id, hostDid: user.did, targetIdentity: targetIdentity as string });
+      return { ok: true };
+    },
+  },
+  mute: {
+    needsTarget: true,
+    run: async ({ user, id, targetIdentity }) => {
+      await muteSpeaker({ spaceId: id, hostDid: user.did, targetIdentity: targetIdentity as string, muted: true });
+      return { ok: true };
+    },
+  },
+  unmute: {
+    needsTarget: true,
+    run: async ({ user, id, targetIdentity }) => {
+      await muteSpeaker({ spaceId: id, hostDid: user.did, targetIdentity: targetIdentity as string, muted: false });
+      return { ok: true };
+    },
+  },
+};
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -129,142 +206,31 @@ export async function POST(
       ? body.targetIdentity
       : undefined;
 
+  const def = Object.prototype.hasOwnProperty.call(ACTIONS, action) ? ACTIONS[action] : undefined;
+  if (!def) {
+    return NextResponse.json(
+      {
+        error: 'validation_error',
+        message:
+          "action must be one of 'invite', 'accept', 'leave', 'remove', 'kick', 'block', 'mute', or 'unmute'.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (def.needsTarget && !targetIdentity) {
+    return NextResponse.json(
+      {
+        error: 'validation_error',
+        message: `targetIdentity is required for ${action}.`,
+      },
+      { status: 400 }
+    );
+  }
+
   try {
-    switch (action) {
-      case 'invite': {
-        if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for invite.',
-            },
-            { status: 400 }
-          );
-        }
-        await inviteToStage({
-          spaceId: id,
-          hostDid: user.did,
-          targetIdentity,
-          origin: originFromRequest(request),
-        });
-        return NextResponse.json({ ok: true }, { status: 200 });
-      }
-      case 'accept': {
-        const result = await acceptStageInvite({
-          spaceId: id,
-          userDid: user.did,
-          displayName: user.handle,
-          handle: user.handle,
-          profileDisplayName: user.displayName,
-          origin: originFromRequest(request),
-        });
-        return NextResponse.json(result, { status: 200 });
-      }
-      case 'leave': {
-        const result = await leaveStage({
-          spaceId: id,
-          userDid: user.did,
-          displayName: user.handle,
-        });
-        return NextResponse.json(result, { status: 200 });
-      }
-      case 'remove': {
-        if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for remove.',
-            },
-            { status: 400 }
-          );
-        }
-        const result = await removeFromStage({
-          spaceId: id,
-          hostDid: user.did,
-          targetIdentity,
-        });
-        return NextResponse.json(result, { status: 200 });
-      }
-      case 'kick': {
-        if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for kick.',
-            },
-            { status: 400 }
-          );
-        }
-        await kickFromSpace({
-          spaceId: id,
-          hostDid: user.did,
-          targetIdentity,
-        });
-        return NextResponse.json({ ok: true }, { status: 200 });
-      }
-      case 'block': {
-        if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for block.',
-            },
-            { status: 400 }
-          );
-        }
-        await blockFromSpace({
-          spaceId: id,
-          hostDid: user.did,
-          targetIdentity,
-        });
-        return NextResponse.json({ ok: true }, { status: 200 });
-      }
-      case 'mute': {
-        if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for mute.',
-            },
-            { status: 400 }
-          );
-        }
-        await muteSpeaker({
-          spaceId: id,
-          hostDid: user.did,
-          targetIdentity,
-          muted: true,
-        });
-        return NextResponse.json({ ok: true }, { status: 200 });
-      }
-      case 'unmute': {
-        if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for unmute.',
-            },
-            { status: 400 }
-          );
-        }
-        await muteSpeaker({
-          spaceId: id,
-          hostDid: user.did,
-          targetIdentity,
-          muted: false,
-        });
-        return NextResponse.json({ ok: true }, { status: 200 });
-      }
-      default:
-        return NextResponse.json(
-          {
-            error: 'validation_error',
-            message:
-              "action must be one of 'invite', 'accept', 'leave', 'remove', 'kick', 'block', 'mute', or 'unmute'.",
-          },
-          { status: 400 }
-        );
-    }
+    const result = await def.run({ user, id, targetIdentity, request });
+    return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof StageError) {
       return NextResponse.json(

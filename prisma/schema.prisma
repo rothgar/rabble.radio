@@ -35,6 +35,7 @@ model User {
 
   @@index([handle])
   @@index([bannedAt])
+  @@index([createdAt])
 }
 
 /// A station: the durable thing a host creates and can go live on many times.
@@ -225,6 +226,7 @@ model ShowSession {
   @@index([spaceId, startedAt])
   @@index([hostDid, startedAt])
   @@index([endedAt])
+  @@index([startedAt])
 }
 
 model ShowSessionTag {
@@ -258,6 +260,7 @@ model ShowParticipation {
   @@unique([sessionId, identity])
   @@index([identity, joinedAt])
   @@index([spaceId])
+  @@index([joinedAt])
 }
 
 /// One reaction tap. Counters on Space and ShowSession are kept in step; the
@@ -276,6 +279,7 @@ model ShowReaction {
   @@index([spaceId, createdAt])
   @@index([sessionId])
   @@index([did])
+  @@index([createdAt])
 }
 
 /// A signed-in user liking a show. One per user per Space.
@@ -289,6 +293,7 @@ model ShowLike {
 
   @@unique([spaceId, did])
   @@index([did])
+  @@index([createdAt])
 }
 
 /// Materialized per-host, per-topic totals behind the host leaderboard. The

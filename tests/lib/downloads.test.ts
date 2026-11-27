@@ -24,6 +24,11 @@ describe('downloadFileFromPath', () => {
     expect(downloadFileFromPath('/downloads')).toBeNull();
     expect(downloadFileFromPath('/api/health')).toBeNull();
   });
+
+  it('returns null for a malformed percent sequence instead of throwing', () => {
+    expect(downloadFileFromPath('/downloads/%')).toBeNull();
+    expect(downloadFileFromPath('/downloads/%E0%A4%A')).toBeNull();
+  });
 });
 
 describe('serveDownload', () => {
@@ -49,5 +54,17 @@ describe('serveDownload', () => {
     expect((await serveDownload('../secret', 'GET', { get: vi.fn() })).status).toBe(404);
     expect((await serveDownload('rabble-android.apk', 'GET', { get: vi.fn(async () => null) })).status).toBe(404);
     expect((await serveDownload('rabble-android.apk', 'GET', undefined)).status).toBe(503);
+  });
+
+  it('504s instead of hanging when the R2 get() never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      const get = vi.fn(() => new Promise<never>(() => undefined));
+      const pending = serveDownload('rabble-android.apk', 'GET', { get });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).toBe(504);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

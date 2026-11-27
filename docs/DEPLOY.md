@@ -138,8 +138,12 @@ dry run. Before the first real deploy:
    registrar. Wait for the zone to show Active. Do not create an A or CNAME
    for the apex: the first deploy attaches the Worker custom domain and
    creates the records and certificate itself. Optional, in the zone: the
-   "www to root" redirect rule, and the no-mail records `TXT rabble.radio
-   "v=spf1 -all"` and `TXT _dmarc.rabble.radio "v=DMARC1; p=reject"`.
+   "www to root" redirect rule. Mail: Email Routing is enabled on the zone
+   with a catch-all rule forwarding every `*@rabble.radio` address to the
+   owner's mailbox (it manages the MX and SPF records itself), plus
+   `TXT _dmarc.rabble.radio "v=DMARC1; p=reject"` since nothing sends as
+   the domain. The Worker's `workers_dev` is off, so production answers on
+   rabble.radio only.
 2. **CI token.** Edit the `CLOUDFLARE_API_TOKEN` token in the dashboard and
    add the `rabble.radio` zone to its zone resources (or create a new token
    with both zones and `gh secret set CLOUDFLARE_API_TOKEN` again).

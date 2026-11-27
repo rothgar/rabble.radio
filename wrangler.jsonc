@@ -66,11 +66,11 @@
       "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "rabble-prod-recordings" }],
       "triggers": { "crons": ["*/5 * * * *"] },
       "routes": [{ "pattern": "rabble.radio", "custom_domain": true }],
+      // Production answers on rabble.radio only; no rabble-prod.*.workers.dev.
+      "workers_dev": false,
       "observability": { "enabled": true },
       // Secrets for this environment are separate from rabble-dev's and set
       // with `wrangler secret put NAME --env production` (docs/DEPLOY.md).
-      // Add "VAPID_PUBLIC_KEY" here once the production key pair exists
-      // (docs/DEPLOY.md); until then web push is off and the rest works.
       "vars": {
         "APP_NAME": "Rabble",
         "PUBLIC_URL": "https://rabble.radio",
@@ -84,7 +84,10 @@
         "REPORT_ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
         "ADMIN_DIDS": "did:plc:p7uix7mresfq4nfzxp3klgfa,did:plc:pu72ebuazc53cwafmuhll5t3",
         "SUPPORT_EMAIL": "justin.garrison@siderolabs.com",
-        "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
+        "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com",
+        // Web Push (VAPID) public key for production; the private key is the
+        // VAPID_PRIVATE_KEY secret of rabble-prod. Generated with scripts/gen-vapid.mjs.
+        "VAPID_PUBLIC_KEY": "BNHs4j8QOgekeOp9ICPToxt9xRuNplblaDiCG2nm_oVBb08_OvteEpnIPxht7EvoXQoPEyxNPZOr1qIMKm05ug0"
         // Add "NEXT_PUBLIC_CF_BEACON_TOKEN" here once a production Web
         // Analytics site exists for rabble.radio; see the top-level vars.
       }

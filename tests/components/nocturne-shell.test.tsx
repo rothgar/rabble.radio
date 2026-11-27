@@ -40,6 +40,14 @@ describe('<NocturneShell />', () => {
     expect(screen.getByTestId('nocturne-nav-avatar')).toBeInTheDocument();
   });
 
+  it('keeps the brand link at a 44px touch target', () => {
+    renderShell();
+    const nav = screen.getByTestId('nocturne-nav');
+    const link = within(nav).getByRole('link', { name: /rabble radio/i });
+    expect(link.className).toContain('min-h-touch');
+    expect(link.className).toContain('min-w-touch');
+  });
+
   it('renders the sticky footer', () => {
     renderShell();
     expect(screen.getByTestId('nocturne-footer')).toBeInTheDocument();

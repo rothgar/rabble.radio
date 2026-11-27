@@ -514,3 +514,17 @@ code, and mistakes already made there.
   (`androidx.compose.ui.semantics.clearAndSetSemantics`) instead. Hit when
   porting iOS's `Wordmark` (icon + text, one accessibility element) to
   Android's `Wordmark` in `Common.kt` for issue #157.
+
+## src/components/SiteHeader.tsx and src/components/NocturneShell.tsx (brand link touch target)
+
+- A fix that adds `min-h-touch` to a tappable element without `min-w-touch`
+  keeps recurring in this repo (`AudienceRows` invite chip, `AddToCalendar`
+  trigger — both above), and the site-brand `Link` in both files hit it a
+  third time: on phones, `Wordmark compact`'s text span is `hidden
+  sm:inline` (`src/components/ui/Logo.tsx`), so the link renders as just
+  the bare `Monogram` (40px since issue #157's size bump, 32px before it)
+  with no horizontal padding of its own — under 44px wide either way.
+  Check both classes together, every time, on anything that collapses to
+  an icon on narrow screens — `DESIGN.md`: "Touch targets are at least
+  44px tall and wide (`min-h-touch`, `min-w-touch`) on every tappable
+  thing."

@@ -31,7 +31,7 @@ export function NocturneShell({
       >
         <Link
           href="/stations"
-          className="flex items-center gap-2 text-[var(--color-text)]"
+          className="flex min-h-touch min-w-touch items-center gap-2 text-[var(--color-text)]"
         >
           <Wordmark compact />
         </Link>

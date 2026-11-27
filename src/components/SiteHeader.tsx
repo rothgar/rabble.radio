@@ -49,7 +49,7 @@ export function SiteHeader(): ReactElement {
     >
       <Link
         href="/"
-        className="flex items-center gap-2 text-[var(--color-text)]"
+        className="flex min-h-touch min-w-touch items-center gap-2 text-[var(--color-text)]"
         data-testid="site-brand"
       >
         <Wordmark compact />

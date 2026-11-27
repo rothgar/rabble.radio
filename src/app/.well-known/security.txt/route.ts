@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 const EXPIRES = '2027-11-26T00:00:00.000Z';
 

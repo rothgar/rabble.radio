@@ -24,6 +24,11 @@ describe('downloadFileFromPath', () => {
     expect(downloadFileFromPath('/downloads')).toBeNull();
     expect(downloadFileFromPath('/api/health')).toBeNull();
   });
+
+  it('returns null for a malformed percent sequence instead of throwing', () => {
+    expect(downloadFileFromPath('/downloads/%')).toBeNull();
+    expect(downloadFileFromPath('/downloads/%E0%A4%A')).toBeNull();
+  });
 });
 
 describe('serveDownload', () => {

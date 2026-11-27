@@ -74,6 +74,7 @@ import {
   getSpaceBySlug,
   getSpacesForUser,
   generateSlugSuffix,
+  setCalendarEvent,
   toPublicSpace,
   SPACE_STATUS,
   EMPTY_SPACE_TTL_MS,
@@ -447,6 +448,26 @@ describe('updateSpace', () => {
     mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
     await updateSpace('sp1', { musicOnStage: false });
     expect(mockSpaceUpdate.mock.calls[0][0].data).toEqual({ musicOnStage: false });
+  });
+});
+
+describe('setCalendarEvent', () => {
+  it('stores the published record uri/cid', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
+    await setCalendarEvent('sp1', { uri: 'at://did/collection/sp1', cid: 'bafy...' });
+    const args = mockSpaceUpdate.mock.calls[0][0];
+    expect(args.where).toEqual({ id: 'sp1' });
+    expect(args.data).toEqual({
+      calendarEventUri: 'at://did/collection/sp1',
+      calendarEventCid: 'bafy...',
+    });
+  });
+
+  it('clears both fields when passed null', async () => {
+    mockSpaceUpdate.mockResolvedValueOnce({ id: 'sp1', title: 'Kept', tags: [], host: {} });
+    await setCalendarEvent('sp1', null);
+    const args = mockSpaceUpdate.mock.calls[0][0];
+    expect(args.data).toEqual({ calendarEventUri: null, calendarEventCid: null });
   });
 });
 

@@ -25,7 +25,12 @@ import {
 import { getCurrentUser } from '@/lib/session';
 import { jsonError, readJson, requireUser } from '@/lib/api';
 import { decoratePublicSpaces } from '@/lib/space-extras';
-import { deleteLiveStatus, publishLiveStatus } from '@/lib/atproto';
+import {
+  CALENDAR_EVENT_STATUS,
+  deleteLiveStatus,
+  publishLiveStatus,
+  updateCalendarEventStatus,
+} from '@/lib/atproto';
 import { broadcastRoomData, roomNameForSpace } from '@/lib/livekit';
 import { normalizeTags } from '@/lib/tags';
 import { isValidMood } from '@/lib/music';
@@ -206,6 +211,26 @@ export async function DELETE(
         logger.warn('space.delete.atproto_failed', {
           err,
           spaceId: space.id,
+        });
+      }
+    }
+
+    if (space.calendarEventUri) {
+      const result = await updateCalendarEventStatus({
+        session: { did: user.did, handle: user.handle },
+        rkey: space.id,
+        title: space.title,
+        description: space.description,
+        // Public on Bluesky, so always the canonical origin, never whatever
+        // Host header this request carried.
+        spaceUrl: `${defaultPublicOrigin()}/show/${space.id}`,
+        startsAt: (space.scheduledAt ?? space.createdAt).toISOString(),
+        status: CALENDAR_EVENT_STATUS.cancelled,
+      });
+      if (!result.ok) {
+        logger.warn('space.delete.calendar_event_failed', {
+          spaceId: space.id,
+          error: result.error,
         });
       }
     }

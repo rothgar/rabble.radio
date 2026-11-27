@@ -19,13 +19,18 @@ vi.mock('@/lib/auth', () => ({
 
 import {
   APP_PROFILE_PLATFORM,
+  CALENDAR_EVENT_MODE,
+  CALENDAR_EVENT_STATUS,
   buildAppProfileRecord,
+  buildCalendarEventRecord,
   buildLiveStatusRecord,
   createAppPasswordSession,
   deleteLiveStatus,
   fetchBlockedDids,
   publishAppProfile,
+  publishCalendarEvent,
   publishLiveStatus,
+  updateCalendarEventStatus,
 } from '@/lib/atproto';
 
 const session = { did: 'did:plc:host123', handle: 'alice.bsky.social' };
@@ -215,6 +220,161 @@ describe('deleteLiveStatus', () => {
 
   it('rejects when session has no DID', async () => {
     const result = await deleteLiveStatus({ session: {} });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/DID/);
+    expect(fetchHandlerMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildCalendarEventRecord', () => {
+  it('builds a scheduled, virtual calendar.event record', () => {
+    const record = buildCalendarEventRecord({
+      title: 'My show',
+      description: 'Details',
+      spaceUrl: 'https://example.com/show/abc',
+      startsAt: '2026-01-01T18:00:00.000Z',
+    });
+    expect(record.$type).toBe('community.lexicon.calendar.event');
+    expect(record.name).toBe('My show');
+    expect(record.description).toBe('Details');
+    expect(record.startsAt).toBe('2026-01-01T18:00:00.000Z');
+    expect(record.mode).toBe(CALENDAR_EVENT_MODE.virtual);
+    expect(record.status).toBe(CALENDAR_EVENT_STATUS.scheduled);
+    expect(record.uris).toEqual([{ uri: 'https://example.com/show/abc' }]);
+    expect(typeof record.createdAt).toBe('string');
+  });
+
+  it('falls back to the title when no description is given', () => {
+    const record = buildCalendarEventRecord({
+      title: 'My show',
+      spaceUrl: 'https://example.com/show/abc',
+      startsAt: '2026-01-01T18:00:00.000Z',
+    });
+    expect(record.description).toBe('My show');
+  });
+
+  it('accepts an explicit status override', () => {
+    const record = buildCalendarEventRecord({
+      title: 'My show',
+      spaceUrl: 'https://example.com/show/abc',
+      startsAt: '2026-01-01T18:00:00.000Z',
+      status: CALENDAR_EVENT_STATUS.cancelled,
+    });
+    expect(record.status).toBe(CALENDAR_EVENT_STATUS.cancelled);
+  });
+});
+
+describe('publishCalendarEvent', () => {
+  const input = {
+    session,
+    spaceUrl: 'https://example.com/show/abc',
+    title: 'My show',
+    startsAt: '2026-01-01T18:00:00.000Z',
+    rkey: 'sp_abc',
+  };
+
+  it('writes community.lexicon.calendar.event/<rkey>', async () => {
+    fetchHandlerMock.mockResolvedValueOnce(
+      jsonResponse({
+        uri: 'at://did:plc:host123/community.lexicon.calendar.event/sp_abc',
+        cid: VALID_CID,
+      })
+    );
+
+    const result = await publishCalendarEvent(input);
+
+    expect(result.ok).toBe(true);
+    expect(result.uri).toBe(
+      'at://did:plc:host123/community.lexicon.calendar.event/sp_abc'
+    );
+    expect(result.cid).toBe(VALID_CID);
+
+    const [calledPathname, calledInit] = fetchHandlerMock.mock.calls[0];
+    expect(String(calledPathname)).toBe('/xrpc/com.atproto.repo.putRecord');
+    const body = await decodeBody(calledInit.body);
+    expect(body.repo).toBe('did:plc:host123');
+    expect(body.collection).toBe('community.lexicon.calendar.event');
+    expect(body.rkey).toBe('sp_abc');
+    const record = body.record as Record<string, unknown>;
+    expect(record.$type).toBe('community.lexicon.calendar.event');
+    expect(record.mode).toBe(CALENDAR_EVENT_MODE.virtual);
+    expect(record.status).toBe(CALENDAR_EVENT_STATUS.scheduled);
+  });
+
+  it('returns ok=false when PDS returns an error', async () => {
+    fetchHandlerMock.mockResolvedValueOnce(
+      jsonErrorResponse(500, 'InternalServerError', 'boom')
+    );
+    const result = await publishCalendarEvent(input);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/boom/);
+  });
+
+  it('rejects when session has no DID', async () => {
+    const result = await publishCalendarEvent({ ...input, session: {} });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/DID/);
+    expect(fetchHandlerMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects when spaceUrl missing', async () => {
+    const result = await publishCalendarEvent({ ...input, spaceUrl: '' });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/spaceUrl/);
+    expect(fetchHandlerMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects when startsAt missing', async () => {
+    const result = await publishCalendarEvent({ ...input, startsAt: '' });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/startsAt/);
+    expect(fetchHandlerMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateCalendarEventStatus', () => {
+  const input = {
+    session,
+    rkey: 'sp_abc',
+    title: 'My show',
+    spaceUrl: 'https://example.com/show/abc',
+    startsAt: '2026-01-01T18:00:00.000Z',
+    status: CALENDAR_EVENT_STATUS.cancelled,
+  };
+
+  it('re-publishes the record with the new status', async () => {
+    fetchHandlerMock.mockResolvedValueOnce(
+      jsonResponse({
+        uri: 'at://did:plc:host123/community.lexicon.calendar.event/sp_abc',
+        cid: VALID_CID,
+      })
+    );
+
+    const result = await updateCalendarEventStatus(input);
+    expect(result.ok).toBe(true);
+    expect(result.uri).toBe(
+      'at://did:plc:host123/community.lexicon.calendar.event/sp_abc'
+    );
+
+    const [calledPathname, calledInit] = fetchHandlerMock.mock.calls[0];
+    expect(String(calledPathname)).toBe('/xrpc/com.atproto.repo.putRecord');
+    const body = await decodeBody(calledInit.body);
+    expect(body.rkey).toBe('sp_abc');
+    const record = body.record as Record<string, unknown>;
+    expect(record.status).toBe(CALENDAR_EVENT_STATUS.cancelled);
+  });
+
+  it('returns ok=false when PDS returns an error', async () => {
+    fetchHandlerMock.mockResolvedValueOnce(
+      jsonErrorResponse(500, 'InternalServerError', 'boom')
+    );
+    const result = await updateCalendarEventStatus(input);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/boom/);
+  });
+
+  it('rejects when session has no DID', async () => {
+    const result = await updateCalendarEventStatus({ ...input, session: {} });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/DID/);
     expect(fetchHandlerMock).not.toHaveBeenCalled();

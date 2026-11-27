@@ -39,6 +39,9 @@ export interface SpaceModel {
   podcastFeedEnabled: boolean;
   /** True for the auto-titled default show from an untitled "Start a show". */
   isDefaultTitled: boolean;
+  /** AT URI of the published `community.lexicon.calendar.event` record, null if none. */
+  calendarEventUri?: string | null;
+  calendarEventCid?: string | null;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -314,6 +317,26 @@ export async function updateSpace(
   const row = await prisma.space.update({
     where: { id },
     data,
+    include: spaceInclude,
+  });
+  return withTags(row);
+}
+
+/**
+ * Store (or clear) the uri/cid of the `community.lexicon.calendar.event`
+ * record published for a scheduled space, so a later update can target the
+ * same record.
+ */
+export async function setCalendarEvent(
+  id: string,
+  event: { uri: string; cid: string | null } | null
+): Promise<SpaceWithHost> {
+  const row = await prisma.space.update({
+    where: { id },
+    data: {
+      calendarEventUri: event?.uri ?? null,
+      calendarEventCid: event?.cid ?? null,
+    },
     include: spaceInclude,
   });
   return withTags(row);

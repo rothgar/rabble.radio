@@ -343,6 +343,161 @@ export async function publishAppProfile(input: {
   }
 }
 
+const CALENDAR_EVENT_COLLECTION = 'community.lexicon.calendar.event';
+
+/** `mode` values for `community.lexicon.calendar.event`. */
+export const CALENDAR_EVENT_MODE = {
+  inPerson: 'community.lexicon.calendar.event#inperson',
+  virtual: 'community.lexicon.calendar.event#virtual',
+  hybrid: 'community.lexicon.calendar.event#hybrid',
+} as const;
+
+/** `status` values for `community.lexicon.calendar.event`. */
+export const CALENDAR_EVENT_STATUS = {
+  scheduled: 'community.lexicon.calendar.event#scheduled',
+  planned: 'community.lexicon.calendar.event#planned',
+  cancelled: 'community.lexicon.calendar.event#cancelled',
+  postponed: 'community.lexicon.calendar.event#postponed',
+  rescheduled: 'community.lexicon.calendar.event#rescheduled',
+} as const;
+
+export interface CalendarEventRecordInput {
+  title: string;
+  description?: string | null;
+  spaceUrl: string;
+  /** ISO datetime string for the show's scheduled start. */
+  startsAt: string;
+  status?: string;
+}
+
+export interface PublishCalendarEventInput extends CalendarEventRecordInput {
+  session: BlueskySessionLike;
+  /** Record key; stable per space so a later update targets the same record. */
+  rkey: string;
+  correlationId?: string;
+}
+
+export interface UpdateCalendarEventStatusInput extends CalendarEventRecordInput {
+  session: BlueskySessionLike;
+  rkey: string;
+  status: string;
+  correlationId?: string;
+}
+
+export interface CalendarEventResult {
+  ok: boolean;
+  record?: unknown;
+  uri?: string;
+  cid?: string;
+  error?: string;
+}
+
+/**
+ * Build the record payload for a `community.lexicon.calendar.event` record.
+ * Exported for tests.
+ */
+export function buildCalendarEventRecord(
+  input: CalendarEventRecordInput
+): Record<string, unknown> {
+  return {
+    $type: CALENDAR_EVENT_COLLECTION,
+    name: input.title,
+    description: input.description || input.title,
+    startsAt: input.startsAt,
+    mode: CALENDAR_EVENT_MODE.virtual,
+    status: input.status ?? CALENDAR_EVENT_STATUS.scheduled,
+    uris: [{ uri: input.spaceUrl }],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Publish a `community.lexicon.calendar.event` record in the host's own repo
+ * for a scheduled show, so other atproto apps can see it as a native event.
+ */
+export async function publishCalendarEvent(
+  input: PublishCalendarEventInput
+): Promise<CalendarEventResult> {
+  const { logger } = await import('@/lib/logger');
+  const log = logger.child({ correlationId: input.correlationId, did: input.session.did });
+  if (!input.session.did) {
+    log.warn('atproto.calendar_event.publish.missing_did');
+    return { ok: false, error: 'Session is missing user DID.' };
+  }
+  if (!input.spaceUrl) {
+    log.warn('atproto.calendar_event.publish.missing_space_url');
+    return { ok: false, error: 'spaceUrl is required.' };
+  }
+  if (!input.startsAt) {
+    log.warn('atproto.calendar_event.publish.missing_starts_at');
+    return { ok: false, error: 'startsAt is required.' };
+  }
+  try {
+    const session = await resolveOAuthSession(input.session.did);
+    const agent = agentFor(session);
+    const { data } = await agent.com.atproto.repo.putRecord({
+      repo: input.session.did,
+      collection: CALENDAR_EVENT_COLLECTION,
+      rkey: input.rkey,
+      record: buildCalendarEventRecord(input),
+    });
+    log.info('atproto.calendar_event.publish.success', { uri: data.uri });
+    return { ok: true, record: data, uri: data.uri, cid: data.cid };
+  } catch (err) {
+    log.error('atproto.calendar_event.publish.failed', { err });
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Failed to publish calendar event record.',
+    };
+  }
+}
+
+/**
+ * Re-publish a host's `community.lexicon.calendar.event` record with a new
+ * `status` (e.g. `#cancelled` when the show is deleted). `putRecord` replaces
+ * the whole record, so the caller passes the current title/description/
+ * spaceUrl/startsAt back in alongside the new status.
+ */
+export async function updateCalendarEventStatus(
+  input: UpdateCalendarEventStatusInput
+): Promise<CalendarEventResult> {
+  const { logger } = await import('@/lib/logger');
+  const log = logger.child({ correlationId: input.correlationId, did: input.session.did });
+  if (!input.session.did) {
+    log.warn('atproto.calendar_event.update.missing_did');
+    return { ok: false, error: 'Session is missing user DID.' };
+  }
+  try {
+    const session = await resolveOAuthSession(input.session.did);
+    const agent = agentFor(session);
+    const { data } = await agent.com.atproto.repo.putRecord({
+      repo: input.session.did,
+      collection: CALENDAR_EVENT_COLLECTION,
+      rkey: input.rkey,
+      record: buildCalendarEventRecord(input),
+    });
+    log.info('atproto.calendar_event.update.success', { uri: data.uri });
+    return { ok: true, record: data, uri: data.uri, cid: data.cid };
+  } catch (err) {
+    log.error('atproto.calendar_event.update.failed', { err });
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Failed to update calendar event record.',
+    };
+  }
+}
+
+interface GetBlocksPage {
+  blocks?: Array<{ did?: string }>;
+  cursor?: string;
+}
+
 const BLOCKS_PAGE_SIZE = 100;
 
 /**

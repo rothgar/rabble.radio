@@ -22,11 +22,13 @@ const {
   mockResolveSpaceForUser,
   mockSetSpaceLive,
   mockDeleteLiveStatus,
+  mockUpdateCalendarEventStatus,
   mockLogger,
 } = vi.hoisted(() => ({
   mockResolveSpaceForUser: vi.fn(),
   mockSetSpaceLive: vi.fn(),
   mockDeleteLiveStatus: vi.fn(),
+  mockUpdateCalendarEventStatus: vi.fn(),
   mockLogger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -45,10 +47,16 @@ vi.mock('@/lib/spaces', () => ({
   setSpaceLive: mockSetSpaceLive,
   toPublicSpace: vi.fn((s: unknown) => s),
   originFromRequest: (request: Request) => new URL(request.url).origin,
+  defaultPublicOrigin: () => 'https://rabble.invalid',
 }));
 
 vi.mock('@/lib/atproto', () => ({
   deleteLiveStatus: mockDeleteLiveStatus,
+  updateCalendarEventStatus: mockUpdateCalendarEventStatus,
+  CALENDAR_EVENT_STATUS: {
+    scheduled: 'community.lexicon.calendar.event#scheduled',
+    cancelled: 'community.lexicon.calendar.event#cancelled',
+  },
 }));
 
 vi.mock('@/lib/db', () => ({ prisma }));
@@ -71,6 +79,7 @@ beforeEach(() => {
   // External cleanup helpers succeed by default.
   mockSetSpaceLive.mockResolvedValue(undefined);
   mockDeleteLiveStatus.mockResolvedValue({ ok: true });
+  mockUpdateCalendarEventStatus.mockResolvedValue({ ok: true });
 });
 
 function makeRequest(id: string) {
@@ -228,6 +237,86 @@ describe('DELETE /api/spaces/[id]', () => {
     expect(mockSetSpaceLive).toHaveBeenCalledWith('sp1', false);
     expect(mockDeleteLiveStatus).toHaveBeenCalledTimes(1);
     // The route should log a warning rather than propagate the error.
+    expect(mockLogger.warn).toHaveBeenCalled();
+    expect(prisma.space.delete).toHaveBeenCalledWith({
+      where: { id: 'sp1' },
+    });
+  });
+
+  it('does not touch the calendar event when none was published', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(HOST);
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace({ calendarEventUri: null }),
+      isHost: true,
+    });
+
+    const { DELETE } = await import('@/app/api/spaces/[id]/route');
+    const res = await DELETE(makeRequest('sp1'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockUpdateCalendarEventStatus).not.toHaveBeenCalled();
+    expect(prisma.space.delete).toHaveBeenCalledWith({
+      where: { id: 'sp1' },
+    });
+  });
+
+  it('cancels the calendar event for a scheduled show before deleting it', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(HOST);
+    const scheduledAt = new Date('2026-02-01T18:00:00.000Z');
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace({
+        status: 'scheduled',
+        scheduledAt,
+        calendarEventUri: 'at://did:plc:host123/community.lexicon.calendar.event/sp1',
+      }),
+      isHost: true,
+    });
+
+    const { DELETE } = await import('@/app/api/spaces/[id]/route');
+    const res = await DELETE(makeRequest('sp1'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true });
+
+    expect(mockUpdateCalendarEventStatus).toHaveBeenCalledWith({
+      session: { did: HOST.did, handle: HOST.handle },
+      rkey: 'sp1',
+      title: 'My room',
+      description: null,
+      spaceUrl: 'https://rabble.invalid/show/sp1',
+      startsAt: scheduledAt.toISOString(),
+      status: 'community.lexicon.calendar.event#cancelled',
+    });
+    expect(callIndex(mockUpdateCalendarEventStatus)).toBeLessThan(
+      callIndex(prisma.space.delete)
+    );
+    expect(prisma.space.delete).toHaveBeenCalledWith({
+      where: { id: 'sp1' },
+    });
+  });
+
+  it('still deletes the space when updateCalendarEventStatus fails', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce(HOST);
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace({
+        status: 'scheduled',
+        scheduledAt: new Date('2026-02-01T18:00:00.000Z'),
+        calendarEventUri: 'at://did:plc:host123/community.lexicon.calendar.event/sp1',
+      }),
+      isHost: true,
+    });
+    mockUpdateCalendarEventStatus.mockResolvedValueOnce({ ok: false, error: 'PDS unavailable' });
+
+    const { DELETE } = await import('@/app/api/spaces/[id]/route');
+    const res = await DELETE(makeRequest('sp1'), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true });
     expect(mockLogger.warn).toHaveBeenCalled();
     expect(prisma.space.delete).toHaveBeenCalledWith({
       where: { id: 'sp1' },

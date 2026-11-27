@@ -1,8 +1,29 @@
 // Baseline security headers added to every response by custom-worker.ts.
-// No Content-Security-Policy yet: it needs a report-only rollout against the
-// live room (LiveKit wss, blob: media, Bluesky avatar CDN) before enforcing.
 // Kept out of next.config.js `headers()` on purpose: OpenNext applies those
 // by rebuilding the response, which loses content-length on streamed bodies.
+//
+// Content-Security-Policy ships report-only first (issue #180): the live
+// room (LiveKit wss, blob: media, Bluesky avatar CDN) needs a few days of
+// reports against /api/csp-report before a follow-up switches it to
+// enforcing. The only inline script is the theme bootstrap in
+// src/app/layout.tsx (a build-time constant, hashed below); the only
+// third-party script is the optional Cloudflare Web Analytics beacon.
+
+const THEME_SCRIPT_HASH = "'sha256-xjvOfUib5M5fPe9SAhOqoPYEIGPHeRcvpKmUA0Zv0NQ='";
+
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  `script-src 'self' ${THEME_SCRIPT_HASH} https://static.cloudflareinsights.com`,
+  "connect-src 'self' wss://*.livekit.cloud https://*.livekit.cloud https://cloudflareinsights.com https://public.api.bsky.app",
+  "img-src 'self' data: https://cdn.bsky.app",
+  "media-src 'self' blob:",
+  "font-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  'report-to csp-endpoint',
+  'report-uri /api/csp-report',
+].join('; ');
 
 export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'strict-transport-security': 'max-age=63072000; includeSubDomains',
@@ -10,6 +31,8 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
   'permissions-policy': 'camera=(), geolocation=(), microphone=(self)',
+  'content-security-policy-report-only': CONTENT_SECURITY_POLICY,
+  'reporting-endpoints': 'csp-endpoint="/api/csp-report"',
 };
 
 /**

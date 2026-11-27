@@ -30,3 +30,29 @@ describe('withSecurityHeaders', () => {
     expect(out.headers.get('location')).toBe('/x');
   });
 });
+
+describe('content-security-policy-report-only', () => {
+  const csp = SECURITY_HEADERS['content-security-policy-report-only'];
+
+  it('is report-only, not enforcing', () => {
+    expect(SECURITY_HEADERS['content-security-policy']).toBeUndefined();
+    expect(csp).toBeTruthy();
+  });
+
+  it('allows the theme bootstrap script by hash, not unsafe-inline', () => {
+    expect(csp).toMatch(/script-src[^;]*'sha256-[^']+'/);
+    expect(csp).not.toMatch(/unsafe-inline/);
+  });
+
+  it('allows the LiveKit Cloud room, the Bluesky avatar CDN and blob: media', () => {
+    expect(csp).toMatch(/connect-src[^;]*wss:\/\/\*\.livekit\.cloud/);
+    expect(csp).toMatch(/img-src[^;]*https:\/\/cdn\.bsky\.app/);
+    expect(csp).toMatch(/media-src[^;]*blob:/);
+  });
+
+  it('points violation reports at /api/csp-report', () => {
+    expect(csp).toMatch(/report-to csp-endpoint/);
+    expect(csp).toMatch(/report-uri \/api\/csp-report/);
+    expect(SECURITY_HEADERS['reporting-endpoints']).toBe('csp-endpoint="/api/csp-report"');
+  });
+});

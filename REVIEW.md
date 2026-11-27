@@ -515,6 +515,22 @@ code, and mistakes already made there.
   porting iOS's `Wordmark` (icon + text, one accessibility element) to
   Android's `Wordmark` in `Common.kt` for issue #157.
 
+## src/lib/security-headers.ts (THEME_SCRIPT_HASH)
+
+- `THEME_SCRIPT_HASH` is a sha256 of the exact inline theme-bootstrap script
+  string in `src/app/layout.tsx`, hand-computed and pasted in as a literal
+  (issue #180's report-only CSP). Nothing ties the two together: an edit to
+  that inline script in `layout.tsx` — even reformatting it — without
+  recomputing and updating this hash makes `script-src` reject the app's
+  only inline script on every single page view, burying the real signal the
+  report-only rollout exists to collect under self-inflicted noise at
+  `/api/csp-report`. `tests/lib/security-headers.test.ts` only asserts the
+  policy contains *a* sha256 hash, not that it matches `layout.tsx`'s actual
+  script, so a green suite doesn't catch the drift. Any future edit to that
+  script must recompute the hash (`openssl dgst -sha256 -binary | openssl
+  base64`, or the equivalent in Node) and update `THEME_SCRIPT_HASH` in the
+  same change.
+
 ## src/components/SiteHeader.tsx and src/components/NocturneShell.tsx (brand link touch target)
 
 - A fix that adds `min-h-touch` to a tappable element without `min-w-touch`

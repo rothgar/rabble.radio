@@ -558,3 +558,18 @@ code, and mistakes already made there.
   an icon on narrow screens — `DESIGN.md`: "Touch targets are at least
   44px tall and wide (`min-h-touch`, `min-w-touch`) on every tappable
   thing."
+
+## custom-worker.ts, src/lib/downloads.ts and src/lib/music.ts (routes answered before Next.js)
+
+- A route whose shared `serve*` function branches on `method === 'HEAD'`
+  (so it can return the real content-length with no body) only reaches
+  that branch under `next dev` if its `route.ts` exports `HEAD` itself.
+  Next.js does not synthesize a `HEAD` handler from `GET` — it 405s
+  instead — so without that export the HEAD branch is dead code locally
+  and untested, even though it works in production once `custom-worker.ts`
+  answers the request before Next.js ever sees it. `/music/<file>` (#194)
+  exports `HEAD` explicitly; `src/app/downloads/[file]/route.ts` (#192)
+  does not (#195). Any further route built on this
+  split — shared lib function plus a `custom-worker.ts` early return —
+  needs the same explicit `HEAD` export in its `route.ts`, with a test
+  that actually calls it.

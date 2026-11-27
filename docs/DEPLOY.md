@@ -110,6 +110,31 @@ error-level logs into `logs`-labelled issues every six hours
 (`.github/workflows/log-triage.yml`); these consoles are for looking, not
 alerting.
 
+## Rollback and uptime
+
+Both deploy workflows record the live Worker version before deploying. If
+the smoke test on `/api/health` fails afterwards, or the live-site checks
+(`scripts/qa-live.mjs`) fail, the workflow runs `wrangler rollback` to that
+version (`--env production` for rabble.radio) and says so on the QA issue.
+The commit or tag stays where it is: the factory fixes forward and the next
+deploy carries everything. D1 migrations are not rolled back, which is why
+they must stay additive (new tables and columns, never drops or renames of
+something the previous version reads).
+
+By hand: `pnpm exec wrangler deployments list [--env production] --json`
+shows the version ids; `pnpm exec wrangler rollback <id> -y [--env production]`
+puts one back.
+
+`.github/workflows/uptime.yml` probes `/api/health` on both sites every five
+minutes (three tries, twenty seconds apart). A site that is not answering, or
+reports `status: down`, gets an `ops` + `p0` issue the factory triages like
+any bug; recovery closes it. `status: degraded` (LiveKit unreachable) does
+not count as down.
+
+Pull requests run `.github/workflows/ci.yml` (typecheck, lint, test). The
+factory manager merges a worker's PR only when that check is green on the
+head commit (`docs/discobox.md`).
+
 ## Production: rabble.radio
 
 `deploy-production.yml` runs on a `v*` tag (`git tag v0.1.0 && git push

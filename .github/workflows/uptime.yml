@@ -1,0 +1,77 @@
+# Uptime: every five minutes, GET /api/health on rabble.rodeo and
+# rabble.radio. Three tries twenty seconds apart before a site counts as
+# down. Down opens (or updates) an `ops` issue the factory triages like any
+# bug; recovery comments on it and closes it. Rollback of a bad deploy is
+# deploy.yml's / deploy-production.yml's job, not this one's.
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    name: ${{ matrix.site }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [rabble.rodeo, rabble.radio]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SITE: ${{ matrix.site }}
+    steps:
+      - name: Probe /api/health
+        id: probe
+        run: |
+          ok=0; code=none; status=none
+          for i in 1 2 3; do
+            out=$(curl -sS --max-time 20 -w '\n%{http_code}' "https://$SITE/api/health" 2>/dev/null || true)
+            code=${out##*$'\n'}; body=${out%$'\n'*}
+            status=$(printf '%s' "$body" | jq -r '.status // "none"' 2>/dev/null || echo none)
+            if [ "$code" = "200" ] && [ "$status" != "down" ]; then ok=1; break; fi
+            [ "$i" -lt 3 ] && sleep 20
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "detail=HTTP ${code:-none}, status ${status:-none}" >> "$GITHUB_OUTPUT"
+          echo "$SITE: ok=$ok (HTTP ${code:-none}, status ${status:-none})"
+      - name: Open or update the outage issue
+        if: steps.probe.outputs.ok == '0'
+        env:
+          DETAIL: ${{ steps.probe.outputs.detail }}
+        run: |
+          title="Ops: $SITE is not answering"
+          {
+            echo "**Where:** https://$SITE/api/health, probed by \`.github/workflows/uptime.yml\` (three tries, 20 s apart)"
+            echo "**Observed:** $DETAIL at $(date -u +%FT%TZ)"
+            echo "**Expected:** HTTP 200 with \`status\` ok or degraded"
+            echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "Read the Worker's logs for this window (the log-triage dataset), find the deploy or dependency that broke it, and open a fix PR. If the last deploy is the cause, roll it back first: \`pnpm exec wrangler rollback <previous version id> -y\` (add \`--env production\` for rabble.radio; \`wrangler deployments list\` shows the ids)."
+          } > body.md
+          num=$(gh issue list --label ops --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file body.md
+          else
+            gh issue create --title "$title" --label bug --label ops --label p0 --body-file body.md
+          fi
+          exit 1
+      - name: Close the outage issue on recovery
+        if: steps.probe.outputs.ok == '1'
+        env:
+          DETAIL: ${{ steps.probe.outputs.detail }}
+        run: |
+          title="Ops: $SITE is not answering"
+          num=$(gh issue list --label ops --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            gh issue close "$num" --comment "Recovered: https://$SITE/api/health answered $DETAIL at $(date -u +%FT%TZ) (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+          fi

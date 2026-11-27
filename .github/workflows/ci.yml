@@ -1,0 +1,32 @@
+# Pull-request checks: the same typecheck, lint and test the deploy runs, so
+# a PR has a green check before the factory manager merges it (docs/discobox.md,
+# "Merging"). Pushes to main are covered by deploy.yml itself.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test

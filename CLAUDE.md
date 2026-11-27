@@ -60,7 +60,11 @@ commands yourself regardless.
   also linked as `.claude/skills/verify-recipes`). Say in the PR what could not
   be driven (Bluesky login, Android, iOS, deploys).
 - Work leaves the box as a PR from `discobox/issue-<N>`; never a push to
-  `main`, never a deploy, never a remote migration. The owner merges and deploys.
+  `main`, never a deploy, never a remote migration. The factory manager merges
+  a worker's PR once the `CI` check is green and its process check passed
+  (design PRs and anything labelled `status/needs-decision` wait for the
+  owner); the merge deploys rabble.rodeo, and a failed deploy rolls itself
+  back (`docs/DEPLOY.md`, Rollback and uptime).
 - PR descriptions are short, 20 lines at most. Summary: two to four
   sentences on the cause and the fix, naming the one file a reviewer should
   open. `## Evidence` keeps exactly its four lines (Review with the sha,

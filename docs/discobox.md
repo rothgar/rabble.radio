@@ -54,8 +54,8 @@ The discobox server already runs on this machine (`discobox version`,
 1. **A bot account** is recommended: a separate GitHub user added to
    `rothgar/rabble.radio` with Triage permission. Workers then push to the
    bot's fork and comments are visibly the bot's. Using your own account
-   works too; every route is still narrowed by the role policies and none
-   can merge.
+   works too; every route is still narrowed by the role policies and no
+   worker role can merge (only the manager's own credential does).
 2. **Start the manager** from the factory template (it keeps its settings in
    the box until you fork it):
 
@@ -73,10 +73,14 @@ The discobox server already runs on this machine (`discobox version`,
 3. **Keep it**: once it works, fork `discobox-ai/factory-demo` (or make an
    empty private repository) and tell the manager its name; it pushes itself
    there and edits its own skills when you change the process.
-4. **Approve and merge.** The manager proposes every action until you say
-   "do triage on your own". You merge PRs; a box never does. The merge
-   deploys rabble.rodeo on its own through `.github/workflows/deploy.yml`
-   (web, Android APK, TestFlight when enabled; see `docs/DEPLOY.md`).
+4. **Approve, then let it merge.** The manager proposes every action until
+   you say "do triage on your own". Since 2026-11-27 it also merges: a
+   worker's PR lands once `.github/workflows/ci.yml` is green on its head
+   and the manager's process check passed; a box never merges, and design
+   PRs or anything labelled `status/needs-decision` still wait for you. The
+   merge deploys rabble.rodeo through `.github/workflows/deploy.yml` (web,
+   Android APK, TestFlight when enabled; see `docs/DEPLOY.md`), and a deploy
+   that fails its smoke test or live-site checks rolls itself back.
 
 To try one job without the manager, run a worker by hand on an issue:
 

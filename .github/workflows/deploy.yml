@@ -81,6 +81,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    outputs:
+      previous: ${{ steps.live.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -95,11 +97,18 @@ jobs:
           pnpm typecheck
           pnpm lint
           pnpm test
+      - name: Record the live version (rollback target)
+        id: live
+        run: |
+          version=$(pnpm exec wrangler deployments list --json | jq -r 'max_by(.created_on).versions[0].version_id // empty')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "live before this deploy: ${version:-unknown}"
       - name: Apply D1 migrations
         run: pnpm d1:migrate:remote
       - name: Build and deploy the Worker
         run: pnpm cf:deploy
       - name: Smoke test
+        id: smoke
         run: |
           for i in 1 2 3 4 5 6; do
             if curl -fsS --max-time 20 https://rabble.rodeo/api/health; then exit 0; fi
@@ -107,6 +116,13 @@ jobs:
           done
           echo "rabble.rodeo did not answer /api/health after the deploy" >&2
           exit 1
+      # The new version is live but not answering: put the previous one back.
+      # Migrations are not undone (they are additive by convention), and main
+      # keeps the commit, so the fix is forward: fix-ci / the QA issue.
+      - name: Roll back to the previous version
+        if: failure() && steps.smoke.outcome == 'failure' && steps.live.outputs.version != ''
+        run: |
+          pnpm exec wrangler rollback "${{ steps.live.outputs.version }}" -y --message "deploy.yml ${GITHUB_SHA::7}: smoke test failed"
 
   qa:
     name: Live-site checks
@@ -149,6 +165,38 @@ jobs:
             gh issue create --title "$title" --label bug --label qa --body-file body.md
           fi
           exit 1
+
+  # The deploy answered /api/health but the live-site checks failed: put the
+  # previous version back and say so on the QA issue. The commit stays on
+  # main; the factory fixes forward and the next deploy carries everything.
+  rollback:
+    name: Roll back (live-site checks failed)
+    needs: [web, qa]
+    if: always() && needs.web.result == 'success' && needs.qa.result == 'failure' && needs.web.outputs.previous != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      PREVIOUS: ${{ needs.web.outputs.previous }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Roll rabble.rodeo back
+        run: |
+          pnpm exec wrangler rollback "$PREVIOUS" -y --message "deploy.yml ${GITHUB_SHA::7}: live-site checks failed"
+      - name: Note it on the QA issue
+        run: |
+          num=$(gh issue list --label qa --state open --search "\"QA: live-site checks failing after deploy\" in:title" --json number --jq '.[0].number')
+          [ -n "$num" ] && gh issue comment "$num" --body "Rolled rabble.rodeo back to the previous Worker version ($PREVIOUS). ${GITHUB_SHA::7} stays on main; fix forward and the next deploy carries it." || true
 
   android:
     name: Android APK

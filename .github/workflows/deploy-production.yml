@@ -39,6 +39,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    outputs:
+      previous: ${{ steps.live.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -53,11 +55,18 @@ jobs:
           pnpm typecheck
           pnpm lint
           pnpm test
+      - name: Record the live version (rollback target)
+        id: live
+        run: |
+          version=$(pnpm exec wrangler deployments list --env production --json | jq -r 'max_by(.created_on).versions[0].version_id // empty')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "live before this deploy: ${version:-unknown}"
       - name: Apply D1 migrations (rabble-prod)
         run: pnpm d1:migrate:prod
       - name: Build and deploy the rabble-prod Worker
         run: pnpm cf:deploy:prod
       - name: Smoke test
+        id: smoke
         run: |
           for i in 1 2 3 4 5 6; do
             if curl -fsS --max-time 20 https://rabble.radio/api/health; then exit 0; fi
@@ -65,6 +74,11 @@ jobs:
           done
           echo "rabble.radio did not answer /api/health after the deploy" >&2
           exit 1
+      # Not answering after the deploy: previous version back (migrations stay).
+      - name: Roll back to the previous version
+        if: failure() && steps.smoke.outcome == 'failure' && steps.live.outputs.version != ''
+        run: |
+          pnpm exec wrangler rollback "${{ steps.live.outputs.version }}" -y --env production --message "deploy-production.yml ${GITHUB_REF_NAME}: smoke test failed"
 
   android:
     name: Android APK (rabble.radio)
@@ -194,3 +208,34 @@ jobs:
             gh issue create --title "$title" --label bug --label qa --body-file body.md
           fi
           exit 1
+
+  # Live-site checks failed on production: previous version back, note on
+  # the QA issue. The tag stays; fix forward and cut the next tag.
+  rollback:
+    name: Roll back (live-site checks failed)
+    needs: [web, qa]
+    if: always() && needs.web.result == 'success' && needs.qa.result == 'failure' && needs.web.outputs.previous != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      PREVIOUS: ${{ needs.web.outputs.previous }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Roll rabble.radio back
+        run: |
+          pnpm exec wrangler rollback "$PREVIOUS" -y --env production --message "deploy-production.yml ${GITHUB_REF_NAME}: live-site checks failed"
+      - name: Note it on the QA issue
+        run: |
+          num=$(gh issue list --label qa --state open --search "\"QA: production checks failing after deploy\" in:title" --json number --jq '.[0].number')
+          [ -n "$num" ] && gh issue comment "$num" --body "Rolled rabble.radio back to the previous Worker version ($PREVIOUS). ${GITHUB_REF_NAME} stays; fix forward and cut the next tag." || true

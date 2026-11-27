@@ -6,9 +6,16 @@ atproto account the owner controls, the same way a host's live banner is a
 `app.bsky.actor.status#self` record on theirs. It's how the service itself
 becomes discoverable through the AT Protocol network.
 
-**Account:** the owner names which account holds the record once it's
-created (not a listener's or host's account). Record that handle/DID here
-once it's decided.
+**Account:** `rabble.radio` (`did:plc:dmauvltgdhhn3w6d3zjbbkyc`, the
+service's own Bluesky account, not a listener's or host's). The handle is
+verified by the `_atproto.rabble.radio` TXT record in the Cloudflare zone.
+First published 2026-11-27; check it with:
+
+```bash
+curl -s 'https://panus.us-west.host.bsky.network/xrpc/com.atproto.repo.getRecord?repo=did:plc:dmauvltgdhhn3w6d3zjbbkyc&collection=community.lexicon.app.profile&rkey=self'
+```
+
+(`public.api.bsky.app` does not serve this collection; ask the PDS.)
 
 ## Updating the record
 

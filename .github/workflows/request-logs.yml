@@ -1,0 +1,96 @@
+# Fetch the log timelines of failing requests from Workers Logs and post
+# them on an issue (scripts/request-logs.mjs): every log line of each
+# request in order, with any D1 query that started and never finished
+# flagged. For the hung-request issues whose triage ends with "needs the
+# db.query logs for request id X": the owner, the factory manager or a
+# worker runs this instead of asking for dashboard access.
+#
+#   gh workflow run request-logs.yml -f issue=158 -f service=rabble-dev \
+#     -f route=/api/me/shows -f from=2026-11-27T05:00:00Z -f to=2026-11-27T07:30:00Z
+#   gh workflow run request-logs.yml -f issue=214 -f service=rabble-prod -f requests='id1 id2'
+#
+# The output is redacted (DIDs, e-mail, tokens) and request headers are never
+# read, so it can go on a public issue. Workers Logs keeps a few days only.
+name: Request logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to comment on
+        required: true
+      service:
+        description: Worker (rabble-dev or rabble-prod)
+        default: rabble-dev
+      route:
+        description: Path whose failed requests to show (with from/to)
+        default: ''
+      from:
+        description: Window start, ISO 8601 (with route)
+        default: ''
+      to:
+        description: Window end, ISO 8601 (default now)
+        default: ''
+      requests:
+        description: Request ids, space separated (instead of route)
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  fetch:
+    name: Timelines to issue
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Dispatch inputs go through env, never straight into the shell line.
+      - name: Fetch the timelines
+        env:
+          SERVICE: ${{ inputs.service }}
+          ROUTE: ${{ inputs.route }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          REQUESTS: ${{ inputs.requests }}
+        run: |
+          set -o pipefail
+          args=(--service "$SERVICE")
+          if [ -n "$REQUESTS" ]; then
+            for id in $REQUESTS; do args+=(--request "$id"); done
+          else
+            args+=(--route "$ROUTE" --from "$FROM")
+            [ -n "$TO" ] && args+=(--to "$TO")
+          fi
+          node scripts/request-logs.mjs "${args[@]}" 2>&1 | tee timelines.txt
+      - name: Comment on the issue
+        if: ${{ !cancelled() }}
+        env:
+          ISSUE: ${{ inputs.issue }}
+          SERVICE: ${{ inputs.service }}
+          ROUTE: ${{ inputs.route }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          REQUESTS: ${{ inputs.requests }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "<!-- request-logs -->"
+            if [ -n "$REQUESTS" ]; then
+              echo "Request timelines from Workers Logs for \`$SERVICE\`, request ids \`$REQUESTS\` ([run]($RUN_URL), \`scripts/request-logs.mjs\`). A \`db.query.start\` with no \`done\` is the call that hung."
+            else
+              echo "Request timelines from Workers Logs for \`$SERVICE\` \`$ROUTE\`, $FROM to ${TO:-now} ([run]($RUN_URL), \`scripts/request-logs.mjs\`). A \`db.query.start\` with no \`done\` is the call that hung."
+            fi
+            echo
+            echo '```'
+            head -c 60000 timelines.txt
+            echo '```'
+          } > comment.md
+          gh issue comment -R "$GITHUB_REPOSITORY" "$ISSUE" --body-file comment.md

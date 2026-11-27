@@ -14,15 +14,16 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import {
-  getSpaceById,
-  getSpaceBySlug,
+  defaultPublicOrigin,
   originFromRequest,
+  resolveSpace,
   resolveSpaceForUser,
   setSpaceLive,
   toPublicSpace,
   updateSpace,
 } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError, readJson, requireUser } from '@/lib/api';
 import { decoratePublicSpaces } from '@/lib/space-extras';
 import { deleteLiveStatus, publishLiveStatus } from '@/lib/atproto';
 import { broadcastRoomData, roomNameForSpace } from '@/lib/livekit';
@@ -40,17 +41,12 @@ export async function GET(
 ): Promise<NextResponse> {
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
-  // Try primary key first, then fall back to slug lookup so the same route
-  // can be used for shareable URLs that use either form.
-  let space = await getSpaceById(id);
+  const space = await resolveSpace(id);
   if (!space) {
-    space = await getSpaceBySlug(id);
-  }
-  if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
   const origin = originFromRequest(request);
@@ -80,24 +76,15 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
-  let body: PatchBody;
-  try {
-    body = (await request.json()) as PatchBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<PatchBody>(request);
+  if (body instanceof NextResponse) return body;
 
   const patch: {
     title?: string;
@@ -109,96 +96,60 @@ export async function PATCH(
   } = {};
   if (body.title !== undefined) {
     if (typeof body.title !== 'string' || body.title.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Title is required.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Title is required.');
     }
     if (body.title.trim().length > 200) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Title must be 200 characters or fewer.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Title must be 200 characters or fewer.');
     }
     patch.title = body.title.trim();
   }
   if (body.description !== undefined) {
     if (body.description !== null && typeof body.description !== 'string') {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Description must be a string.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Description must be a string.');
     }
     if (typeof body.description === 'string' && body.description.trim().length > 2000) {
-      return NextResponse.json(
-        {
-          error: 'validation_error',
-          message: 'Description must be 2000 characters or fewer.',
-        },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Description must be 2000 characters or fewer.');
     }
     patch.description = body.description;
   }
   if (body.tags !== undefined) {
     if (!Array.isArray(body.tags)) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Tags must be an array.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Tags must be an array.');
     }
     const tags = normalizeTags(body.tags);
     if (body.tags.length > 0 && tags.length === 0) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Tags must be valid YouTube categories.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Tags must be valid YouTube categories.');
     }
     patch.tags = tags;
   }
   if (body.musicMood !== undefined) {
     if (!isValidMood(body.musicMood)) {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'Unknown music mood.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'Unknown music mood.');
     }
     patch.musicMood = body.musicMood;
   }
   if (body.musicOnStage !== undefined) {
     if (typeof body.musicOnStage !== 'boolean') {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'musicOnStage must be a boolean.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'musicOnStage must be a boolean.');
     }
     patch.musicOnStage = body.musicOnStage;
   }
   if (body.podcastFeedEnabled !== undefined) {
     if (typeof body.podcastFeedEnabled !== 'boolean') {
-      return NextResponse.json(
-        { error: 'validation_error', message: 'podcastFeedEnabled must be a boolean.' },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'podcastFeedEnabled must be a boolean.');
     }
     patch.podcastFeedEnabled = body.podcastFeedEnabled;
   }
   if (Object.keys(patch).length === 0) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'Nothing to update.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'Nothing to update.');
   }
 
   const resolved = await resolveSpaceForUser(id, user.did);
   if (!resolved) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   if (!resolved.isHost) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'Only the host can edit this show.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the host can edit this show.');
   }
 
   try {
@@ -208,9 +159,11 @@ export async function PATCH(
 
     if (updated.isLive && patch.title !== undefined) {
       // Keep the Bluesky live banner in step with the new title. Best-effort.
+      // The record is public on Bluesky, so its URL is always the canonical
+      // public origin, never whatever Host header this request carried.
       const result = await publishLiveStatus({
         session: { did: user.did, handle: user.handle },
-        spaceUrl: `${origin}/show/${updated.id}`,
+        spaceUrl: `${defaultPublicOrigin()}/show/${updated.id}`,
         title: updated.title,
       });
       if (!result.ok) {
@@ -230,13 +183,7 @@ export async function PATCH(
     return NextResponse.json({ space: toPublicSpace(updated, origin) }, { status: 200 });
   } catch (err) {
     logger.error('space.patch.failed', { err, spaceId: resolved.space.id });
-    return NextResponse.json(
-      {
-        error: 'update_failed',
-        message: err instanceof Error ? err.message : 'Failed to update show.',
-      },
-      { status: 500 }
-    );
+    return jsonError(500, 'update_failed', 'Failed to update show.');
   }
 }
 
@@ -244,35 +191,21 @@ export async function DELETE(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: 'unauthorized' },
-      { status: 401 }
-    );
-  }
+  const user = await requireUser({ ok: false });
+  if (user instanceof NextResponse) return user;
 
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json(
-      { ok: false, error: 'not_found' },
-      { status: 404 }
-    );
+    return jsonError(404, 'not_found', undefined, { ok: false });
   }
 
   const resolved = await resolveSpaceForUser(id, user.did);
   if (!resolved) {
-    return NextResponse.json(
-      { ok: false, error: 'not_found' },
-      { status: 404 }
-    );
+    return jsonError(404, 'not_found', undefined, { ok: false });
   }
   const { space, isHost } = resolved;
   if (!isHost) {
-    return NextResponse.json(
-      { ok: false, error: 'forbidden', message: 'Only the host can close this station.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the host can close this station.', { ok: false });
   }
 
   try {
@@ -292,13 +225,7 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: 'internal_error',
-        message: err instanceof Error ? err.message : 'Failed to delete space.',
-      },
-      { status: 500 }
-    );
+    logger.error('space.delete.failed', { err, spaceId: space.id });
+    return jsonError(500, 'internal_error', 'Failed to delete space.', { ok: false });
   }
 }

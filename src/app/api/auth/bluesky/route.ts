@@ -38,10 +38,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     log.info('oauth.authorize.success', { handle });
     return NextResponse.redirect(url, { status: 302 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'OAuth authorize failed.';
-    log.error('oauth.authorize.failed', { err, handle, message });
+    log.error('oauth.authorize.failed', { err, handle });
     return NextResponse.json(
-      { error: 'oauth_authorize_failed', message, correlationId },
+      { error: 'oauth_authorize_failed', message: 'OAuth authorize failed.', correlationId },
       { status: 500 }
     );
   }

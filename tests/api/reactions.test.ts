@@ -41,6 +41,7 @@ vi.mock('@/lib/session', () => ({
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: mockGetSpaceBySlug,
+  resolveSpace: async (id: string) => (await mockGetSpaceById(id)) ?? (await mockGetSpaceBySlug(id)),
 }));
 
 import { POST } from '@/app/api/spaces/[id]/reactions/route';

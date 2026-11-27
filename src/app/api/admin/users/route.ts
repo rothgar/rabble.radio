@@ -7,6 +7,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError, readJson } from '@/lib/api';
 import { AdminActionError, banUser, isAdmin, kickFromPlatform, unbanUser } from '@/lib/admin';
 import { logger } from '@/lib/logger';
 
@@ -24,32 +25,19 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!isAdmin(user)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    return jsonError(403, 'forbidden');
   }
 
-  let body: AdminUsersBody;
-  try {
-    body = (await request.json()) as AdminUsersBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<AdminUsersBody>(request);
+  if (body instanceof NextResponse) return body;
 
   const did = str(body.did);
   const action = str(body.action);
   if (!did || (action !== 'ban' && action !== 'unban' && action !== 'kick')) {
-    return NextResponse.json(
-      { error: 'validation_error', message: "did is required and action must be 'ban', 'unban' or 'kick'." },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', "did is required and action must be 'ban', 'unban' or 'kick'.");
   }
   if (action === 'ban' && did === user?.did) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'You cannot ban yourself.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'You cannot ban yourself.');
   }
 
   try {
@@ -62,14 +50,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, user: { ...row, createdAt: row.createdAt.toISOString() } }, { status: 200 });
   } catch (err) {
     if (err instanceof AdminActionError && err.message === 'user_not_found') {
-      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+      return jsonError(404, 'not_found');
     }
     if (err instanceof AdminActionError) {
-      return NextResponse.json({ error: 'validation_error', message: err.message }, { status: 400 });
+      return jsonError(400, 'validation_error', err.message);
     }
     logger.error('admin.user_action_failed', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return NextResponse.json({ error: 'action_failed', message: 'Could not complete that action.' }, { status: 500 });
+    return jsonError(500, 'action_failed', 'Could not complete that action.');
   }
 }

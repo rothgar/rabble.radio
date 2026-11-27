@@ -81,11 +81,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to migrate host identity.';
-      log.error('oauth.callback.did_migration_failed', { err, did, message });
+      log.error('oauth.callback.did_migration_failed', { err, did });
       return NextResponse.json(
-        { error: 'did_migration_failed', message, correlationId },
+        {
+          error: 'did_migration_failed',
+          message: 'Failed to migrate host identity.',
+          correlationId,
+        },
         { status: 500 }
       );
     }
@@ -107,11 +109,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         },
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to persist user.';
-      log.error('oauth.callback.user_upsert_failed', { err, did, message });
+      log.error('oauth.callback.user_upsert_failed', { err, did });
       return NextResponse.json(
-        { error: 'user_upsert_failed', message, correlationId },
+        { error: 'user_upsert_failed', message: 'Failed to persist user.', correlationId },
         { status: 500 }
       );
     }

@@ -10,6 +10,7 @@
 // Response: { expired: number }
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { jsonError } from '@/lib/api';
 import { expireOldRecordings } from '@/lib/recording';
 import { isCronRequest } from '@/lib/cron';
 import { logger } from '@/lib/logger';
@@ -19,20 +20,13 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!isCronRequest(request)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    return jsonError(403, 'forbidden');
   }
   try {
     const expired = await expireOldRecordings();
     return NextResponse.json({ expired }, { status: 200 });
   } catch (err) {
     logger.error('recording.expire.failed', { err });
-    return NextResponse.json(
-      {
-        error: 'expire_failed',
-        message:
-          err instanceof Error ? err.message : 'Failed to expire recordings.',
-      },
-      { status: 500 }
-    );
+    return jsonError(500, 'expire_failed', 'Failed to expire recordings.');
   }
 }

@@ -8,8 +8,9 @@
 // src/lib/metrics.ts.
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getSpaceById, getSpaceBySlug, type SpaceWithHost } from '@/lib/spaces';
+import { resolveSpace } from '@/lib/spaces';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError, requireUser } from '@/lib/api';
 import { hasLiked, likeShow, unlikeShow } from '@/lib/metrics';
 import { createLogger, correlationIdFromRequest } from '@/lib/logger';
 
@@ -18,16 +19,11 @@ export const runtime = 'nodejs';
 
 type Params = { params: Promise<{ id: string }> };
 
-async function resolveSpace(id: string | undefined): Promise<SpaceWithHost | null> {
-  if (!id) return null;
-  return (await getSpaceById(id)) ?? (await getSpaceBySlug(id));
-}
-
 export async function GET(_request: NextRequest, context: Params): Promise<NextResponse> {
   const { id } = await context.params;
-  const space = await resolveSpace(id);
+  const space = id ? await resolveSpace(id) : null;
   if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   const user = await getCurrentUser();
   const liked = user ? await hasLiked(space.id, user.did) : false;
@@ -40,14 +36,12 @@ async function mutate(
   action: 'like' | 'unlike'
 ): Promise<NextResponse> {
   const log = createLogger({ correlationId: correlationIdFromRequest(request) });
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
-  const space = await resolveSpace(id);
+  const space = id ? await resolveSpace(id) : null;
   if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   try {
     const result =
@@ -57,10 +51,7 @@ async function mutate(
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     log.error('like.failed', { err, spaceId: space.id, did: user.did, action });
-    return NextResponse.json(
-      { error: 'like_failed', message: 'Failed to update like.' },
-      { status: 500 }
-    );
+    return jsonError(500, 'like_failed', 'Failed to update like.');
   }
 }
 

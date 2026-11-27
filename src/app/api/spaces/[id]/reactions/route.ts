@@ -21,8 +21,8 @@
 //   or an error envelope on failure.
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getSpaceById, getSpaceBySlug } from '@/lib/spaces';
-import { getCurrentUser } from '@/lib/session';
+import { resolveSpace } from '@/lib/spaces';
+import { jsonError, requireUser } from '@/lib/api';
 import { bufferReaction } from '@/lib/reaction-buffer';
 import { broadcastRoomData, roomNameForSpace } from '@/lib/livekit';
 import { prisma } from '@/lib/db';
@@ -46,24 +46,18 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const emoji = pickEmoji(await request.json().catch(() => null));
 
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
-  // Resolve by primary key first, then fall back to slug.
-  let space = await getSpaceById(id);
+  const space = await resolveSpace(id);
   if (!space) {
-    space = await getSpaceBySlug(id);
-  }
-  if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
   const reactionCount = await bufferReaction({ spaceId: space.id, did: user.did, kind: emoji });

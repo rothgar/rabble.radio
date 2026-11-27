@@ -8,7 +8,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { resolveSpaceForUser } from '@/lib/spaces';
-import { getCurrentUser } from '@/lib/session';
+import { jsonError, requireUser } from '@/lib/api';
 import {
   getRecordingForSpace,
   refreshSignedUrl,
@@ -23,23 +23,18 @@ export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   const resolved = await resolveSpaceForUser(id, user.did);
   if (!resolved) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   if (!resolved.isHost) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'Only the host can access recordings.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the host can access recordings.');
   }
   const recording = await getRecordingForSpace(resolved.space.id);
   return NextResponse.json(
@@ -52,47 +47,30 @@ export async function POST(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   const resolved = await resolveSpaceForUser(id, user.did);
   if (!resolved) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   if (!resolved.isHost) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'Only the host can refresh recordings.' },
-      { status: 403 }
-    );
+    return jsonError(403, 'forbidden', 'Only the host can refresh recordings.');
   }
   const recording = await getRecordingForSpace(resolved.space.id);
   if (!recording) {
-    return NextResponse.json(
-      { error: 'not_found', message: 'No recording exists for this show.' },
-      { status: 404 }
-    );
+    return jsonError(404, 'not_found', 'No recording exists for this show.');
   }
   if (recording.status !== 'available') {
-    return NextResponse.json(
-      {
-        error: 'not_ready',
-        message: `Recording is in status '${recording.status}'.`,
-      },
-      { status: 409 }
-    );
+    return jsonError(409, 'not_ready', `Recording is in status '${recording.status}'.`);
   }
   try {
     const refreshed = await refreshSignedUrl(recording.id);
     if (!refreshed) {
-      return NextResponse.json(
-        { error: 'refresh_failed' },
-        { status: 500 }
-      );
+      return jsonError(500, 'refresh_failed');
     }
     return NextResponse.json(
       { downloadUrl: refreshed.downloadUrl },
@@ -100,12 +78,6 @@ export async function POST(
     );
   } catch (err) {
     logger.error('recording.refresh.failed', { err, id: recording.id });
-    return NextResponse.json(
-      {
-        error: 'refresh_failed',
-        message: err instanceof Error ? err.message : 'Refresh failed.',
-      },
-      { status: 500 }
-    );
+    return jsonError(500, 'refresh_failed', 'Refresh failed.');
   }
 }

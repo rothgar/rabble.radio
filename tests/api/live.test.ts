@@ -30,6 +30,8 @@ const {
   mockPushRemindersOnAir,
   mockPushHostFollowersOnAir,
   mockPushShowFollowersOnAir,
+  mockStartRecording,
+  mockFindActiveRecordingForSpace,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockResolveSpaceForUser: vi.fn(),
@@ -42,6 +44,8 @@ const {
   mockPushRemindersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
   mockPushHostFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
   mockPushShowFollowersOnAir: vi.fn(async () => ({ users: 0, delivered: 0 })),
+  mockStartRecording: vi.fn(async () => null),
+  mockFindActiveRecordingForSpace: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/push', () => ({
@@ -52,10 +56,16 @@ vi.mock('@/lib/push', () => ({
 
 vi.mock('@/lib/livekit', () => ({
   roomNameForSpace: (id: string) => `space-${id}`,
-  startRecording: vi.fn(async () => null),
+  startRecording: mockStartRecording,
   stopRecording: vi.fn(async () => false),
   setAudienceSubscriptions: mockSetAudienceSubscriptions,
   broadcastRoomData: mockBroadcastRoomData,
+}));
+
+vi.mock('@/lib/recording', () => ({
+  findActiveRecordingForSpace: mockFindActiveRecordingForSpace,
+  createRecording: vi.fn(async () => undefined),
+  buildRecordingKey: () => 'key',
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -64,6 +74,7 @@ vi.mock('@/lib/session', () => ({
 
 vi.mock('@/lib/spaces', () => ({
   originFromRequest: (request: Request) => new URL(request.url).origin,
+  defaultPublicOrigin: () => 'https://rabble.invalid',
   resolveSpaceForUser: mockResolveSpaceForUser,
   setSpaceLive: mockSetSpaceLive,
   toPublicSpace: mockToPublicSpace,
@@ -103,6 +114,8 @@ beforeEach(() => {
     isLive: space.isLive,
     title: space.title,
   }));
+  mockFindActiveRecordingForSpace.mockResolvedValue(null);
+  mockStartRecording.mockResolvedValue(null);
 });
 
 function makeRequest(body: unknown) {
@@ -202,7 +215,7 @@ describe('POST /api/spaces/[id]/live', () => {
     expect(mockSetSpaceLive).toHaveBeenCalledWith('sp1', true);
     expect(mockPublishLiveStatus).toHaveBeenCalledTimes(1);
     expect(mockPublishLiveStatus.mock.calls[0][0].spaceUrl).toBe(
-      'http://localhost/show/sp1'
+      'https://rabble.invalid/show/sp1'
     );
     // Going on air lets the audience hear the stage and tells the room.
     expect(mockSetAudienceSubscriptions).toHaveBeenCalledWith('space-sp1', true);
@@ -214,16 +227,42 @@ describe('POST /api/spaces/[id]/live', () => {
     // Reminders for this show and this host's followers both get pushed.
     expect(mockPushRemindersOnAir).toHaveBeenCalledWith(
       { id: 'sp1', title: 'My room', host: { handle: 'alice.bsky.social', displayName: null } },
-      'http://localhost'
+      'https://rabble.invalid'
     );
     expect(mockPushHostFollowersOnAir).toHaveBeenCalledWith(
       { id: 'sp1', title: 'My room', host: { did: 'did:plc:host123', handle: 'alice.bsky.social', displayName: null } },
-      'http://localhost'
+      'https://rabble.invalid'
     );
     expect(mockPushShowFollowersOnAir).toHaveBeenCalledWith(
       { id: 'sp1', title: 'My room', host: { handle: 'alice.bsky.social', displayName: null } },
-      'http://localhost'
+      'https://rabble.invalid'
     );
+  });
+
+  it('start: a recording failure never leaks the upstream error into the 200 body', async () => {
+    mockGetCurrentUser.mockResolvedValueOnce({
+      did: 'did:plc:host123',
+      handle: 'alice.bsky.social',
+    });
+    mockResolveSpaceForUser.mockResolvedValueOnce({
+      space: makeSpace({ isLive: false }),
+      isHost: true,
+    });
+    mockSetSpaceLive.mockResolvedValueOnce(makeSpace({ isLive: true }));
+    mockPublishLiveStatus.mockResolvedValueOnce({ ok: true, uri: 'at://x', record: {} });
+    mockStartRecording.mockRejectedValueOnce(
+      new Error('egress: connection refused at 10.0.0.1:7880')
+    );
+
+    const { POST } = await import('@/app/api/spaces/[id]/live/route');
+    const res = await POST(makeRequest({ action: 'start' }), {
+      params: Promise.resolve({ id: 'sp1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.recordingError).toBe('recording_failed');
+    expect(JSON.stringify(body)).not.toContain('10.0.0.1');
   });
 
   it('end: closes the audience subscriptions again', async () => {

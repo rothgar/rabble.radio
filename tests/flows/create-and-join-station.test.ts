@@ -106,6 +106,10 @@ vi.mock('@/lib/spaces', async (importOriginal) => {
     getSpaceBySlug: vi.fn(async (slug: string) =>
       Array.from(state.spaces.values()).find((s) => s.slug === slug) ?? null
     ),
+    resolveSpace: vi.fn(async (identifier: string) => {
+      const bySlug = Array.from(state.spaces.values()).find((s) => s.slug === identifier);
+      return (await byId(identifier)) ?? (bySlug as SpaceWithHost | undefined) ?? null;
+    }),
     resolveSpaceForUser: vi.fn(async (identifier: string, userDid: string) => {
       const space = await byId(identifier);
       if (!space) return null;

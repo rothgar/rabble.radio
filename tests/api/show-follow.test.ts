@@ -12,7 +12,11 @@ const m = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/session', () => ({ getCurrentUser: m.getCurrentUser }));
-vi.mock('@/lib/spaces', () => ({ getSpaceById: m.getSpaceById, getSpaceBySlug: m.getSpaceBySlug }));
+vi.mock('@/lib/spaces', () => ({
+  getSpaceById: m.getSpaceById,
+  getSpaceBySlug: m.getSpaceBySlug,
+  resolveSpace: async (id: string) => (await m.getSpaceById(id)) ?? (await m.getSpaceBySlug(id)),
+}));
 vi.mock('@/lib/show-follows', () => ({
   hasShowFollow: m.hasShowFollow,
   setShowFollow: m.setShowFollow,

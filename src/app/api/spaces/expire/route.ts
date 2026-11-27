@@ -10,25 +10,23 @@
 // Response: { expired: number }
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { jsonError } from '@/lib/api';
 import { expireStaleSpaces } from '@/lib/spaces';
 import { isCronRequest } from '@/lib/cron';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!isCronRequest(request)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    return jsonError(403, 'forbidden');
   }
   try {
     const expired = await expireStaleSpaces();
     return NextResponse.json({ expired }, { status: 200 });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Failed to expire spaces.';
-    return NextResponse.json(
-      { error: 'expire_failed', message },
-      { status: 500 }
-    );
+    logger.error('spaces.expire.failed', { err });
+    return jsonError(500, 'expire_failed', 'Failed to expire spaces.');
   }
 }

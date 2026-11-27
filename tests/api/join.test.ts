@@ -59,6 +59,7 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/spaces', () => ({
   getSpaceById: mockGetSpaceById,
   getSpaceBySlug: mockGetSpaceBySlug,
+  resolveSpace: async (id: string) => (await mockGetSpaceById(id)) ?? (await mockGetSpaceBySlug(id)),
 }));
 
 vi.mock('@/lib/livekit', () => ({

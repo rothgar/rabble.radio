@@ -35,8 +35,9 @@ import {
   removeFromStage,
   StageError,
 } from '@/lib/stage';
-import { getSpaceById, getSpaceBySlug, originFromRequest } from '@/lib/spaces';
-import { getCurrentUser } from '@/lib/session';
+import { defaultPublicOrigin, resolveSpace } from '@/lib/spaces';
+import { jsonError, readJson, requireUser } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,23 +45,6 @@ export const runtime = 'nodejs';
 interface StageBody {
   action?: unknown;
   targetIdentity?: unknown;
-}
-
-interface SuccessTokenBody {
-  token: string;
-  wsUrl: string;
-  role: string;
-  roomName: string;
-  identity: string;
-}
-
-interface OkBody {
-  ok: true;
-}
-
-interface ErrorBody {
-  error: string;
-  message?: string;
 }
 
 export interface StageStatusBody {
@@ -72,18 +56,16 @@ export interface StageStatusBody {
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
-): Promise<NextResponse<StageStatusBody | ErrorBody>> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+): Promise<NextResponse> {
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
-  const space = (await getSpaceById(id)) ?? (await getSpaceBySlug(id));
+  const space = await resolveSpace(id);
   if (!space) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
   const [invite, speakers] = await Promise.all([
     getPendingInvite(space.id, user.did),
@@ -102,26 +84,17 @@ export async function GET(
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
-): Promise<NextResponse<SuccessTokenBody | OkBody | ErrorBody>> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+): Promise<NextResponse> {
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    return jsonError(404, 'not_found');
   }
 
-  let body: StageBody;
-  try {
-    body = (await request.json()) as StageBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<StageBody>(request);
+  if (body instanceof NextResponse) return body;
 
   const action = typeof body.action === 'string' ? body.action : '';
   const targetIdentity =
@@ -133,19 +106,13 @@ export async function POST(
     switch (action) {
       case 'invite': {
         if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for invite.',
-            },
-            { status: 400 }
-          );
+          return jsonError(400, 'validation_error', 'targetIdentity is required for invite.');
         }
         await inviteToStage({
           spaceId: id,
           hostDid: user.did,
           targetIdentity,
-          origin: originFromRequest(request),
+          origin: defaultPublicOrigin(),
         });
         return NextResponse.json({ ok: true }, { status: 200 });
       }
@@ -156,7 +123,7 @@ export async function POST(
           displayName: user.handle,
           handle: user.handle,
           profileDisplayName: user.displayName,
-          origin: originFromRequest(request),
+          origin: defaultPublicOrigin(),
         });
         return NextResponse.json(result, { status: 200 });
       }
@@ -170,13 +137,7 @@ export async function POST(
       }
       case 'remove': {
         if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for remove.',
-            },
-            { status: 400 }
-          );
+          return jsonError(400, 'validation_error', 'targetIdentity is required for remove.');
         }
         const result = await removeFromStage({
           spaceId: id,
@@ -187,13 +148,7 @@ export async function POST(
       }
       case 'kick': {
         if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for kick.',
-            },
-            { status: 400 }
-          );
+          return jsonError(400, 'validation_error', 'targetIdentity is required for kick.');
         }
         await kickFromSpace({
           spaceId: id,
@@ -204,13 +159,7 @@ export async function POST(
       }
       case 'block': {
         if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for block.',
-            },
-            { status: 400 }
-          );
+          return jsonError(400, 'validation_error', 'targetIdentity is required for block.');
         }
         await blockFromSpace({
           spaceId: id,
@@ -221,13 +170,7 @@ export async function POST(
       }
       case 'mute': {
         if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for mute.',
-            },
-            { status: 400 }
-          );
+          return jsonError(400, 'validation_error', 'targetIdentity is required for mute.');
         }
         await muteSpeaker({
           spaceId: id,
@@ -239,13 +182,7 @@ export async function POST(
       }
       case 'unmute': {
         if (!targetIdentity) {
-          return NextResponse.json(
-            {
-              error: 'validation_error',
-              message: 'targetIdentity is required for unmute.',
-            },
-            { status: 400 }
-          );
+          return jsonError(400, 'validation_error', 'targetIdentity is required for unmute.');
         }
         await muteSpeaker({
           spaceId: id,
@@ -256,29 +193,17 @@ export async function POST(
         return NextResponse.json({ ok: true }, { status: 200 });
       }
       default:
-        return NextResponse.json(
-          {
-            error: 'validation_error',
-            message:
-              "action must be one of 'invite', 'accept', 'leave', 'remove', 'kick', 'block', 'mute', or 'unmute'.",
-          },
-          { status: 400 }
+        return jsonError(
+          400,
+          'validation_error',
+          "action must be one of 'invite', 'accept', 'leave', 'remove', 'kick', 'block', 'mute', or 'unmute'."
         );
     }
   } catch (err) {
     if (err instanceof StageError) {
-      return NextResponse.json(
-        { error: err.code, message: err.message },
-        { status: err.status }
-      );
+      return jsonError(err.status, err.code, err.message);
     }
-    return NextResponse.json(
-      {
-        error: 'stage_failed',
-        message:
-          err instanceof Error ? err.message : 'Stage action failed.',
-      },
-      { status: 500 }
-    );
+    logger.error('stage.action_failed', { err, spaceId: id, action });
+    return jsonError(500, 'stage_failed', 'Stage action failed.');
   }
 }

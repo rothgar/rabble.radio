@@ -32,6 +32,7 @@ import {
 } from '@/lib/spaces';
 import { createHostToken } from '@/lib/livekit';
 import { getCurrentUser } from '@/lib/session';
+import { jsonError, readJson, requireUser } from '@/lib/api';
 import { decoratePublicSpaces } from '@/lib/space-extras';
 import { normalizeTags } from '@/lib/tags';
 import { prisma } from '@/lib/db';
@@ -83,32 +84,17 @@ function isOnScheduleBoundary(d: Date): boolean {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
 
-  let body: CreateSpaceBody;
-  try {
-    body = (await request.json()) as CreateSpaceBody;
-  } catch {
-    return NextResponse.json(
-      { error: 'invalid_json', message: 'Request body must be JSON.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJson<CreateSpaceBody>(request);
+  if (body instanceof NextResponse) return body;
 
   // ---- startNow validation (first, because it relaxes the title rule) ---
   let startNow = false;
   if (body.startNow !== undefined) {
     if (typeof body.startNow !== 'boolean') {
-      return NextResponse.json(
-        {
-          error: 'validation_error',
-          message: 'startNow must be a boolean.',
-        },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'startNow must be a boolean.');
     }
     startNow = body.startNow;
   }
@@ -116,19 +102,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
   const title = rawTitle || (startNow ? defaultShowTitle(user.handle, user.displayName) : '');
   if (!title) {
-    return NextResponse.json(
-      { error: 'validation_error', message: 'Title is required.' },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'Title is required.');
   }
   if (title.length > 200) {
-    return NextResponse.json(
-      {
-        error: 'validation_error',
-        message: 'Title must be 200 characters or fewer.',
-      },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'Title must be 200 characters or fewer.');
   }
 
   const description =
@@ -136,25 +113,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? body.description.trim()
       : null;
   if (description && description.length > 2000) {
-    return NextResponse.json(
-      {
-        error: 'validation_error',
-        message: 'Description must be 2000 characters or fewer.',
-      },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'Description must be 2000 characters or fewer.');
   }
 
   // Tags must be a subset of the allowed YouTube categories, up to 3.
   const tags = normalizeTags(body.tags);
   if (Array.isArray(body.tags) && body.tags.length > 0 && tags.length === 0) {
-    return NextResponse.json(
-      {
-        error: 'validation_error',
-        message: 'Tags must be valid YouTube categories.',
-      },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'Tags must be valid YouTube categories.');
   }
 
   // `scheduledAt` is "provided" only when it is a non-empty string. Anything
@@ -165,26 +130,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     body.scheduledAt.trim().length > 0;
 
   if (startNow && hasScheduledAtString) {
-    return NextResponse.json(
-      {
-        error: 'validation_error',
-        message: 'Cannot combine startNow with scheduledAt.',
-      },
-      { status: 400 }
-    );
+    return jsonError(400, 'validation_error', 'Cannot combine startNow with scheduledAt.');
   }
 
   // ---- scheduledAt validation --------------------------------------------
   let scheduledAt: Date | null = null;
   if (body.scheduledAt !== undefined && body.scheduledAt !== null) {
     if (typeof body.scheduledAt !== 'string') {
-      return NextResponse.json(
-        {
-          error: 'validation_error',
-          message: 'scheduledAt must be an ISO date string.',
-        },
-        { status: 400 }
-      );
+      return jsonError(400, 'validation_error', 'scheduledAt must be an ISO date string.');
     }
     const trimmed = body.scheduledAt.trim();
     if (trimmed.length === 0) {
@@ -194,41 +147,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     } else {
       const parsed = new Date(trimmed);
       if (Number.isNaN(parsed.getTime())) {
-        return NextResponse.json(
-          {
-            error: 'validation_error',
-            message: 'scheduledAt is not a valid ISO date string.',
-          },
-          { status: 400 }
-        );
+        return jsonError(400, 'validation_error', 'scheduledAt is not a valid ISO date string.');
       }
       const now = new Date();
       if (parsed.getTime() <= now.getTime()) {
-        return NextResponse.json(
-          {
-            error: 'validation_error',
-            message: 'scheduledAt must be in the future.',
-          },
-          { status: 400 }
-        );
+        return jsonError(400, 'validation_error', 'scheduledAt must be in the future.');
       }
       if (parsed.getTime() > now.getTime() + SCHEDULE_MAX_MS) {
-        return NextResponse.json(
-          {
-            error: 'validation_error',
-            message: `scheduledAt must be within ${SCHEDULE_MAX_DAYS} days.`,
-          },
-          { status: 400 }
+        return jsonError(
+          400,
+          'validation_error',
+          `scheduledAt must be within ${SCHEDULE_MAX_DAYS} days.`
         );
       }
       if (!isOnScheduleBoundary(parsed)) {
-        return NextResponse.json(
-          {
-            error: 'validation_error',
-            message: 'scheduledAt must be on a 15-minute UTC boundary.',
-          },
-          { status: 400 }
-        );
+        return jsonError(400, 'validation_error', 'scheduledAt must be on a 15-minute UTC boundary.');
       }
       scheduledAt = parsed;
     }
@@ -247,7 +180,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (spaceId) {
       const resolved = await resolveSpaceForUser(spaceId, user.did);
       if (!resolved || !resolved.isHost) {
-        return NextResponse.json({ error: 'not_found' }, { status: 404 });
+        return jsonError(404, 'not_found');
       }
       existing = resolved.space;
     } else if (!rawTitle) {
@@ -263,8 +196,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           : await reopenSpace(existing.id);
         reopened = true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to reopen show.';
-        return NextResponse.json({ error: 'create_failed', message }, { status: 500 });
+        logger.error('spaces.reopen_failed', { err, spaceId: existing.id });
+        return jsonError(500, 'create_failed', 'Failed to reopen show.');
       }
     }
   }
@@ -285,8 +218,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         isDefaultTitled: startNow && !rawTitle,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create space.';
-      return NextResponse.json({ error: 'create_failed', message }, { status: 500 });
+      logger.error('spaces.create_failed', { err, did: user.did });
+      return jsonError(500, 'create_failed', 'Failed to create space.');
     }
   }
 
@@ -314,16 +247,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         err,
         spaceId: space.id,
       });
-      return NextResponse.json(
-        {
-          error: 'token_failed',
-          message:
-            err instanceof Error
-              ? err.message
-              : 'Failed to create host token.',
-        },
-        { status: 500 }
-      );
+      return jsonError(500, 'token_failed', 'Failed to create host token.');
     }
 
     logger.info(reopened ? 'spaces.start_now.reopened' : 'spaces.start_now.created', {

@@ -7,7 +7,7 @@
 // the same data server-side.
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/session';
+import { requireUser } from '@/lib/api';
 import { getHostedSpaces, originFromRequest, toPublicSpace } from '@/lib/spaces';
 import { getJoinedShows } from '@/lib/metrics';
 import { decoratePublicSpaces } from '@/lib/space-extras';
@@ -31,8 +31,8 @@ export interface JoinedShowSummary {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
   const [hostedRows, joinedRows] = await Promise.all([
     getHostedSpaces(user.did),
     getJoinedShows(user.did),

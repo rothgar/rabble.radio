@@ -63,11 +63,6 @@ interface DeleteRecordInput {
 
 export const PDS_SERVICE_URL = 'https://bsky.social';
 
-export function __resetAtprotoAgentForTests(): void {
-  // Test helper retained for backwards compatibility; no cached state to clear
-  // when we go straight to fetch.
-}
-
 /**
  * Build the record payload for the `app.bsky.actor.status` self record.
  * Exported for tests.

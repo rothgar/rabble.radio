@@ -265,22 +265,6 @@ export async function generateToken(
   return { token, wsUrl: getLiveKitPublicWsUrl() };
 }
 
-/**
- * Return the number of participants currently in a LiveKit room, or `-1` if
- * the LiveKit server could not be reached (e.g. misconfigured env or a
- * transient network error). Callers use `-1` to fail safe and avoid expiring
- * a room whose occupancy is unknown.
- */
-export async function getRoomParticipantCount(roomName: string): Promise<number> {
-  try {
-    const client = getLiveKitClient();
-    const participants = await client.listParticipants(roomName);
-    return participants.length;
-  } catch {
-    return -1;
-  }
-}
-
 export interface RoomParticipantSummary {
   /** Participants with publish rights (hosts + speakers). */
   speakers: number;
@@ -617,27 +601,6 @@ export async function stopRecording(egressId: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-/**
- * Look up an egress's current status. Used by the completion handler when
- * we need to refresh a recording's metadata.
- */
-export async function getEgressStatus(
-  egressId: string
-): Promise<{ status: string; endedAt?: Date } | null> {
-  try {
-    const egress = getEgressClient();
-    const items = await egress.listEgress({ egressId });
-    const info = items[0];
-    if (!info) return null;
-    return {
-      status: String(info.status ?? 'unknown'),
-      endedAt: info.endedAt ? new Date(Number(info.endedAt) * 1000) : undefined,
-    };
-  } catch {
-    return null;
   }
 }
 

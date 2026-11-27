@@ -97,15 +97,6 @@ export function getStorageClient(): S3Client {
 }
 
 /**
- * Reset the module-level caches. Used by tests that change env vars
- * between cases.
- */
-export function __resetStorageCacheForTests(): void {
-  cachedClient = null;
-  cachedConfig = null;
-}
-
-/**
  * Build a pre-signed GET URL for `s3Key` in the configured bucket. Defaults
  * to a 5-minute expiry — short enough to discourage link sharing, long
  * enough for a normal download flow.

@@ -64,10 +64,6 @@ export function setRoomSnapshot(next: Omit<RoomSnapshot, 'updatedAt'> | null): v
   room = next ? { ...next, updatedAt: new Date().toISOString() } : null;
 }
 
-export function getRoomSnapshot(): RoomSnapshot | null {
-  return room;
-}
-
 /** Hook window error sources once. Idempotent. */
 export function installDiagnostics(): void {
   if (installed || typeof window === 'undefined') return;

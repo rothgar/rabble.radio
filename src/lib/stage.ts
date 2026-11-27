@@ -664,13 +664,3 @@ export async function listActiveSpeakersForSpaces(spaceIds: string[]): Promise<M
   }
   return out;
 }
-
-// ---------- Test helpers ----------
-
-/**
- * Test-only: reset the in-memory stores so unit tests can run in isolation.
- * Not exported via the public route surface.
- */
-export function __resetStageStoresForTests(): void {
-  // Stage state is in the database now; tests reset their Prisma mock instead.
-}

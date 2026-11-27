@@ -69,22 +69,3 @@ export async function ensurePushSubscription(prompt: boolean): Promise<PushStatu
     return 'failed';
   }
 }
-
-/** Unsubscribe this browser and tell the server. */
-export async function removePushSubscription(): Promise<void> {
-  if (!pushSupported()) return;
-  try {
-    const registration = await navigator.serviceWorker.getRegistration('/');
-    const subscription = await registration?.pushManager.getSubscription();
-    if (!subscription) return;
-    await fetch('/api/push/subscribe', {
-      method: 'DELETE',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ endpoint: subscription.endpoint }),
-    }).catch(() => undefined);
-    await subscription.unsubscribe();
-  } catch {
-    // nothing to clean up
-  }
-}

@@ -140,20 +140,6 @@ export async function findActiveRecordingForSpace(
 }
 
 /**
- * Return every recording for a space, ordered by `startedAt` DESC so the
- * newest row is first.
- */
-export async function getRecordingsForSpace(
-  spaceId: string
-): Promise<RecordingRow[]> {
-  const rows = await prisma.recording.findMany({
-    where: { spaceId },
-    orderBy: { startedAt: 'desc' },
-  });
-  return rows.map((r) => rowToRecording(r as unknown as Record<string, unknown>));
-}
-
-/**
  * Look up the most recent recording for a space regardless of status.
  */
 export async function getRecordingForSpace(

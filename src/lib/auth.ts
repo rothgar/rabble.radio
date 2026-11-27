@@ -372,15 +372,4 @@ export function oauthMode(): 'loopback' | 'public' {
   return PUBLIC_URL ? 'public' : 'loopback';
 }
 
-/**
- * Test-only: clear the cached OAuth client + metadata + JWKS. Production
- * code should never call this; the singleton is reused across requests.
- */
-export function __resetOAuthClientForTests(): void {
-  globalThis.__bluesky_spaces_oauth_init__ = undefined;
-  globalThis.__bluesky_spaces_oauth_loopback__ = undefined;
-  globalThis.__bluesky_spaces_state_store__ = undefined;
-  globalThis.__bluesky_spaces_session_store__ = undefined;
-}
-
 export const appName = APP_NAME;

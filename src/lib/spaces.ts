@@ -481,22 +481,6 @@ export async function setSpaceLive(
 }
 
 /**
- * Mark a single space as expired.
- */
-export async function expireSpace(id: string): Promise<SpaceWithHost> {
-  await endShowSession({ spaceId: id });
-  const row = await prisma.space.update({
-    where: { id },
-    data: {
-      isLive: false,
-      status: SPACE_STATUS.EXPIRED,
-    },
-    include: spaceInclude,
-  });
-  return withTags(row);
-}
-
-/**
  * Sweep stale spaces. Two passes:
  *
  *  1. Hard-TTL fallback: expire `active` spaces that are past their
@@ -626,30 +610,6 @@ export function isSpaceVisible(
     default:
       return false;
   }
-}
-
-/**
- * Visibility predicate when no viewer is known (anonymous request). Mirrors
- * `isSpaceVisible` but always denies host-only fallback.
- */
-export function isSpaceVisibleToAnonymous(
-  space: SpaceModel,
-  now: Date = new Date()
-): boolean {
-  return isSpaceVisible(space, null, now);
-}
-
-/**
- * Popularity score used to rank rooms by how much is happening in them.
- * A "popular" room is one with a live audience, speakers on stage, and/or
- * lots of reactions.
- */
-export function popularityScore(space: {
-  listenerCount: number;
-  speakerCount: number;
-  reactionCount: number;
-}): number {
-  return space.listenerCount + space.speakerCount + space.reactionCount;
 }
 
 /**

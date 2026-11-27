@@ -635,31 +635,6 @@ export async function getHostLeaderboard(
   });
 }
 
-export interface TopicSummary {
-  tag: string;
-  shows: number;
-  listeners: number;
-  reactions: number;
-  likes: number;
-  hostedSeconds: number;
-  lastLiveAt: Date | null;
-}
-
-export async function getTopicStats(): Promise<TopicSummary[]> {
-  const rows = await prisma.topicStats.findMany({
-    orderBy: [{ listeners: 'desc' }, { tag: 'asc' }],
-  });
-  return rows.map((r) => ({
-    tag: r.tag,
-    shows: r.shows,
-    listeners: r.listeners,
-    reactions: r.reactions,
-    likes: r.likes,
-    hostedSeconds: r.hostedSeconds,
-    lastLiveAt: r.lastLiveAt,
-  }));
-}
-
 export interface JoinedShow {
   sessionId: string;
   role: ParticipantRole;
@@ -734,27 +709,5 @@ export async function getJoinedShows(
         },
       },
     };
-  });
-}
-
-export interface RecentSessionsQuery {
-  /** Only sessions whose tags include this topic. */
-  tag?: string;
-  since?: Date;
-  limit?: number;
-}
-
-/** Finished sessions, best first, for digests and "top shows this week". */
-export async function getRecentSessions(query: RecentSessionsQuery = {}) {
-  const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
-  return prisma.showSession.findMany({
-    where: {
-      endedAt: { not: null },
-      ...(query.since ? { startedAt: { gte: query.since } } : {}),
-      ...(query.tag ? { tags: { some: { tag: query.tag } } } : {}),
-    },
-    orderBy: [{ uniqueListeners: 'desc' }, { reactionCount: 'desc' }, { startedAt: 'desc' }],
-    take: limit,
-    include: { tags: { select: { tag: true } }, space: { include: { host: true } } },
   });
 }

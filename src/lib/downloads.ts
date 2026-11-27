@@ -7,6 +7,8 @@
 // loses its content-length, so a 78 MB APK would download with no size), and
 // src/app/downloads/[file]/route.ts keeps `next dev` working.
 
+import { withR2Timeout, R2TimeoutError } from '@/lib/r2-timeout';
+
 export const DOWNLOADS: Readonly<Record<string, string>> = {
   'rabble-android.apk': 'application/vnd.android.package-archive',
 };
@@ -41,7 +43,13 @@ export async function serveDownload(
   const contentType = DOWNLOADS[file];
   if (!contentType) return Response.json({ error: 'not_found' }, { status: 404 });
   if (!bucket) return Response.json({ error: 'storage_unavailable' }, { status: 503 });
-  const object = await bucket.get(`builds/${file}`);
+  let object: R2ObjectLike | null;
+  try {
+    object = await withR2Timeout(bucket.get(`builds/${file}`), 'downloads.r2_get_timeout', { file });
+  } catch (err) {
+    if (err instanceof R2TimeoutError) return Response.json({ error: 'storage_timeout' }, { status: 504 });
+    throw err;
+  }
   if (!object) return Response.json({ error: 'not_found' }, { status: 404 });
   const headers = {
     'content-type': contentType,

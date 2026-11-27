@@ -57,4 +57,16 @@ describe('GET /downloads/[file]', () => {
     delete m.env.RECORDINGS;
     expect((await GET(req('rabble-android.apk'), ctx('rabble-android.apk'))).status).toBe(503);
   });
+
+  it('504s instead of hanging when the R2 get() never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      m.get.mockImplementation(() => new Promise(() => undefined));
+      const pending = GET(req('rabble-android.apk'), ctx('rabble-android.apk'));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).toBe(504);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

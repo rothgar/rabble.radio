@@ -27,7 +27,14 @@ export interface R2BucketLike {
 /** The file name for a /downloads/<file> path, or null when it is not one. */
 export function downloadFileFromPath(pathname: string): string | null {
   const m = /^\/downloads\/([^/]+)$/.exec(pathname);
-  return m ? decodeURIComponent(m[1]) : null;
+  if (!m) return null;
+  // decodeURIComponent throws on a malformed percent sequence (REVIEW.md:
+  // src/app/station/[tag]/page.tsx) rather than letting the allow-list reject it.
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
 }
 
 /**

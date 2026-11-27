@@ -193,13 +193,20 @@ dry run. Before the first real deploy:
    Analytics → Add a site) and puts the beacon token it prints in
    `env.production.vars` as `NEXT_PUBLIC_CF_BEACON_TOKEN` in
    `wrangler.jsonc`, committed like `VAPID_PUBLIC_KEY`.
-4. **Music.** The production bucket starts empty. Upload the pre-show tracks
+4. **Webhook.** In the LiveKit Cloud project (Settings, Webhooks) add
+   `https://rabble.radio/api/livekit/webhook`, signed with the API key that
+   is the Worker's `LIVEKIT_API_KEY`. LiveKit then tells the site when a
+   participant joins or leaves: presence metrics, and a show ends the moment
+   its last speaker leaves. Without it a show the host walks out of only
+   ends when the five-minute sweep has seen the room empty for ten minutes.
+   The dev project needs the same with `https://rabble.rodeo/api/livekit/webhook`.
+5. **Music.** The production bucket starts empty. Upload the pre-show tracks
    with `RECORDING_BUCKET=rabble-prod-recordings node scripts/upload-music.mjs
    <dir>`; the R2 token in `.env` must cover the production bucket.
-5. **First deploy.** Push a tag or run the workflow. The Worker is deployed
+6. **First deploy.** Push a tag or run the workflow. The Worker is deployed
    first, then the smoke test waits for `/api/health`; the custom domain
    needs the zone Active, otherwise `wrangler deploy` fails on the route.
-6. **Admins** are the same DIDs as development (`ADMIN_DIDS` and friends in
+7. **Admins** are the same DIDs as development (`ADMIN_DIDS` and friends in
    `env.production.vars`); edit them there.
 
 Production starts with an empty database: no demo shows, no seeded data.

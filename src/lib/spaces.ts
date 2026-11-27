@@ -126,6 +126,15 @@ export const SCHEDULED_VISIBILITY_WINDOW_MS = 60 * 60 * 1000;
 export const EXPIRATION_GRACE_MS = 5 * 60 * 1000;
 
 /**
+ * A show the occupancy sweep has not managed to read for this long is
+ * expired anyway. Every successful LiveKit reading writes the row, so only a
+ * sweep that keeps failing (LiveKit unreachable, bad credentials) lets a row
+ * go untouched this long; without this a `live` show would stay live
+ * forever, since the hard TTL above covers only `active` ones.
+ */
+export const UNREADABLE_SPACE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
  * Generate a short, URL-safe random suffix (base36) for slug uniqueness.
  */
 export function generateSlugSuffix(length: number = SUFFIX_LENGTH): string {
@@ -520,13 +529,25 @@ export async function expireStaleSpaces(
   //    lives on the cron trigger and not in the request path.
   const candidates = await prisma.space.findMany({
     where: { status: { in: [SPACE_STATUS.ACTIVE, SPACE_STATUS.LIVE] } },
-    select: { id: true, emptySince: true },
+    select: { id: true, emptySince: true, updatedAt: true },
   });
+  const unreadableCutoff = now.getTime() - UNREADABLE_SPACE_TTL_MS;
   const results = await Promise.all(
     candidates.map(async (space): Promise<boolean> => {
       const roomName = roomNameForSpace(space.id);
       const summary = await getRoomParticipantSummary(roomName);
-      if (summary === null) return false; // LiveKit unreachable — fail safe.
+      if (summary === null) {
+        // LiveKit unreachable: fail safe, unless it has been failing for so
+        // long that the row is clearly abandoned (UNREADABLE_SPACE_TTL_MS).
+        const lastWrite = space.updatedAt?.getTime();
+        if (lastWrite === undefined || lastWrite >= unreadableCutoff) return false;
+        await endShowSession({ spaceId: space.id });
+        await prisma.space.update({
+          where: { id: space.id },
+          data: { isLive: false, status: SPACE_STATUS.EXPIRED },
+        });
+        return true;
+      }
       const occupied = summary.speakers + summary.listeners > 0;
       // Always refresh the occupancy metrics when we have a reading.
       await prisma.space.update({

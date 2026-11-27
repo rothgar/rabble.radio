@@ -178,10 +178,12 @@ leaderboard rows (`HostTopicStats`, tag `*` = all topics) and per-topic totals
 `getRecentSessions` in `src/lib/metrics.ts`. Metrics writes are best-effort
 and never block joining, reacting or going live.
 
-The webhook needs `webhook.api_key` and `webhook.urls` in the LiveKit server
-config pointing at the app (the homelab manifests set it; the kind dev
-manifest in `k8s/livekit.yaml` runs LiveKit from flags only, so add a config
-file there if you want presence metrics locally).
+The webhook is configured in each LiveKit Cloud project (Settings, Webhooks:
+the site's `/api/livekit/webhook`, signed with the key the Worker holds as
+`LIVEKIT_API_KEY`; `docs/DEPLOY.md`). A self-hosted LiveKit sets the same
+through `webhook.api_key` and `webhook.urls` in its config. Without it a show
+whose host simply leaves ends only when the five-minute sweep
+(`expireStaleSpaces`) has seen its room empty for ten minutes.
 
 ## Mobile apps
 

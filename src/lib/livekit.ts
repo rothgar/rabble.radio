@@ -22,6 +22,7 @@ import {
   RoomServiceClient,
   S3Upload,
 } from 'livekit-server-sdk';
+import { logger, serializeError } from '@/lib/logger';
 
 export type SpaceRole = 'host' | 'speaker' | 'audience';
 
@@ -284,6 +285,14 @@ export async function getRoomParticipantSummary(
 ): Promise<RoomParticipantSummary | null> {
   try {
     const client = getLiveKitClient();
+    // A room LiveKit has already closed (departureTimeout after the last
+    // participant left, or never created because nobody joined) is empty.
+    // Ask for it by name first: listRooms answers an empty list for a
+    // missing room, whereas listParticipants may answer not_found.
+    const rooms = await client.listRooms([roomName]);
+    if (!rooms.some((r) => r.name === roomName)) {
+      return { speakers: 0, listeners: 0 };
+    }
     const participants = await client.listParticipants(roomName);
     let speakers = 0;
     let listeners = 0;
@@ -293,9 +302,21 @@ export async function getRoomParticipantSummary(
       else listeners++;
     }
     return { speakers, listeners };
-  } catch {
+  } catch (err) {
+    if (isRoomNotFound(err)) return { speakers: 0, listeners: 0 };
+    // Callers fail safe on null (a show is never ended on a guess), so the
+    // reason has to be visible somewhere: this is the only trace of it.
+    logger.warn('livekit.participants.failed', { roomName, err: serializeError(err) });
     return null;
   }
+}
+
+/** True for LiveKit's twirp `not_found` ("requested room does not exist"). */
+function isRoomNotFound(err: unknown): boolean {
+  const e = err as { code?: unknown; status?: unknown; message?: unknown } | null;
+  if (!e || typeof e !== 'object') return false;
+  if (e.code === 'not_found' || e.status === 404) return true;
+  return typeof e.message === 'string' && /room does not exist/i.test(e.message);
 }
 
 /**

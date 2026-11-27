@@ -77,6 +77,7 @@ import {
   toPublicSpace,
   SPACE_STATUS,
   EMPTY_SPACE_TTL_MS,
+  UNREADABLE_SPACE_TTL_MS,
 } from '@/lib/spaces';
 
 const HOST_DID = 'did:plc:host123';
@@ -357,7 +358,7 @@ describe('expireStaleSpaces', () => {
     mockSpaceUpdateMany.mockResolvedValueOnce({ count: 0 });
     const emptySince = new Date(NOW.getTime() - EMPTY_SPACE_TTL_MS - 1000);
     mockSpaceFindMany.mockResolvedValueOnce([
-      { id: 'sp1', emptySince },
+      { id: 'sp1', emptySince, updatedAt: new Date(NOW.getTime() - 60 * 60 * 1000) },
     ]);
     mockGetRoomParticipantSummary.mockResolvedValue(null);
 
@@ -365,6 +366,26 @@ describe('expireStaleSpaces', () => {
 
     expect(count).toBe(0);
     expect(mockSpaceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('expires a live show LiveKit has been unreadable for longer than UNREADABLE_SPACE_TTL_MS', async () => {
+    mockSpaceUpdateMany.mockResolvedValueOnce({ count: 0 });
+    mockSpaceFindMany.mockResolvedValueOnce([
+      {
+        id: 'sp-stuck',
+        emptySince: null,
+        updatedAt: new Date(NOW.getTime() - UNREADABLE_SPACE_TTL_MS - 1000),
+      },
+    ]);
+    mockGetRoomParticipantSummary.mockResolvedValue(null);
+
+    const count = await expireStaleSpaces(NOW);
+
+    expect(count).toBe(1);
+    expect(mockSpaceUpdate).toHaveBeenCalledWith({
+      where: { id: 'sp-stuck' },
+      data: { isLive: false, status: SPACE_STATUS.EXPIRED },
+    });
   });
 });
 

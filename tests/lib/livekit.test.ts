@@ -25,6 +25,7 @@ interface AccessTokenOptions {
 
 interface FakeRoomServiceClient {
   createRoom: ReturnType<typeof vi.fn>;
+  listRooms: ReturnType<typeof vi.fn>;
   listParticipants: ReturnType<typeof vi.fn>;
   updateParticipant: ReturnType<typeof vi.fn>;
   sendData: ReturnType<typeof vi.fn>;
@@ -60,6 +61,11 @@ vi.mock('livekit-server-sdk', () => {
 
   function RoomServiceClient(this: FakeRoomServiceClient) {
     this.createRoom = vi.fn().mockResolvedValue(undefined);
+    // By default every room asked for exists, so the participant lookup
+    // reaches listParticipants.
+    this.listRooms = vi
+      .fn()
+      .mockImplementation(async (names?: string[]) => (names ?? []).map((name) => ({ name })));
     this.listParticipants = vi.fn().mockResolvedValue([]);
     this.updateParticipant = vi.fn().mockResolvedValue(undefined);
     this.sendData = vi.fn().mockResolvedValue(undefined);
@@ -377,6 +383,35 @@ describe('getRoomParticipantSummary', () => {
     ]);
     const summary = await getRoomParticipantSummary('space-x');
     expect(summary).toEqual({ speakers: 1, listeners: 1 });
+  });
+
+  it('reads a room LiveKit no longer has as empty, without listing participants', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listRooms.mockResolvedValueOnce([]);
+    const summary = await getRoomParticipantSummary('space-closed');
+    expect(summary).toEqual({ speakers: 0, listeners: 0 });
+    expect(client.listParticipants).not.toHaveBeenCalled();
+  });
+
+  it('reads a not_found answer as an empty room', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listParticipants.mockRejectedValueOnce(
+      Object.assign(new Error('requested room does not exist'), { code: 'not_found', status: 404 })
+    );
+    const summary = await getRoomParticipantSummary('space-x');
+    expect(summary).toEqual({ speakers: 0, listeners: 0 });
+  });
+
+  it('returns null (fail safe) on any other LiveKit error', async () => {
+    getLiveKitClient();
+    const client = lastRoomClient();
+    client.listRooms.mockRejectedValueOnce(
+      Object.assign(new Error('invalid token'), { code: 'unauthenticated', status: 401 })
+    );
+    const summary = await getRoomParticipantSummary('space-x');
+    expect(summary).toBeNull();
   });
 });
 

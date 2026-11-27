@@ -583,6 +583,7 @@ private struct ReactionBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Leave the show")
+            .accessibilityIdentifier("reaction-bar-leave-button")
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)

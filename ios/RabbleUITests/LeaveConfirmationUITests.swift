@@ -3,7 +3,12 @@ import XCTest
 /// Leaving a joined room always asks first (ShowView.swift's `leaveMessage`
 /// alert), whether on stage or in the audience. Joins `demo_space_1` the
 /// same way ShowRoomUITests does, then taps the reaction bar's leave
-/// control (`accessibilityLabel("Leave the show")`).
+/// control (`accessibilityIdentifier("reaction-bar-leave-button")`).
+///
+/// Waits on that identifier rather than `show-on-air-badge`: the badge can
+/// be true from the show's HTTP metadata alone, before the LiveKit room
+/// object is populated, while the reaction bar (and its leave button) only
+/// renders once the room has actually connected (#150).
 final class LeaveConfirmationUITests: XCTestCase {
     override func setUp() {
         super.setUp()
@@ -18,9 +23,8 @@ final class LeaveConfirmationUITests: XCTestCase {
         let warmup = XCUIApplication()
         warmup.launchArguments = ["-showId", "demo_space_1", "-autoJoin"]
         warmup.launch()
-        if warmup.descendants(matching: .any)["show-on-air-badge"].waitForExistence(timeout: 30),
-           warmup.buttons["Leave the show"].waitForExistence(timeout: 5) {
-            warmup.buttons["Leave the show"].tap()
+        if warmup.buttons["reaction-bar-leave-button"].waitForExistence(timeout: 30) {
+            warmup.buttons["reaction-bar-leave-button"].tap()
             if warmup.alerts["Leave the show?"].waitForExistence(timeout: 5) {
                 warmup.alerts.buttons["Leave"].tap()
             }
@@ -34,11 +38,11 @@ final class LeaveConfirmationUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.descendants(matching: .any)["show-on-air-badge"].waitForExistence(timeout: 20),
-            "expected demo_space_1 to connect before leaving"
+            app.buttons["reaction-bar-leave-button"].waitForExistence(timeout: 20),
+            "expected demo_space_1's LiveKit room to connect (and its reaction bar to appear) before leaving"
         )
 
-        app.buttons["Leave the show"].tap()
+        app.buttons["reaction-bar-leave-button"].tap()
 
         XCTAssertTrue(app.alerts["Leave the show?"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.alerts.buttons["Leave"].exists)

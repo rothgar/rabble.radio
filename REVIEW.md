@@ -530,6 +530,22 @@ code, and mistakes already made there.
   lower bound, or a clamp where the array is built — the WHERE clause and
   the array's index range must agree exactly, not just be "close enough".
 
+## src/lib/security-headers.ts (THEME_SCRIPT_HASH)
+
+- `THEME_SCRIPT_HASH` is a sha256 of the exact inline theme-bootstrap script
+  string in `src/app/layout.tsx`, hand-computed and pasted in as a literal
+  (issue #180's report-only CSP). Nothing ties the two together: an edit to
+  that inline script in `layout.tsx` — even reformatting it — without
+  recomputing and updating this hash makes `script-src` reject the app's
+  only inline script on every single page view, burying the real signal the
+  report-only rollout exists to collect under self-inflicted noise at
+  `/api/csp-report`. `tests/lib/security-headers.test.ts` only asserts the
+  policy contains *a* sha256 hash, not that it matches `layout.tsx`'s actual
+  script, so a green suite doesn't catch the drift. Any future edit to that
+  script must recompute the hash (`openssl dgst -sha256 -binary | openssl
+  base64`, or the equivalent in Node) and update `THEME_SCRIPT_HASH` in the
+  same change.
+
 ## src/app/api/spaces/[id]/live/route.ts (err.message leaks outside the error envelope)
 
 - Issue #185 scrubbed `err.message` from every non-2xx `jsonError` call
@@ -545,7 +561,6 @@ code, and mistakes already made there.
   security review. Any future pass removing a leaked-message pattern from
   this codebase should also check success-response fields set inside a
   catch block, not just the client-facing error envelopes.
-
 ## src/components/SiteHeader.tsx and src/components/NocturneShell.tsx (brand link touch target)
 
 - A fix that adds `min-h-touch` to a tappable element without `min-w-touch`
@@ -559,3 +574,18 @@ code, and mistakes already made there.
   an icon on narrow screens — `DESIGN.md`: "Touch targets are at least
   44px tall and wide (`min-h-touch`, `min-w-touch`) on every tappable
   thing."
+
+## custom-worker.ts, src/lib/downloads.ts and src/lib/music.ts (routes answered before Next.js)
+
+- A route whose shared `serve*` function branches on `method === 'HEAD'`
+  (so it can return the real content-length with no body) only reaches
+  that branch under `next dev` if its `route.ts` exports `HEAD` itself.
+  Next.js does not synthesize a `HEAD` handler from `GET` — it 405s
+  instead — so without that export the HEAD branch is dead code locally
+  and untested, even though it works in production once `custom-worker.ts`
+  answers the request before Next.js ever sees it. `/music/<file>` (#194)
+  exports `HEAD` explicitly; `src/app/downloads/[file]/route.ts` (#192)
+  does not (#195). Any further route built on this
+  split — shared lib function plus a `custom-worker.ts` early return —
+  needs the same explicit `HEAD` export in its `route.ts`, with a test
+  that actually calls it.

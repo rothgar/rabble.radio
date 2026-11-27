@@ -42,6 +42,38 @@ construct `new PrismaClient({ adapter: new PrismaD1(db) })` directly — no
 need for `next dev` or a request context. Run the script from inside the
 repo root (bare `import`s need its `node_modules`); delete it afterwards.
 
+## Verifying custom-worker.ts (security headers, downloads)
+
+`next dev` (the `web` boot service) never runs `custom-worker.ts` — that
+file only wraps `.open-next/worker.js`'s `fetch`, which exists after an
+OpenNext build. Anything added there (`withSecurityHeaders`, the R2
+download fast path) is invisible on `:3000`; a `curl` against it there will
+not show the header or behaviour you just added. Build and preview the real
+Worker instead:
+
+```bash
+pnpm cf:build                                  # ~2-3 min; OpenNext + the Workers bundle
+nohup pnpm exec opennextjs-cloudflare preview > /tmp/cf-preview.log 2>&1 &
+sleep 8   # "Ready on http://localhost:8787"
+curl -sD - -o /dev/null http://localhost:8787/ | grep -i content-security-policy
+```
+
+This runs under `wrangler dev` against the same local D1/LiveKit, on
+`:8787`, alongside the `:3000` `next dev` service (different process, no
+port clash). `logger.*` calls don't reliably land in `/tmp/cf-preview.log`
+under wrangler's dev runtime; read them back from its local observability
+API instead:
+
+```bash
+curl -s -X POST http://localhost:8787/cdn-cgi/local/explorer/api/local/observability/query \
+  -H 'Content-Type: application/json' \
+  -d '{"sql":"SELECT message, level FROM logs WHERE message LIKE '"'"'%your.event.name%'"'"' ORDER BY ts_ms DESC LIMIT 10"}'
+```
+
+`message` is a JSON-encoded array wrapping the logger's own JSON string.
+Kill the preview (`pkill -f "opennextjs-cloudflare preview"`) and
+`rm -rf .open-next` when done — neither belongs in the tree or left running.
+
 ## Data
 
 The local D1 is SQLite under `.wrangler/state/`. Query it with wrangler:
@@ -116,6 +148,49 @@ can see each other's state.
 
 Audio itself (someone actually speaking) has no headless surface: say so in
 the PR when a change is about audio quality or device handling.
+
+## Driving custom-worker.ts (the deployed Worker entrypoint)
+
+`next dev` never runs `custom-worker.ts` — it only runs the Next.js app, so a
+fix that depends on `custom-worker.ts` answering a path before Next.js sees it
+(the content-length-stripping workaround `src/lib/downloads.ts` and
+`src/lib/music.ts` share, issues #192/#194) can't be verified on :3000. The
+unpatched behaviour (no `content-length`) will still reproduce there, which is
+expected, not a regression.
+
+To drive the real entrypoint, build and preview it locally:
+
+```bash
+pnpm cf:build                                            # opennextjs-cloudflare build
+pnpm exec wrangler dev --local --port 8787 --config wrangler.jsonc &
+```
+
+This is the actual `.open-next/worker.js` + `custom-worker.ts`, under
+`workerd`, with the same local D1/R2/LiveKit bindings `next dev` uses. The R2
+buckets this builds against (`rabble-dev-recordings`) are empty of anything
+under `music/` or `builds/`: upload a throwaway object first —
+
+```bash
+pnpm exec wrangler r2 object put rabble-dev-recordings/music/<file> --local --file=/path/to/some.mp3
+curl -sI http://localhost:8787/music/<file>          # content-length now present
+curl -sI -X HEAD http://localhost:8787/music/<file>
+curl -sD - -o /dev/null -r 0-99 http://localhost:8787/music/<file>
+pnpm exec wrangler r2 object delete rabble-dev-recordings/music/<file> --local   # clean up after
+```
+
+`rm -rf .open-next` afterwards; it's a build artifact, not meant to be
+committed. `pkill -f "wrangler dev"` to stop the preview — it binds its own
+port, so it doesn't conflict with the boot `web` service on :3000.
+
+Gotcha found verifying #194: a bare `%` anywhere in the path 500s under this
+local Worker runtime, on routes that don't touch R2 at all (`/station/%`,
+`/show/%`) — the OpenNext/Workers runtime itself faults on the malformed
+request before any route code runs, even one with its own decode guard. The
+same path 400s cleanly under `next dev`. This is pre-existing and generic,
+not something a single route's code can fix; Cloudflare's edge likely never
+forwards a malformed percent-sequence this far in real traffic anyway, since
+`wrangler dev --local` has no edge in front of `workerd`. Don't chase it as
+part of an unrelated route fix.
 
 ## What needs a logged-in user
 

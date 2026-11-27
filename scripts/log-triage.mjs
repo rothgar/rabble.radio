@@ -22,6 +22,15 @@
 // what the API returned to a file (local use only: log lines hold user data).
 // The token needs the account permission "Workers Observability" (the API
 // names it Workers Observability Write). Run by .github/workflows/log-triage.yml.
+//
+// Each issue (and each "still happening" comment) carries the timeline of up
+// to MAX_TIMELINES of the failing requests: every log line of that request
+// in order, with any D1 query that started and never finished flagged
+// (scripts/lib/workers-logs.mjs). That is the evidence a hung-request issue
+// needs, so the triage worker does not have to ask the owner for dashboard
+// access. With --input the timelines come from the same file.
+
+import { formatTimeline, requestEvents, requestIdOf, requestTimeline } from './lib/workers-logs.mjs';
 
 const arg = (name, dflt) =>
   (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${dflt}`).split('=').slice(1).join('=');
@@ -38,6 +47,8 @@ const LABEL = 'logs';
 const MARK = '<!-- log-triage -->';
 const COMMENT_EVERY_MS = 24 * 3600 * 1000;
 const MAX_NEW_ISSUES = 10;
+const MAX_TIMELINES = 3;
+const TIMELINE_MARGIN_MS = 5 * 60 * 1000;
 
 const envOf = (service) => (service.endsWith('-prod') ? 'prod' : service.endsWith('-dev') ? 'dev' : service);
 const dashboard = (service) =>
@@ -248,7 +259,40 @@ function title(g) {
   return `Logs (${g.env}): ${what}`;
 }
 
-function body(g, from, to) {
+// ------------------------------------------------------------- timelines
+async function timelinesFor(g, events) {
+  const out = [];
+  for (const id of [...g.requests].slice(0, MAX_TIMELINES)) {
+    try {
+      const own = input
+        ? events.filter((e) => requestIdOf(e) === id)
+        : await requestEvents({
+            account: process.env.CLOUDFLARE_ACCOUNT_ID,
+            token: process.env.CLOUDFLARE_API_TOKEN,
+            service: g.service,
+            requestId: id,
+            timeframe: { from: new Date(g.first - TIMELINE_MARGIN_MS).toISOString(), to: new Date(g.last + TIMELINE_MARGIN_MS).toISOString() },
+          });
+      if (own.length === 0) continue;
+      out.push({ id, timeline: requestTimeline(own) });
+    } catch (err) {
+      console.error(`timeline for ${id} skipped: ${err.message}`);
+    }
+  }
+  return out;
+}
+
+function timelineSection(timelines) {
+  if (!timelines?.length) return '';
+  const hung = timelines.filter((t) => t.timeline.neverFinished.length > 0);
+  const summary = hung.length
+    ? `Request timelines: ${hung.length} of ${timelines.length} left a D1 query unfinished (${[...new Set(hung.flatMap((t) => t.timeline.neverFinished.map((q) => q.query)))].join(', ')})`
+    : `Request timelines (${timelines.length}; every D1 query finished)`;
+  const text = timelines.map((t) => redact(formatTimeline(t.id, t.timeline))).join('\n\n');
+  return `<details><summary>${summary}</summary>\n\n\`\`\`\n${text.slice(0, 6000)}\n\`\`\`\n</details>`;
+}
+
+function body(g, from, to, timelines = []) {
   const urls = [...g.urls.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, n]) => `\`${p}\` (${n})`).join(', ');
   const lines = [
     `<!-- log-triage:fp=${fp(g.key)} -->`,
@@ -262,6 +306,7 @@ function body(g, from, to) {
     '',
     g.sample ? `<details><summary>Sample log line (ids and secrets redacted)</summary>\n\n\`\`\`json\n${redact(g.sample).slice(0, 1500)}\n\`\`\`\n</details>` : '',
     g.stack && typeof g.stack === 'string' && g.stack.includes('\n') ? `<details><summary>Stack</summary>\n\n\`\`\`\n${redact(g.stack).slice(0, 1500)}\n\`\`\`\n</details>` : '',
+    timelineSection(timelines),
     '',
     '## Wanted',
     '',
@@ -289,7 +334,10 @@ const groups = group(events);
 const report = { window: { from: fmt(from), to: fmt(to) }, services, events: events.length, groups: [], filed: [], commented: [], skipped: [] };
 
 if (dryRun || groups.length === 0) {
-  for (const g of groups) report.groups.push({ key: g.key, count: g.count, requests: g.requests.size, title: title(g), ...(has('bodies') ? { body: body(g, from, to) } : {}) });
+  for (const g of groups) {
+    const timelines = has('bodies') ? await timelinesFor(g, events) : [];
+    report.groups.push({ key: g.key, count: g.count, requests: g.requests.size, title: title(g), ...(has('bodies') ? { body: body(g, from, to, timelines) } : {}) });
+  }
 } else {
   const open = await listLabelled('open');
   const closed = await listLabelled('closed');
@@ -306,15 +354,17 @@ if (dryRun || groups.length === 0) {
       const comments = await gh(`/repos/${repo}/issues/${existing.number}/comments?per_page=100`);
       const last = comments.filter((c) => c.body?.includes(MARK)).map((c) => Date.parse(c.created_at)).sort((a, b) => b - a)[0] ?? Date.parse(existing.created_at);
       if (Date.now() - last < COMMENT_EVERY_MS) { report.skipped.push({ ...row, why: `#${existing.number} updated in the last 24h` }); continue; }
+      const section = timelineSection(await timelinesFor(g, events));
       await gh(`/repos/${repo}/issues/${existing.number}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ body: `${MARK}\nStill happening: **${g.count}** more between ${fmt(g.first)} and ${fmt(g.last)} across ${g.requests.size} request${g.requests.size === 1 ? '' : 's'}.` }),
+        body: JSON.stringify({ body: `${MARK}\nStill happening: **${g.count}** more between ${fmt(g.first)} and ${fmt(g.last)} across ${g.requests.size} request${g.requests.size === 1 ? '' : 's'}.${section ? `\n\n${section}` : ''}` }),
       });
       report.commented.push({ ...row, issue: existing.number });
       continue;
     }
     if (filed >= MAX_NEW_ISSUES) { report.skipped.push({ ...row, why: `more than ${MAX_NEW_ISSUES} new groups in one run` }); continue; }
-    const issue = await gh(`/repos/${repo}/issues`, { method: 'POST', body: JSON.stringify({ title: title(g), body: body(g, from, to), labels: [LABEL, 'bug'] }) });
+    const timelines = await timelinesFor(g, events);
+    const issue = await gh(`/repos/${repo}/issues`, { method: 'POST', body: JSON.stringify({ title: title(g), body: body(g, from, to, timelines), labels: [LABEL, 'bug'] }) });
     filed++;
     report.filed.push({ ...row, issue: issue.number, url: issue.html_url });
   }

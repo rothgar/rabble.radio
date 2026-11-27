@@ -111,9 +111,11 @@ already turn `rabble-prod`'s error-level logs and elevated P95 wall time into
 (`.github/workflows/log-triage.yml`); these consoles are for looking at
 either environment, not alerting — alerting is production only.
 
-When such an issue asks which D1 call hung, `scripts/request-logs.mjs` prints
-a request's log timeline from Workers Logs and flags any `db.query.start`
-without a `done`: `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node
+Each `logs` issue and each "still happening" comment carries the timeline of
+up to three of the failing requests (every log line in order, with any
+`db.query.start` that has no `done` flagged), so a hung-request issue already
+names the D1 call that hung. For a window or request the issue did not
+cover, `scripts/request-logs.mjs` prints the same timeline: `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node
 scripts/request-logs.mjs --service rabble-dev --route /api/me/shows --from
 <iso> --to <iso>` (or `--request <id>`). Its output is redacted and safe to
 paste on the issue; Workers Logs keeps only a few days, so run it soon after

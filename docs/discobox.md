@@ -231,8 +231,11 @@ seen. Noise is logged and nothing else.
    `rabble-prod` in the last eight hours, groups them by the
    logger's event name or the exception's message with ids stripped, and
    files one issue per new group labelled `logs` and `bug`, titled
-   `Logs (prod): <event>`, with counts, routes, request ids and a
-   redacted sample line, written as Today / Wanted / Done when. A group
+   `Logs (prod): <event>`, with counts, routes, request ids, a
+   redacted sample line and the timelines of up to three of the failing
+   requests (every log line in order; a D1 query that started and never
+   finished is flagged, which is what a hung-request issue needs), written
+   as Today / Wanted / Done when. A group
    with an open `logs` issue gets a "still happening" comment at most once
    a day; one closed as `wontfix` is never filed again, and client
    disconnects ("Network connection lost") are never filed. Workers Logs keep

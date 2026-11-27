@@ -58,11 +58,11 @@ jobs:
             echo
             echo "Read the Worker's logs for this window (the log-triage dataset), find the deploy or dependency that broke it, and open a fix PR. If the last deploy is the cause, roll it back first: \`pnpm exec wrangler rollback <previous version id> -y\` (add \`--env production\` for rabble.radio; \`wrangler deployments list\` shows the ids)."
           } > body.md
-          num=$(gh issue list --label ops --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          num=$(gh issue list -R "$GITHUB_REPOSITORY" --label ops --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
           if [ -n "$num" ]; then
-            gh issue comment "$num" --body-file body.md
+            gh issue comment -R "$GITHUB_REPOSITORY" "$num" --body-file body.md
           else
-            gh issue create --title "$title" --label bug --label ops --label p0 --body-file body.md
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --label bug --label ops --label p0 --body-file body.md
           fi
           exit 1
       - name: Close the outage issue on recovery
@@ -71,7 +71,7 @@ jobs:
           DETAIL: ${{ steps.probe.outputs.detail }}
         run: |
           title="Ops: $SITE is not answering"
-          num=$(gh issue list --label ops --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          num=$(gh issue list -R "$GITHUB_REPOSITORY" --label ops --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
           if [ -n "$num" ]; then
-            gh issue close "$num" --comment "Recovered: https://$SITE/api/health answered $DETAIL at $(date -u +%FT%TZ) (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            gh issue close -R "$GITHUB_REPOSITORY" "$num" --comment "Recovered: https://$SITE/api/health answered $DETAIL at $(date -u +%FT%TZ) (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
           fi

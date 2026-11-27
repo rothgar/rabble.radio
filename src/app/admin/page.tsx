@@ -8,15 +8,12 @@ import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 import { getCurrentUser } from '@/lib/session';
 import { getPlatformOverview, isAdmin, listUsersForAdmin, type AdminUserRow } from '@/lib/admin';
+import { formatUtcDateTime } from '@/lib/format';
 import { SiteHeader } from '@/components/SiteHeader';
 import { AdminUserActions } from '@/components/AdminUserActions';
 import { Card, PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
-
-function formatWhen(d: Date): string {
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-}
 
 function slug(label: string): string {
   return label.toLowerCase().replace(/\s+/g, '-');
@@ -49,7 +46,7 @@ function UserRow({ row }: { row: AdminUserRow }): ReactElement {
           ) : null}
         </div>
         <span className="break-all text-caption text-[var(--color-text-tertiary)]">{row.did}</span>
-        <span className="text-caption text-[var(--color-text-secondary)]">joined {formatWhen(row.createdAt)}</span>
+        <span className="text-caption text-[var(--color-text-secondary)]">joined {formatUtcDateTime(row.createdAt)}</span>
         {row.bannedAt && row.banReason ? (
           <span className="text-caption text-[var(--color-text-secondary)]">reason: {row.banReason}</span>
         ) : null}

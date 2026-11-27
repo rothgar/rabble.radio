@@ -9,6 +9,7 @@
 
 import type { ReactElement } from 'react';
 import type { PublicReplay } from '@/types';
+import { formatSize } from '@/lib/format';
 
 export interface ReplayPlayerProps {
   replay: PublicReplay;
@@ -21,12 +22,6 @@ export function formatDuration(seconds: number | null): string {
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-export function formatSize(bytes: number | null): string {
-  if (bytes === null || !Number.isFinite(bytes) || bytes <= 0) return '';
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
 }
 
 export function ReplayPlayer({ replay, title }: ReplayPlayerProps): ReactElement {

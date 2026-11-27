@@ -9,6 +9,7 @@
 import { useCallback, useState, type ReactElement } from 'react';
 import { Button, Card } from '@/components/ui';
 import { StartShowButton } from '@/components/StartShowButton';
+import { formatLocalDateTime, formatSize } from '@/lib/format';
 import type { PublicSpace } from '@/types';
 
 export interface HostedRecording {
@@ -24,19 +25,6 @@ export interface HostedRecording {
 export interface HostedShowCardProps {
   space: PublicSpace;
   recordings: HostedRecording[];
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null || bytes <= 0) return '';
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function formatHosted(seconds: number): string {
@@ -98,7 +86,7 @@ function RecordingRow({ recording: initial }: { recording: HostedRecording }): R
   }, [busy, recording.id, recording.published]);
 
   const playable = recording.status === 'available';
-  const meta = [formatDate(recording.startedAt), formatBytes(recording.sizeBytes)]
+  const meta = [formatLocalDateTime(recording.startedAt), formatSize(recording.sizeBytes)]
     .filter(Boolean)
     .join(' · ');
 
@@ -113,7 +101,7 @@ function RecordingRow({ recording: initial }: { recording: HostedRecording }): R
         <span className="text-caption text-[var(--color-text-tertiary)]">
           {recording.status === 'available'
             ? recording.published
-              ? `Published to your podcast feed${recording.publishedAt ? ` · ${formatDate(recording.publishedAt)}` : ''}`
+              ? `Published to your podcast feed${recording.publishedAt ? ` · ${formatLocalDateTime(recording.publishedAt)}` : ''}`
               : 'Not published'
             : recording.status === 'starting'
               ? 'Processing…'

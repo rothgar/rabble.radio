@@ -8,20 +8,17 @@ import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 import { getCurrentUser } from '@/lib/session';
 import { isReportAdmin, listReports, type ReportRow } from '@/lib/reports';
+import { formatUtcDateTime } from '@/lib/format';
 import { SiteHeader } from '@/components/SiteHeader';
 import { Card, PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
-function formatWhen(d: Date): string {
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-}
-
 function ReportEntry({ row }: { row: ReportRow }): ReactElement {
   return (
     <Card className="flex flex-col gap-3" data-testid={`report-${row.id}`}>
       <div className="flex flex-wrap items-center gap-2 text-caption text-[var(--color-text-secondary)]">
-        <span>{formatWhen(row.createdAt)}</span>
+        <span>{formatUtcDateTime(row.createdAt)}</span>
         <span>space {row.spaceId}</span>
       </div>
       <div className="text-caption text-[var(--color-text-secondary)]">

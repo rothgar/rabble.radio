@@ -5,6 +5,7 @@
 
 import type { ReactElement } from 'react';
 import { Card } from '@/components/ui';
+import { formatLocalDateTime } from '@/lib/format';
 
 export interface JoinedShowView {
   sessionId: string;
@@ -18,12 +19,6 @@ export interface JoinedShowView {
     tags: string[];
     host: { handle: string; displayName: string | null; avatarUrl: string | null };
   };
-}
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export function JoinedShowCard({ show }: { show: JoinedShowView }): ReactElement {
@@ -47,7 +42,7 @@ export function JoinedShowCard({ show }: { show: JoinedShowView }): ReactElement
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-body font-semibold text-[var(--color-text)]">{show.space.title}</span>
         <span className="truncate text-caption text-[var(--color-text-secondary)]">
-          {hostName} · {formatWhen(show.joinedAt)}
+          {hostName} · {formatLocalDateTime(show.joinedAt)}
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-1">

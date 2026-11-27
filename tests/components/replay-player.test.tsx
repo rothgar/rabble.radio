@@ -2,7 +2,8 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { ReplayPlayer, formatDuration, formatSize } from '@/components/ReplayPlayer';
+import { ReplayPlayer, formatDuration } from '@/components/ReplayPlayer';
+import { formatSize } from '@/lib/format';
 
 afterEach(cleanup);
 

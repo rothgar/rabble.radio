@@ -8,14 +8,11 @@ import { notFound } from 'next/navigation';
 import type { ReactElement } from 'react';
 import { getCurrentUser } from '@/lib/session';
 import { isFeedbackAdmin, listFeedback, type FeedbackRow } from '@/lib/feedback';
+import { formatUtcDateTime } from '@/lib/format';
 import { SiteHeader } from '@/components/SiteHeader';
 import { Card, PageLayout } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
-
-function formatWhen(d: Date): string {
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-}
 
 function FeedbackEntry({ row }: { row: FeedbackRow }): ReactElement {
   const context = JSON.stringify(row.context, null, 2);
@@ -27,7 +24,7 @@ function FeedbackEntry({ row }: { row: FeedbackRow }): ReactElement {
         </span>
         <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5">{row.platform}</span>
         {row.appVersion ? <span>v{row.appVersion}</span> : null}
-        <span>{formatWhen(row.createdAt)}</span>
+        <span>{formatUtcDateTime(row.createdAt)}</span>
         <span>{row.handle ? `@${row.handle}` : 'signed out'}</span>
         {row.email ? <span>{row.email}</span> : null}
         {row.page ? <span className="truncate">{row.page}</span> : null}

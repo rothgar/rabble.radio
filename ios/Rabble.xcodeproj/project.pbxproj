@@ -270,6 +270,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = radio.rabble.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RABBLE_BASE_URL = "https://rabble.radio";
+				RABBLE_CRASH_SECRET = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -294,6 +295,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = radio.rabble.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RABBLE_BASE_URL = "https://rabble.radio";
+				RABBLE_CRASH_SECRET = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

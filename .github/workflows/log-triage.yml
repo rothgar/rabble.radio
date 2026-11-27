@@ -42,20 +42,20 @@ jobs:
         with:
           node-version: 22
       # Dispatch inputs go through env, never straight into the shell line.
-      - name: Scan rabble-dev and rabble-prod for errors
+      - name: Scan rabble-prod for errors
         env:
           HOURS: ${{ inputs.hours || '8' }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: |
           node scripts/log-triage.mjs \
-            --services=rabble-dev,rabble-prod \
+            --services=rabble-prod \
             --hours="$HOURS" $DRY_RUN
-      - name: Scan rabble-dev and rabble-prod for elevated latency
+      - name: Scan rabble-prod for elevated latency
         if: ${{ !cancelled() }}
         env:
           HOURS: ${{ inputs.hours || '8' }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: |
           node scripts/latency-triage.mjs \
-            --services=rabble-dev,rabble-prod \
+            --services=rabble-prod \
             --hours="$HOURS" $DRY_RUN

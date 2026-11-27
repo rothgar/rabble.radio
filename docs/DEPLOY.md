@@ -105,10 +105,11 @@ Four consoles, already enabled, no code or cost:
 
 The LiveKit Cloud console has one login across both projects; pick the dev
 or production project after signing in (there's no project-specific URL to
-link to from here). `scripts/log-triage.mjs` already turns the Workers'
-error-level logs into `logs`-labelled issues every six hours
-(`.github/workflows/log-triage.yml`); these consoles are for looking, not
-alerting.
+link to from here). `scripts/log-triage.mjs` and `scripts/latency-triage.mjs`
+already turn `rabble-prod`'s error-level logs and elevated P95 wall time into
+`logs`- and `latency`-labelled issues every six hours
+(`.github/workflows/log-triage.yml`); these consoles are for looking at
+either environment, not alerting — alerting is production only.
 
 ## Rollback and uptime
 

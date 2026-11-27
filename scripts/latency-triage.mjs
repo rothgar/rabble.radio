@@ -3,7 +3,7 @@
 // scripts/log-triage.mjs alerts on errors.
 //
 //   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… GH_TOKEN=… \
-//   node scripts/latency-triage.mjs [--services=rabble-dev,rabble-prod] [--hours=6]
+//   node scripts/latency-triage.mjs [--services=rabble-prod] [--hours=6]
 //                                   [--repo=rothgar/rabble.radio] [--threshold-ms=5000]
 //                                   [--dry-run] [--json] [--input=stats.json] [--dump=stats.json]
 //
@@ -31,7 +31,7 @@ const arg = (name, dflt) =>
   (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${dflt}`).split('=').slice(1).join('=');
 const has = (flag) => process.argv.includes(`--${flag}`);
 
-const services = arg('services', 'rabble-dev,rabble-prod').split(',').map((s) => s.trim()).filter(Boolean);
+const services = arg('services', 'rabble-prod').split(',').map((s) => s.trim()).filter(Boolean);
 const hours = Number(arg('hours', '6'));
 const repo = arg('repo', 'rothgar/rabble.radio');
 const thresholdMs = Number(arg('threshold-ms', '5000'));

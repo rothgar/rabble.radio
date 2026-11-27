@@ -228,10 +228,10 @@ seen. Noise is logged and nothing else.
 3. **Every six hours**, `.github/workflows/log-triage.yml` runs
    `scripts/log-triage.mjs`: it queries Workers Logs (the Workers
    Observability API) for every error-level line and uncaught exception of
-   `rabble-dev` and `rabble-prod` in the last eight hours, groups them by the
+   `rabble-prod` in the last eight hours, groups them by the
    logger's event name or the exception's message with ids stripped, and
    files one issue per new group labelled `logs` and `bug`, titled
-   `Logs (dev|prod): <event>`, with counts, routes, request ids and a
+   `Logs (prod): <event>`, with counts, routes, request ids and a
    redacted sample line, written as Today / Wanted / Done when. A group
    with an open `logs` issue gets a "still happening" comment at most once
    a day; one closed as `wontfix` is never filed again, and client
@@ -240,19 +240,20 @@ seen. Noise is logged and nothing else.
    durable record. Run it by hand with `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…
    node scripts/log-triage.mjs --dry-run --bodies`; the token needs the
    account permission "Workers Observability" (the CI token has to be
-   given it too).
+   given it too). Alerting is production only: rabble-dev is still deployed
+   and watched by hand through its own dashboard, but doesn't file issues.
 
 4. **The same run**, `.github/workflows/log-triage.yml` also runs
    `scripts/latency-triage.mjs`: it queries the Workers Observability
    telemetry API's calculations view for the P95, P99 and invocation count of
-   each Worker's wall time (`$workers.wallTimeMs`) over the last eight hours,
-   and files one issue labelled `latency` and `bug` per service whose P95
+   `rabble-prod`'s wall time (`$workers.wallTimeMs`) over the last eight
+   hours, and files one issue labelled `latency` and `bug` when its P95
    crosses `--threshold-ms` (default 5000ms — no baseline existed yet, so
    this starts conservative; tighten it once real `--dump` data comes in),
-   titled `Latency (dev|prod): P95 wall time <ms>ms (> <threshold>ms)`. A
-   service with an open `latency` issue gets a "still happening" comment at
-   most once a day; one closed as `wontfix` is never filed again, and a
-   service back under the threshold, or with too few invocations in the
+   titled `Latency (prod): P95 wall time <ms>ms (> <threshold>ms)`. An
+   open `latency` issue gets a "still happening" comment at
+   most once a day; one closed as `wontfix` is never filed again, and
+   being back under the threshold, or too few invocations in the
    window to trust a percentile, is left alone. Run it by hand with
    `CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node scripts/latency-triage.mjs
    --dry-run --bodies`; same token and permission as log-triage.mjs, no new

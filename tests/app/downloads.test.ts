@@ -11,9 +11,10 @@ vi.mock('@opennextjs/cloudflare', () => ({
   getCloudflareContext: () => ({ env: m.env }),
 }));
 
-import { GET } from '@/app/downloads/[file]/route';
+import { GET, HEAD } from '@/app/downloads/[file]/route';
 
-const req = (file: string) => new NextRequest(`http://localhost/downloads/${file}`);
+const req = (file: string, method = 'GET') =>
+  new NextRequest(`http://localhost/downloads/${file}`, { method });
 const ctx = (file: string) => ({ params: Promise.resolve({ file }) });
 
 beforeEach(() => {
@@ -56,5 +57,37 @@ describe('GET /downloads/[file]', () => {
   it('503s without the bucket binding', async () => {
     delete m.env.RECORDINGS;
     expect((await GET(req('rabble-android.apk'), ctx('rabble-android.apk'))).status).toBe(503);
+  });
+
+  it('504s instead of hanging when the R2 get() never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      m.get.mockImplementation(() => new Promise(() => undefined));
+      const pending = GET(req('rabble-android.apk'), ctx('rabble-android.apk'));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).toBe(504);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('HEAD /downloads/[file]', () => {
+  it('reports the size with no body, the way next dev exercises it', async () => {
+    m.get.mockResolvedValueOnce({
+      body: new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('apk-bytes'));
+          c.close();
+        },
+      }),
+      size: 9,
+      httpEtag: '"abc"',
+      uploaded: new Date('2026-11-04T00:00:00Z'),
+    });
+    const res = await HEAD(req('rabble-android.apk', 'HEAD'), ctx('rabble-android.apk'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe('9');
+    expect(res.body).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ const {
   mockRemoveParticipant,
   mockRecordLeave,
   mockEndLiveShow,
+  mockQueryRaw,
 } = vi.hoisted(() => ({
   mockCount: vi.fn(),
   mockFindMany: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockRemoveParticipant: vi.fn(),
   mockRecordLeave: vi.fn(),
   mockEndLiveShow: vi.fn(),
+  mockQueryRaw: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -30,6 +32,7 @@ vi.mock('@/lib/db', () => ({
     space: { count: mockCount, findMany: mockSpaceFindMany },
     showSession: { count: mockCount },
     showParticipation: { findMany: mockParticipationFindMany },
+    $queryRaw: mockQueryRaw,
   },
 }));
 
@@ -45,6 +48,7 @@ import {
   AdminActionError,
   adminDids,
   banUser,
+  getPlatformActivity,
   getPlatformOverview,
   isAdmin,
   kickFromPlatform,
@@ -204,5 +208,110 @@ describe('kickFromPlatform', () => {
     });
     await expect(kickFromPlatform('did:plc:host')).resolves.toBeDefined();
     expect(mockEndLiveShow).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('getPlatformActivity', () => {
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const now = new Date('2026-11-27T12:00:00.000Z');
+  const toSqliteIso = (d: Date) => d.toISOString().replace('Z', '+00:00');
+  const nowIso = toSqliteIso(now);
+  const last7Iso = toSqliteIso(new Date(now.getTime() - WEEK_MS));
+  const prev7Iso = toSqliteIso(new Date(now.getTime() - 2 * WEEK_MS));
+  const seriesStartIso = toSqliteIso(new Date(now.getTime() - 12 * WEEK_MS));
+
+  function valuesOf(call: unknown[]): unknown[] {
+    return call.slice(1);
+  }
+  function sqlOf(call: unknown[]): string {
+    return (call[0] as string[]).join('');
+  }
+
+  function queueHappyPath(): void {
+    mockQueryRaw
+      .mockResolvedValueOnce([{ current: 5, previous: 3 }]) // User sign-ups
+      .mockResolvedValueOnce([
+        { showsCurrent: 4, showsPrevious: 2, secondsCurrent: 7200, secondsPrevious: 3600, peakCurrent: 10, peakPrevious: 6 },
+      ]) // ShowSession
+      .mockResolvedValueOnce([{ joinsCurrent: 20, joinsPrevious: 15, distinctCurrent: 8, distinctPrevious: 5 }]) // ShowParticipation
+      .mockResolvedValueOnce([{ current: 30, previous: 25 }]) // ShowReaction
+      .mockResolvedValueOnce([{ current: 9, previous: 4 }]) // ShowLike
+      .mockResolvedValueOnce([
+        { week: 0, count: 5 },
+        { week: 5, count: 2 },
+      ]) // sign-up weeks
+      .mockResolvedValueOnce([
+        { week: 0, count: 4 },
+        { week: 11, count: 1 },
+      ]) // show weeks
+      .mockResolvedValueOnce([{ week: 0, count: 20 }]); // listener-join weeks
+  }
+
+  it('reports each window and rolls durationSeconds up into hours', async () => {
+    queueHappyPath();
+    const out = await getPlatformActivity(now);
+    expect(out.signUps).toEqual({ current: 5, previous: 3 });
+    expect(out.showsHosted).toEqual({ current: 4, previous: 2 });
+    expect(out.hoursHosted).toEqual({ current: 2, previous: 1 });
+    expect(out.listenerJoins).toEqual({ current: 20, previous: 15 });
+    expect(out.distinctListeners).toEqual({ current: 8, previous: 5 });
+    expect(out.peakConcurrentListeners).toEqual({ current: 10, previous: 6 });
+    expect(out.reactions).toEqual({ current: 30, previous: 25 });
+    expect(out.likes).toEqual({ current: 9, previous: 4 });
+  });
+
+  it('zero-fills weeks the DB returned no bucket for, newest first', async () => {
+    queueHappyPath();
+    const out = await getPlatformActivity(now);
+    expect(out.weeklySeries).toHaveLength(12);
+    expect(out.weeklySeries[0]).toEqual({
+      weekStart: new Date(now.getTime() - WEEK_MS).toISOString().slice(0, 10),
+      signUps: 5,
+      showsHosted: 4,
+      listenerJoins: 20,
+    });
+    expect(out.weeklySeries[5].signUps).toBe(2);
+    expect(out.weeklySeries[5].showsHosted).toBe(0);
+    expect(out.weeklySeries[11].showsHosted).toBe(1);
+    expect(out.weeklySeries[11].signUps).toBe(0);
+    expect(out.weeklySeries[11].weekStart).toBe(new Date(now.getTime() - 12 * WEEK_MS).toISOString().slice(0, 10));
+  });
+
+  it('windows every query on the same last-7/previous-7/now boundaries', async () => {
+    queueHappyPath();
+    await getPlatformActivity(now);
+    expect(valuesOf(mockQueryRaw.mock.calls[0])).toEqual([last7Iso, last7Iso, prev7Iso, nowIso]);
+    expect(valuesOf(mockQueryRaw.mock.calls[3])).toEqual([last7Iso, last7Iso, prev7Iso, nowIso]); // ShowReaction
+    expect(valuesOf(mockQueryRaw.mock.calls[4])).toEqual([last7Iso, last7Iso, prev7Iso, nowIso]); // ShowLike
+    expect(valuesOf(mockQueryRaw.mock.calls[5])).toEqual([nowIso, seriesStartIso, nowIso]); // sign-up weeks
+  });
+
+  it('counts only listener-role rows, distinct on non-anonymous identity', async () => {
+    queueHappyPath();
+    await getPlatformActivity(now);
+    const participationCall = mockQueryRaw.mock.calls[2];
+    expect(sqlOf(participationCall)).toContain(`"role" = 'listener'`);
+    expect(sqlOf(participationCall)).toContain('"anonymous" = 0 THEN "identity"');
+    expect(valuesOf(participationCall)).toEqual([last7Iso, last7Iso, last7Iso, last7Iso, prev7Iso, nowIso]);
+
+    const joinWeeksCall = mockQueryRaw.mock.calls[7];
+    expect(sqlOf(joinWeeksCall)).toContain(`"role" = 'listener'`);
+  });
+
+  it('defaults every window and the series to zero when nothing matches', async () => {
+    mockQueryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const out = await getPlatformActivity(now);
+    expect(out.signUps).toEqual({ current: 0, previous: 0 });
+    expect(out.hoursHosted).toEqual({ current: 0, previous: 0 });
+    expect(out.peakConcurrentListeners).toEqual({ current: 0, previous: 0 });
+    expect(out.weeklySeries.every((w) => w.signUps === 0 && w.showsHosted === 0 && w.listenerJoins === 0)).toBe(true);
   });
 });

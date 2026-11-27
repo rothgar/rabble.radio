@@ -1,6 +1,6 @@
 // src/app/downloads/[file]/route.ts
 //
-// GET /downloads/rabble-android.apk
+// GET or HEAD /downloads/rabble-android.apk
 //
 // Serves test builds of the mobile apps from the recordings R2 bucket. In
 // the deployed Worker, custom-worker.ts answers this path before Next.js
@@ -24,3 +24,8 @@ export async function GET(
   const bucket = (getCloudflareContext().env as { RECORDINGS?: R2BucketLike }).RECORDINGS;
   return serveDownload(file, request.method, bucket);
 }
+
+// Next.js does not synthesize a HEAD handler from GET; without this, next
+// dev 405s a HEAD request before it reaches serveDownload's own HEAD branch.
+// serveDownload already branches on the method, so HEAD can just be GET.
+export const HEAD = GET;

@@ -54,6 +54,7 @@ struct HomeView: View {
                 case .station(let tag): StationView(tag: tag)
                 case .show(let id, let autoJoin): ShowView(env: env, showId: id, autoJoin: autoJoin)
                 case .me: MeView()
+                case .admin: AdminView()
                 }
             }
             .sheet(isPresented: $showLogin) {

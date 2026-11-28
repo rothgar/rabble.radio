@@ -4,6 +4,7 @@ enum Route: Hashable {
     case station(String)
     case show(id: String, autoJoin: Bool)
     case me
+    case admin
 }
 
 /// The navigation stack's path, shared so pushed screens can push further

@@ -75,6 +75,7 @@ fun MeScreen(
     sessionVersion: Int,
     onOpenShow: (String) -> Unit,
     onStartedShow: (String) -> Unit,
+    onOpenAdmin: () -> Unit,
     onLogout: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -148,7 +149,7 @@ fun MeScreen(
         when (val s = state) {
             MeState.Loading -> Loading()
             is MeState.Failed -> ErrorPanel(s.message) { reload++ }
-            is MeState.Ready -> MeContent(s, isRefreshing, { reload++ }, padding, onOpenShow, startingId, startError, ::start, ::share, onLogout)
+            is MeState.Ready -> MeContent(s, isRefreshing, { reload++ }, padding, onOpenShow, startingId, startError, ::start, ::share, onOpenAdmin, onLogout)
         }
     }
 }
@@ -165,6 +166,7 @@ private fun MeContent(
     startError: String?,
     onStart: (String?) -> Unit,
     onShare: (Show) -> Unit,
+    onOpenAdmin: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val pullState = rememberPullToRefreshState()
@@ -199,12 +201,7 @@ private fun MeContent(
                 )
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    "SHOWS YOU HOST · ${s.shows.hosted.size}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RabbleColors.TextSecondary,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                SectionLabel("SHOWS YOU HOST · ${s.shows.hosted.size}")
             }
             if (s.shows.hosted.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -227,12 +224,7 @@ private fun MeContent(
                 )
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    "SHOWS YOU JOINED · ${s.shows.joined.size}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RabbleColors.TextSecondary,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                SectionLabel("SHOWS YOU JOINED · ${s.shows.joined.size}")
             }
             if (s.shows.joined.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -247,6 +239,13 @@ private fun MeContent(
             }
             items(s.shows.joined, key = { "joined-" + it.sessionId }) { joined ->
                 JoinedShowCard(joined) { onOpenShow(joined.showId) }
+            }
+            if (s.me.isAdmin) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    OutlinedButton(onClick = onOpenAdmin, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                        Text("Admin")
+                    }
+                }
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().height(48.dp)) {

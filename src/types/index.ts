@@ -14,6 +14,8 @@ export interface PublicUser {
   handle: string;
   displayName: string | null;
   avatarUrl: string | null;
+  /** Whether this DID is in the ADMIN_DIDS allowlist (src/lib/admin.ts). */
+  isAdmin: boolean;
 }
 
 export interface PublicHost {

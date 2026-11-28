@@ -101,6 +101,11 @@ struct MeView: View {
                 }
                 .pickerStyle(.segmented)
                 .card()
+                if me.isAdmin {
+                    Button("Admin") { nav.push(.admin) }
+                        .buttonStyle(.bordered)
+                        .wideButton()
+                }
                 Button("Log out") { logout() }
                     .buttonStyle(.bordered)
                     .foregroundStyle(RabbleColors.live)

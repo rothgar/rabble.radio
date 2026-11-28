@@ -169,6 +169,18 @@ final class RabbleAPI {
         try await request(DueRemindersResponse.self, path: "/api/me/reminders?due=1").due
     }
 
+    /// Admin only: platform overview counts and the user list to moderate. 404s for non-admins.
+    func adminOverview() async throws -> AdminOverviewResponse {
+        try await request(AdminOverviewResponse.self, path: "/api/admin/overview")
+    }
+
+    /// Admin only: ban, unban or kick a user from the platform.
+    func adminAction(did: String, action: String, reason: String? = nil) async throws {
+        var body: [String: Any] = ["did": did, "action": action]
+        if let reason { body["reason"] = reason }
+        _ = try await raw(path: "/api/admin/users", method: "POST", json: body)
+    }
+
     /// Absolute URL for a server-relative path such as a replay's audio.
     func absolute(_ path: String) -> URL {
         if path.hasPrefix("http"), let url = URL(string: path) { return url }

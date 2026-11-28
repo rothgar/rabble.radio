@@ -105,6 +105,7 @@ function makeUser(overrides: Partial<PublicUser> = {}): PublicUser {
     handle: 'viewer.bsky.social',
     displayName: 'Viewer',
     avatarUrl: null,
+    isAdmin: false,
     ...overrides,
   };
 }

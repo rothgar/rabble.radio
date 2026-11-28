@@ -230,6 +230,7 @@ export default function SpacePage(): ReactElement {
               handle: userBody.handle,
               displayName: userBody.displayName ?? null,
               avatarUrl: userBody.avatarUrl ?? null,
+              isAdmin: userBody.isAdmin ?? false,
             };
           }
         }

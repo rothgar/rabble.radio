@@ -232,13 +232,15 @@ struct Me: Decodable, Hashable {
     let handle: String
     var displayName: String?
     var avatarUrl: String?
+    /// Whether this DID is in the platform's ADMIN_DIDS allowlist.
+    var isAdmin: Bool = false
 
     var label: String {
         if let displayName, !displayName.trimmingCharacters(in: .whitespaces).isEmpty { return displayName }
         return "@\(handle)"
     }
 
-    enum CodingKeys: String, CodingKey { case id, did, handle, displayName, avatarUrl }
+    enum CodingKeys: String, CodingKey { case id, did, handle, displayName, avatarUrl, isAdmin }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -247,6 +249,66 @@ struct Me: Decodable, Hashable {
         handle = try c.decode(String.self, forKey: .handle)
         displayName = c.optional(.displayName)
         avatarUrl = c.optional(.avatarUrl)
+        isAdmin = c.opt(.isAdmin, false)
+    }
+}
+
+/// Mirror of PlatformOverview from GET /api/admin/overview.
+struct AdminOverview: Decodable {
+    var totalUsers: Int = 0
+    var bannedUsers: Int = 0
+    var totalShows: Int = 0
+    var liveNow: Int = 0
+    var totalSessions: Int = 0
+    var buildId: String?
+
+    enum CodingKeys: String, CodingKey { case totalUsers, bannedUsers, totalShows, liveNow, totalSessions, buildId }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        totalUsers = c.opt(.totalUsers, 0)
+        bannedUsers = c.opt(.bannedUsers, 0)
+        totalShows = c.opt(.totalShows, 0)
+        liveNow = c.opt(.liveNow, 0)
+        totalSessions = c.opt(.totalSessions, 0)
+        buildId = c.optional(.buildId)
+    }
+}
+
+/// One row of the user list in GET /api/admin/overview.
+struct AdminUserRow: Decodable, Identifiable {
+    let did: String
+    var handle: String = ""
+    var displayName: String?
+    var createdAt: String = ""
+    var bannedAt: String?
+    var banReason: String?
+    var id: String { did }
+
+    enum CodingKeys: String, CodingKey { case did, handle, displayName, createdAt, bannedAt, banReason }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        did = try c.decode(String.self, forKey: .did)
+        handle = c.opt(.handle, "")
+        displayName = c.optional(.displayName)
+        createdAt = c.opt(.createdAt, "")
+        bannedAt = c.optional(.bannedAt)
+        banReason = c.optional(.banReason)
+    }
+}
+
+/// Mirror of the GET /api/admin/overview response.
+struct AdminOverviewResponse: Decodable {
+    let overview: AdminOverview
+    var users: [AdminUserRow] = []
+
+    enum CodingKeys: String, CodingKey { case overview, users }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        overview = try c.decode(AdminOverview.self, forKey: .overview)
+        users = c.opt(.users, [])
     }
 }
 

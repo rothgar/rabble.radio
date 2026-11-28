@@ -182,6 +182,17 @@ class RabbleApi(
         return (0 until arr.length()).map { DueReminder.fromJson(arr.getJSONObject(it)) }
     }
 
+    /** Admin only: platform overview counts and the user list to moderate. 404s for non-admins. */
+    suspend fun adminOverview(): AdminOverviewResponse =
+        AdminOverviewResponse.fromJson(request(get("/api/admin/overview")))
+
+    /** Admin only: ban, unban or kick a user from the platform. */
+    suspend fun adminAction(did: String, action: String, reason: String? = null) {
+        val body = JSONObject().put("did", did).put("action", action)
+        if (reason != null) body.put("reason", reason)
+        request(post("/api/admin/users", body))
+    }
+
     /** Absolute URL for a replay's audio. */
     fun absolute(path: String): String = if (path.startsWith("http")) path else "$baseUrl$path"
 

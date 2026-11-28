@@ -105,6 +105,68 @@ class RabbleApiTest {
         assertNull(response.role)
     }
 
+    // adminOverview / adminAction
+
+    @Test
+    fun `adminOverview parses the overview counts and user list`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"overview":{"totalUsers":10,"bannedUsers":1,"totalShows":5,"liveNow":2,"totalSessions":20,"buildId":"abc123"},
+                   |"users":[{"did":"did:plc:a","handle":"alice.bsky.social","createdAt":"2026-11-01T00:00:00.000Z","bannedAt":null,"banReason":null}]}"""
+                    .trimMargin()
+            )
+        )
+
+        val response = api.adminOverview()
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/api/admin/overview", request.path)
+        assertEquals("bs_spaces_session=abc", request.getHeader("Cookie"))
+        assertEquals(10, response.overview.totalUsers)
+        assertEquals(1, response.users.size)
+        assertEquals("did:plc:a", response.users[0].did)
+    }
+
+    @Test
+    fun `adminOverview throws ApiException with the 404 the server answers for non-admins`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"not_found"}"""))
+
+        val error = try {
+            api.adminOverview()
+            null
+        } catch (e: ApiException) {
+            e
+        }
+
+        assertEquals(404, error?.status)
+    }
+
+    @Test
+    fun `adminAction posts did, action and the reason when given`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+
+        api.adminAction("did:plc:a", "ban", "spam")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/admin/users", request.path)
+        assertEquals(
+            """{"did":"did:plc:a","action":"ban","reason":"spam"}""",
+            JSONObject(request.body.readUtf8()).toString()
+        )
+    }
+
+    @Test
+    fun `adminAction omits reason when none is given`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+
+        api.adminAction("did:plc:a", "kick")
+
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertFalse(body.has("reason"))
+    }
+
     // reportCrash
 
     @Test

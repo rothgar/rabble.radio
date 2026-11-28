@@ -320,7 +320,7 @@ choice in the box, which is why the watcher puts it back at the reset.
 as a Docker container on the factory host, in front of Aperture, for the
 triage boxes only. A box asks for the model `switchyard`; the route in
 `scripts/switchyard/switchyard.toml` has a judge (qwen3.8-flash-next on Aperture,
-limit-free) pick a tier per user turn, capable (claude-sonnet-5) or efficient
+limit-free) pick a tier per user turn, capable (claude-opus-5-5) or efficient
 (the same qwen3.8-flash-next), and Switchyard's stage router moves between the tiers on
 tool-activity signals. No Claude quota is spent on deciding.
 

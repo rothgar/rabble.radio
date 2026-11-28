@@ -34,8 +34,10 @@ base_url = "https://ai.gerbil-dragon.ts.net/v1"
 forward_auth = false
 timeout_ms = 600000
 
+# Opus since 2026-11-28 (was claude-sonnet-5): the judge prefers efficient,
+# so this tier is only paid for on turns it marks capable.
 [targets.capable]
-id = "claude-sonnet-5"
+id = "claude-opus-5-5"
 llm_client = "aperture"
 
 # The gateway rejects effort "high" for the qwen models (xhigh, medium, low).

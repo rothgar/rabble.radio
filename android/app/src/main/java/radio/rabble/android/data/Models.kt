@@ -192,6 +192,8 @@ data class Me(
     val handle: String,
     val displayName: String? = null,
     val avatarUrl: String? = null,
+    /** Whether this DID is in the platform's ADMIN_DIDS allowlist. */
+    val isAdmin: Boolean = false,
 ) {
     companion object {
         fun fromJson(o: JSONObject) = Me(
@@ -200,6 +202,61 @@ data class Me(
             handle = o.getString("handle"),
             displayName = o.optNullableString("displayName"),
             avatarUrl = o.optNullableString("avatarUrl"),
+            isAdmin = o.optBoolean("isAdmin", false),
+        )
+    }
+}
+
+/** Mirror of PlatformOverview from GET /api/admin/overview. */
+data class AdminOverview(
+    val totalUsers: Int = 0,
+    val bannedUsers: Int = 0,
+    val totalShows: Int = 0,
+    val liveNow: Int = 0,
+    val totalSessions: Int = 0,
+    val buildId: String? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = AdminOverview(
+            totalUsers = o.optInt("totalUsers", 0),
+            bannedUsers = o.optInt("bannedUsers", 0),
+            totalShows = o.optInt("totalShows", 0),
+            liveNow = o.optInt("liveNow", 0),
+            totalSessions = o.optInt("totalSessions", 0),
+            buildId = o.optNullableString("buildId"),
+        )
+    }
+}
+
+/** One row of the user list in GET /api/admin/overview. */
+data class AdminUser(
+    val did: String,
+    val handle: String,
+    val displayName: String? = null,
+    val createdAt: String = "",
+    val bannedAt: String? = null,
+    val banReason: String? = null,
+) {
+    companion object {
+        fun fromJson(o: JSONObject) = AdminUser(
+            did = o.getString("did"),
+            handle = o.optString("handle", ""),
+            displayName = o.optNullableString("displayName"),
+            createdAt = o.optString("createdAt", ""),
+            bannedAt = o.optNullableString("bannedAt"),
+            banReason = o.optNullableString("banReason"),
+        )
+    }
+}
+
+/** Mirror of the GET /api/admin/overview response. */
+data class AdminOverviewResponse(val overview: AdminOverview, val users: List<AdminUser>) {
+    companion object {
+        fun fromJson(o: JSONObject) = AdminOverviewResponse(
+            overview = AdminOverview.fromJson(o.getJSONObject("overview")),
+            users = o.optJSONArray("users")?.let { arr ->
+                (0 until arr.length()).map { AdminUser.fromJson(arr.getJSONObject(it)) }
+            } ?: emptyList(),
         )
     }
 }

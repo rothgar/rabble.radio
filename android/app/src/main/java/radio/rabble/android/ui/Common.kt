@@ -168,6 +168,11 @@ fun LiveBadge() {
 }
 
 @Composable
+fun SectionLabel(text: String) {
+    Text(text, style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
 fun Pill(text: String) {
     Box(
         Modifier

@@ -629,3 +629,17 @@ code, and mistakes already made there.
   split — shared lib function plus a `custom-worker.ts` early return —
   needs the same explicit `HEAD` export in its `route.ts`, with a test
   that actually calls it.
+
+## android/.../ui/HomeScreen.kt and ui/MeScreen.kt (SectionLabel copies)
+
+- Android's upper-case caption header (`labelSmall` + `TextSecondary` +
+  `SemiBold`, e.g. "ON AIR NOW", "SHOWS YOU HOST · n") had no shared
+  composable: `HomeScreen.kt` defined its own `SectionLabel` as `private`,
+  so `MeScreen.kt` and issue #216's new `AdminScreen.kt` each hand-copied
+  the same three style arguments inline rather than reusing it — iOS's
+  `SectionLabel` (`Theme.swift`) is shared and every screen there already
+  calls it. Moved `SectionLabel` into `Common.kt` as a public composable
+  (both apps' shared-widgets file, per the `mobile-apps` skill) and pointed
+  every caller at it. Check for this composable before hand-rolling the
+  style again; a fourth inline copy should become a bug, not a repeat of
+  this note.

@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import radio.rabble.android.ui.AdminScreen
 import radio.rabble.android.ui.HomeScreen
 import radio.rabble.android.ui.LoginScreen
 import radio.rabble.android.ui.MeScreen
@@ -64,6 +65,7 @@ object Routes {
     const val SHOW = "show/{id}?autoJoin={autoJoin}"
     const val LOGIN = "login"
     const val ME = "me"
+    const val ADMIN = "admin"
     fun station(tag: String) = "station/" + URLEncoder.encode(tag, "UTF-8")
     fun show(id: String, autoJoin: Boolean = false) = "show/$id?autoJoin=$autoJoin"
 }
@@ -102,6 +104,7 @@ fun RabbleNav(app: RabbleApp, pendingShowId: androidx.compose.runtime.MutableSta
                 sessionVersion = sessionVersion,
                 onOpenShow = { nav.navigate(Routes.show(it)) },
                 onStartedShow = { nav.navigate(Routes.show(it, autoJoin = true)) },
+                onOpenAdmin = { nav.navigate(Routes.ADMIN) },
                 onLogout = {
                     app.session.clear()
                     sessionVersion++
@@ -109,6 +112,9 @@ fun RabbleNav(app: RabbleApp, pendingShowId: androidx.compose.runtime.MutableSta
                 },
                 onBack = { nav.popBackStack() },
             )
+        }
+        composable(Routes.ADMIN) {
+            AdminScreen(api = app.api, onBack = { nav.popBackStack() })
         }
         composable(Routes.STATION) { entry ->
             val tag = URLDecoder.decode(entry.arguments?.getString("tag") ?: "", "UTF-8")

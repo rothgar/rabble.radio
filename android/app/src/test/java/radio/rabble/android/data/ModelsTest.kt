@@ -392,7 +392,7 @@ class ModelsTest {
 
     // Me
 
-    private val fullMeJson = """{"id":"user-1","did":"did:plc:abc","handle":"alice.bsky.social","displayName":"Alice","avatarUrl":"https://example.com/a.png"}"""
+    private val fullMeJson = """{"id":"user-1","did":"did:plc:abc","handle":"alice.bsky.social","displayName":"Alice","avatarUrl":"https://example.com/a.png","isAdmin":true}"""
 
     @Test
     fun `Me parses a full payload`() {
@@ -402,6 +402,7 @@ class ModelsTest {
         assertEquals("alice.bsky.social", me.handle)
         assertEquals("Alice", me.displayName)
         assertEquals("https://example.com/a.png", me.avatarUrl)
+        assertEquals(true, me.isAdmin)
     }
 
     @Test
@@ -420,6 +421,12 @@ class ModelsTest {
     fun `Me defaults a missing avatarUrl to null`() {
         val o = JSONObject(fullMeJson).apply { remove("avatarUrl") }
         assertNull(Me.fromJson(o).avatarUrl)
+    }
+
+    @Test
+    fun `Me defaults a missing isAdmin to false`() {
+        val o = JSONObject(fullMeJson).apply { remove("isAdmin") }
+        assertEquals(false, Me.fromJson(o).isAdmin)
     }
 
     // IceServer
@@ -635,5 +642,74 @@ class ModelsTest {
     fun `UserSummary defaults a missing avatarUrl to null`() {
         val o = JSONObject(fullUserSummaryJson).apply { remove("avatarUrl") }
         assertNull(UserSummary.fromJson(o).avatarUrl)
+    }
+
+    // AdminOverview / AdminUser / AdminOverviewResponse
+
+    private val fullAdminOverviewJson =
+        """{"totalUsers":10,"bannedUsers":1,"totalShows":5,"liveNow":2,"totalSessions":20,"buildId":"abc123"}"""
+
+    @Test
+    fun `AdminOverview parses a full payload`() {
+        val overview = AdminOverview.fromJson(JSONObject(fullAdminOverviewJson))
+        assertEquals(10, overview.totalUsers)
+        assertEquals(1, overview.bannedUsers)
+        assertEquals(5, overview.totalShows)
+        assertEquals(2, overview.liveNow)
+        assertEquals(20, overview.totalSessions)
+        assertEquals("abc123", overview.buildId)
+    }
+
+    @Test
+    fun `AdminOverview defaults a missing buildId to null`() {
+        val o = JSONObject(fullAdminOverviewJson).apply { remove("buildId") }
+        assertNull(AdminOverview.fromJson(o).buildId)
+    }
+
+    private val fullAdminUserJson =
+        """{"did":"did:plc:a","handle":"alice.bsky.social","displayName":"Alice","createdAt":"2026-11-01T00:00:00.000Z","bannedAt":"2026-11-19T00:00:00.000Z","banReason":"spam"}"""
+
+    @Test
+    fun `AdminUser parses a full payload`() {
+        val user = AdminUser.fromJson(JSONObject(fullAdminUserJson))
+        assertEquals("did:plc:a", user.did)
+        assertEquals("alice.bsky.social", user.handle)
+        assertEquals("Alice", user.displayName)
+        assertEquals("2026-11-01T00:00:00.000Z", user.createdAt)
+        assertEquals("2026-11-19T00:00:00.000Z", user.bannedAt)
+        assertEquals("spam", user.banReason)
+    }
+
+    @Test
+    fun `AdminUser defaults a missing displayName to null`() {
+        val o = JSONObject(fullAdminUserJson).apply { remove("displayName") }
+        assertNull(AdminUser.fromJson(o).displayName)
+    }
+
+    @Test
+    fun `AdminUser defaults a missing bannedAt to null`() {
+        val o = JSONObject(fullAdminUserJson).apply { remove("bannedAt") }
+        assertNull(AdminUser.fromJson(o).bannedAt)
+    }
+
+    @Test
+    fun `AdminUser defaults a missing banReason to null`() {
+        val o = JSONObject(fullAdminUserJson).apply { remove("banReason") }
+        assertNull(AdminUser.fromJson(o).banReason)
+    }
+
+    @Test
+    fun `AdminOverviewResponse parses overview and users`() {
+        val json = """{"overview":$fullAdminOverviewJson,"users":[$fullAdminUserJson]}"""
+        val response = AdminOverviewResponse.fromJson(JSONObject(json))
+        assertEquals(10, response.overview.totalUsers)
+        assertEquals(1, response.users.size)
+        assertEquals("did:plc:a", response.users[0].did)
+    }
+
+    @Test
+    fun `AdminOverviewResponse defaults missing users to an empty list`() {
+        val json = """{"overview":$fullAdminOverviewJson}"""
+        assertEquals(emptyList<AdminUser>(), AdminOverviewResponse.fromJson(JSONObject(json)).users)
     }
 }

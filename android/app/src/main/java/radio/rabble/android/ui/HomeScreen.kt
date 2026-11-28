@@ -286,11 +286,6 @@ private fun HomeContent(
     }
 }
 
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, style = MaterialTheme.typography.labelSmall, color = RabbleColors.TextSecondary, fontWeight = FontWeight.SemiBold)
-}
-
 /** How many recent shows the picker lists. */
 private const val MAX_RECENT_SHOWS = 8
 

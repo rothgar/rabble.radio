@@ -84,6 +84,14 @@ model Space {
   /// been published (or it was never a scheduled show).
   calendarEventUri String?
   calendarEventCid String?
+  /// Set once the popular-show watcher (issue #175) posts a "going popular"
+  /// announcement for this show to Bluesky; null until then. Never cleared:
+  /// a show is announced at most once, ever, however long it stays live.
+  announcedAt DateTime?
+  /// Failed announce-post attempts for this show. Once it reaches the
+  /// watcher's retry limit, `announcedAt` is stamped anyway so a broken
+  /// credential cannot keep retrying forever.
+  announceAttempts Int @default(0)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

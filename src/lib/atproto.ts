@@ -498,6 +498,142 @@ interface GetBlocksPage {
   cursor?: string;
 }
 
+const FEED_POST_COLLECTION = 'app.bsky.feed.post';
+
+/** `app.bsky.feed.post`'s own server-side limits on `text`. */
+const MAX_POST_GRAPHEMES = 300;
+const MAX_POST_BYTES = 3000;
+const TRUNCATION_ELLIPSIS = '…';
+
+function graphemeSegments(text: string): string[] {
+  return Array.from(new Intl.Segmenter().segment(text), (s) => s.segment);
+}
+
+function fitsPostLimits(text: string): boolean {
+  return (
+    graphemeSegments(text).length <= MAX_POST_GRAPHEMES &&
+    new TextEncoder().encode(text).length <= MAX_POST_BYTES
+  );
+}
+
+/**
+ * Shorten `title` (never `prefix`/`suffix`, so the link in `suffix` always
+ * survives) until `prefix + title + suffix` fits both of a post's limits,
+ * appending an ellipsis when it had to cut. Without this, a title near the
+ * app's own 200-character limit (src/app/api/spaces/route.ts) can push the
+ * composed post over 300 graphemes, `createRecord` rejects it, and the
+ * watcher burns its retry budget without ever posting. Assumes `prefix` and
+ * `suffix` alone already fit — callers that can shrink `suffix` (dropping
+ * tags, say) should do so first with `fitsPostLimits`.
+ */
+function truncateTitleForPost(title: string, prefix: string, suffix: string): string {
+  const fits = (candidate: string): boolean => fitsPostLimits(`${prefix}${candidate}${suffix}`);
+  if (fits(title)) return title;
+  let segments = graphemeSegments(title);
+  while (segments.length > 0 && !fits(segments.join('') + TRUNCATION_ELLIPSIS)) {
+    segments = segments.slice(0, -1);
+  }
+  return segments.join('') + TRUNCATION_ELLIPSIS;
+}
+
+export interface PopularShowAnnouncementInput {
+  title: string;
+  hostHandle: string;
+  tags: string[];
+  spaceUrl: string;
+  createdAt?: string;
+}
+
+/**
+ * Build the text and link facet for the popular-show watcher's announcement
+ * post (issue #175). The handle and tags are plain text — only the link is
+ * a facet, since a tappable `@mention` needs its DID resolved first and
+ * that's not worth a network round trip for an unattended cron post.
+ */
+export function buildPopularShowAnnouncementRecord(
+  input: PopularShowAnnouncementInput
+): Record<string, unknown> {
+  const prefix = '🎙️ "';
+  const buildSuffix = (tagsLine: string) =>
+    `" just went live with @${input.hostHandle}${tagsLine}\n\n${input.spaceUrl}`;
+  let tagsLine = input.tags.length > 0 ? ` — ${input.tags.join(', ')}` : '';
+  let suffix = buildSuffix(tagsLine);
+  // Tags are the most droppable part of the post: if even an empty title
+  // doesn't fit alongside them (an unusually long custom-domain handle, say
+  // — Bluesky handles aren't length-bounded by this app), drop them before
+  // truncating the title, which would otherwise have no room left at all.
+  if (tagsLine && !fitsPostLimits(`${prefix}${suffix}`)) {
+    tagsLine = '';
+    suffix = buildSuffix(tagsLine);
+  }
+  const title = truncateTitleForPost(input.title, prefix, suffix);
+  const text = `${prefix}${title}${suffix}`;
+  const encoder = new TextEncoder();
+  const byteStart = encoder.encode(
+    text.slice(0, text.lastIndexOf(input.spaceUrl))
+  ).length;
+  const byteEnd = byteStart + encoder.encode(input.spaceUrl).length;
+  return {
+    $type: FEED_POST_COLLECTION,
+    text,
+    facets: [
+      {
+        index: { byteStart, byteEnd },
+        features: [{ $type: 'app.bsky.richtext.facet#link', uri: input.spaceUrl }],
+      },
+    ],
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  };
+}
+
+export interface PublishPopularShowAnnouncementInput extends PopularShowAnnouncementInput {
+  session: AppPasswordSession;
+  correlationId?: string;
+}
+
+/**
+ * Post the popular-show watcher's announcement as a new `app.bsky.feed.post`
+ * from the rabble.radio account — an app-password session like
+ * `publishAppProfile`, not a host's OAuth one, since this is the service's
+ * own account announcing someone else's show.
+ */
+export async function publishPopularShowAnnouncement(
+  input: PublishPopularShowAnnouncementInput
+): Promise<LiveStatusResult> {
+  const { logger } = await import('@/lib/logger');
+  const log = logger.child({ correlationId: input.correlationId, did: input.session.did });
+  const record = buildPopularShowAnnouncementRecord(input);
+  // truncateTitleForPost assumes prefix+suffix alone already fit; an
+  // unusually long handle can still leave the built text over the post
+  // limits even after dropping the title and the tags. Catch that here,
+  // explicitly, rather than sending `createRecord` text it will reject.
+  if (!fitsPostLimits(record.text as string)) {
+    log.error('atproto.popular_show_announcement.text_too_long', {
+      length: (record.text as string).length,
+    });
+    return { ok: false, error: 'Announcement text exceeds the Bluesky post limit.' };
+  }
+  try {
+    const agent = new Agent(fetchHandlerForAppPasswordSession(input.session));
+    const { data } = await agent.com.atproto.repo.createRecord({
+      repo: input.session.did,
+      collection: FEED_POST_COLLECTION,
+      record,
+    });
+    log.info('atproto.popular_show_announcement.success', { uri: data.uri });
+    return { ok: true, record: data, uri: data.uri };
+  } catch (err) {
+    log.error('atproto.popular_show_announcement.failed', { err });
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Failed to publish popular show announcement.',
+    };
+  }
+}
+
 const BLOCKS_PAGE_SIZE = 100;
 
 /**

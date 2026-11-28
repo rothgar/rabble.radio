@@ -45,7 +45,12 @@
     "SUPPORT_EMAIL": "justin.garrison@siderolabs.com",
     // Web Push (VAPID). The private key is the VAPID_PRIVATE_KEY secret.
     "VAPID_PUBLIC_KEY": "BMtZBKmewyV3-_C2qn97wceZqSA-hW5NEGcyhOyDS_AJOFu8OJ00FuMBmZ0XVuSECiOu4AP3BMn_GcwilLz7ulA",
-    "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com"
+    "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com",
+    // The rabble.radio account the popular-show watcher (issue #175) posts
+    // announcements from; not secret. The ATPROTO_APP_PROFILE_PASSWORD app
+    // password is a secret, and is left unset here on purpose so the dev
+    // Worker's watcher stays a no-op (docs/DEPLOY.md).
+    "ATPROTO_APP_PROFILE_IDENTIFIER": "rabble.radio"
     // Cloudflare Web Analytics is off until the owner creates the site
     // (Account Home → Web Analytics → Add a site) and adds
     // "NEXT_PUBLIC_CF_BEACON_TOKEN" here with the beacon token it prints.
@@ -87,7 +92,10 @@
         "VAPID_SUBJECT": "mailto:justin.garrison@siderolabs.com",
         // Web Push (VAPID) public key for production; the private key is the
         // VAPID_PRIVATE_KEY secret of rabble-prod. Generated with scripts/gen-vapid.mjs.
-        "VAPID_PUBLIC_KEY": "BNHs4j8QOgekeOp9ICPToxt9xRuNplblaDiCG2nm_oVBb08_OvteEpnIPxht7EvoXQoPEyxNPZOr1qIMKm05ug0"
+        "VAPID_PUBLIC_KEY": "BNHs4j8QOgekeOp9ICPToxt9xRuNplblaDiCG2nm_oVBb08_OvteEpnIPxht7EvoXQoPEyxNPZOr1qIMKm05ug0",
+        // The rabble.radio account the popular-show watcher (issue #175)
+        // posts announcements from; see the top-level vars.
+        "ATPROTO_APP_PROFILE_IDENTIFIER": "rabble.radio"
         // Add "NEXT_PUBLIC_CF_BEACON_TOKEN" here once a production Web
         // Analytics site exists for rabble.radio; see the top-level vars.
       }

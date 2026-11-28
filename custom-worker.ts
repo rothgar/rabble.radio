@@ -1,6 +1,7 @@
 // Worker entrypoint: the OpenNext fetch handler plus a cron trigger that runs
-// the expire sweep (stale shows and old recordings) through the app's own
-// route, so the sweep shares the app's database and LiveKit configuration.
+// the expire sweep (stale shows and old recordings) and the popular-show
+// watcher (issue #175) through the app's own routes, so they share the
+// app's database and LiveKit configuration.
 // @ts-expect-error generated at build time by `opennextjs-cloudflare build`
 import { default as handler } from './.open-next/worker.js';
 import { withSecurityHeaders } from './src/lib/security-headers';
@@ -49,7 +50,11 @@ export default {
     const g = globalThis as Record<string, unknown>;
     if (typeof g.__rabbleCronToken !== 'string') g.__rabbleCronToken = crypto.randomUUID();
     const headers = { 'x-rabble-cron': g.__rabbleCronToken as string };
-    for (const path of ['/api/spaces/expire', '/api/spaces/recording/expire']) {
+    for (const path of [
+      '/api/spaces/expire',
+      '/api/spaces/recording/expire',
+      '/api/spaces/announce-popular',
+    ]) {
       const request = new Request(`${base}${path}`, { method: 'POST', headers });
       ctx.waitUntil(handler.fetch(request, env, ctx));
     }

@@ -24,12 +24,14 @@ import {
   buildAppProfileRecord,
   buildCalendarEventRecord,
   buildLiveStatusRecord,
+  buildPopularShowAnnouncementRecord,
   createAppPasswordSession,
   deleteLiveStatus,
   fetchBlockedDids,
   publishAppProfile,
   publishCalendarEvent,
   publishLiveStatus,
+  publishPopularShowAnnouncement,
   updateCalendarEventStatus,
 } from '@/lib/atproto';
 
@@ -589,5 +591,185 @@ describe('publishAppProfile', () => {
     });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/boom/);
+  });
+});
+
+describe('buildPopularShowAnnouncementRecord', () => {
+  it('includes the title, handle, tags and a link facet for the URL', () => {
+    const record = buildPopularShowAnnouncementRecord({
+      title: 'Late night jazz',
+      hostHandle: 'alice.bsky.social',
+      tags: ['music', 'chat'],
+      spaceUrl: 'https://rabble.radio/show/sp1',
+    });
+    expect(record.$type).toBe('app.bsky.feed.post');
+    const text = record.text as string;
+    expect(text).toContain('Late night jazz');
+    expect(text).toContain('@alice.bsky.social');
+    expect(text).toContain('music, chat');
+    expect(text).toContain('https://rabble.radio/show/sp1');
+    expect(typeof record.createdAt).toBe('string');
+
+    const facets = record.facets as Array<{
+      index: { byteStart: number; byteEnd: number };
+      features: Array<{ $type: string; uri: string }>;
+    }>;
+    expect(facets).toHaveLength(1);
+    expect(facets[0].features[0]).toEqual({
+      $type: 'app.bsky.richtext.facet#link',
+      uri: 'https://rabble.radio/show/sp1',
+    });
+    const bytes = new TextEncoder().encode(text);
+    const linkBytes = bytes.slice(facets[0].index.byteStart, facets[0].index.byteEnd);
+    expect(new TextDecoder().decode(linkBytes)).toBe('https://rabble.radio/show/sp1');
+  });
+
+  it('omits the tags line when the show has no tags', () => {
+    const record = buildPopularShowAnnouncementRecord({
+      title: 'Untitled',
+      hostHandle: 'alice.bsky.social',
+      tags: [],
+      spaceUrl: 'https://rabble.radio/show/sp1',
+    });
+    expect(record.text).not.toContain(' — ');
+  });
+
+  it('truncates a title near the app\'s 200-character limit so the post stays under 300 graphemes, keeping the link intact', () => {
+    const title = 'A'.repeat(200);
+    const spaceUrl = 'https://rabble.radio/show/sp1';
+    const record = buildPopularShowAnnouncementRecord({
+      title,
+      hostHandle: 'a-fairly-long-custom-domain-handle.example.com',
+      tags: ['Music & Audio', 'Gaming', 'Education'],
+      spaceUrl,
+    });
+    const text = record.text as string;
+    expect([...new Intl.Segmenter().segment(text)].length).toBeLessThanOrEqual(300);
+    expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(3000);
+    expect(text).toContain('…');
+    expect(text.endsWith(spaceUrl)).toBe(true);
+
+    const facets = record.facets as Array<{
+      index: { byteStart: number; byteEnd: number };
+      features: Array<{ uri: string }>;
+    }>;
+    const bytes = new TextEncoder().encode(text);
+    const linkBytes = bytes.slice(facets[0].index.byteStart, facets[0].index.byteEnd);
+    expect(new TextDecoder().decode(linkBytes)).toBe(spaceUrl);
+  });
+
+  it('drops the tags line (not just the title) when an unusually long handle alone leaves no room', () => {
+    // A custom-domain handle long enough that handle + tags overflows the
+    // post limit even with an empty title, but handle alone does not.
+    const hostHandle = `${'a'.repeat(60)}.${'a'.repeat(60)}.${'a'.repeat(60)}.${'a'.repeat(30)}`;
+    const spaceUrl = 'https://rabble.radio/show/sp1';
+    const record = buildPopularShowAnnouncementRecord({
+      title: 'Short title',
+      hostHandle,
+      tags: ['Music & Audio', 'Gaming', 'Education'],
+      spaceUrl,
+    });
+    const text = record.text as string;
+    expect([...new Intl.Segmenter().segment(text)].length).toBeLessThanOrEqual(300);
+    expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(3000);
+    expect(text).not.toContain('Music & Audio');
+    expect(text).toContain(`@${hostHandle}`);
+    expect(text.endsWith(spaceUrl)).toBe(true);
+  });
+
+  it('leaves a short title untouched', () => {
+    const record = buildPopularShowAnnouncementRecord({
+      title: 'Short',
+      hostHandle: 'alice.bsky.social',
+      tags: [],
+      spaceUrl: 'https://rabble.radio/show/sp1',
+    });
+    expect(record.text).toContain('Short');
+    expect(record.text).not.toContain('…');
+  });
+});
+
+describe('publishPopularShowAnnouncement', () => {
+  const session = {
+    did: 'did:plc:app123',
+    handle: 'rabble.radio',
+    accessJwt: 'jwt-token',
+    service: 'https://bsky.social',
+  };
+
+  beforeEach(() => {
+    fetchHandlerMock.mockReset();
+  });
+
+  it('creates an app.bsky.feed.post record with a bearer token', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        uri: 'at://did:plc:app123/app.bsky.feed.post/abc',
+        cid: VALID_CID,
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await publishPopularShowAnnouncement({
+      session,
+      title: 'Late night jazz',
+      hostHandle: 'alice.bsky.social',
+      tags: ['music'],
+      spaceUrl: 'https://rabble.radio/show/sp1',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.uri).toBe('at://did:plc:app123/app.bsky.feed.post/abc');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://bsky.social/xrpc/com.atproto.repo.createRecord');
+    expect((init.headers as Headers).get('authorization')).toBe('Bearer jwt-token');
+    const body = await decodeBody(init.body);
+    expect(body.repo).toBe('did:plc:app123');
+    expect(body.collection).toBe('app.bsky.feed.post');
+    expect((body.record as Record<string, unknown>).text).toContain('Late night jazz');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('returns ok=false when the PDS errors', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonErrorResponse(500, 'InternalServerError', 'boom'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await publishPopularShowAnnouncement({
+      session,
+      title: 'Late night jazz',
+      hostHandle: 'alice.bsky.social',
+      tags: [],
+      spaceUrl: 'https://rabble.radio/show/sp1',
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/boom/);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('returns ok=false without calling the PDS when the handle alone leaves the post over the limit', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    // A custom-domain handle long enough, on its own, to push the post over
+    // 300 graphemes even with no tags and a short title.
+    const hostHandle = `${'a'.repeat(60)}.${'a'.repeat(60)}.${'a'.repeat(60)}.${'a'.repeat(60)}.${'a'.repeat(10)}`;
+    const result = await publishPopularShowAnnouncement({
+      session,
+      title: 'Hi',
+      hostHandle,
+      tags: [],
+      spaceUrl: 'https://rabble.radio/show/sp1',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/limit/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
   });
 });

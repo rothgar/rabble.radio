@@ -323,6 +323,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
     /** Centre of each member's avatar (root px), kept fresh by MemberTile. */
     val avatarCentres = remember { mutableStateMapOf<String, Offset>() }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
+    var overlayHeight by remember { mutableStateOf(0) }
 
     LaunchedEffect(showId) { Diagnostics.screen = "show/$showId" }
     LaunchedEffect(room) {
@@ -743,7 +744,10 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).onGloballyPositioned { overlayOrigin = it.positionInRoot() }) {
+        Box(Modifier.fillMaxSize().padding(padding).onGloballyPositioned {
+            overlayOrigin = it.positionInRoot()
+            overlayHeight = it.size.height
+        }) {
             when (val s = state) {
                 ShowState.Loading -> Loading()
                 is ShowState.Failed -> ErrorPanel(s.message) { reload++ }
@@ -849,7 +853,7 @@ fun ShowScreen(app: RabbleApp, showId: String, sessionVersion: Int, onLogin: () 
             }
             // Reactions float above everything, including the scrolled content.
             Box(Modifier.fillMaxSize().zIndex(1f)) {
-                floating.forEach { FloatingReaction(it, overlayOrigin) }
+                floating.forEach { FloatingReaction(it, overlayOrigin, overlayHeight) }
             }
         }
     }
@@ -1327,7 +1331,7 @@ private fun ReactionBar(
  * dp for the offset modifier.
  */
 @Composable
-private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
+private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset, overlayHeight: Int) {
     val progress = remember(item.id) { Animatable(0f) }
     LaunchedEffect(item.id) { progress.animateTo(1f, animationSpec = tween(REACTION_FLOAT_MS, easing = LinearEasing)) }
     val p = progress.value
@@ -1363,7 +1367,8 @@ private fun FloatingReaction(item: FloatingEmoji, overlayOrigin: Offset) {
     // reactions rise from the bottom bar instead and stay visible.
     val origin = item.origin
     val yDp = origin?.let { with(density) { (it.y - overlayOrigin.y).toDp() } }
-    if (origin != null && yDp != null && yDp >= 140.dp) {
+    val overlayHeightDp = with(density) { overlayHeight.toDp() }
+    if (origin != null && yDp != null && yDp >= 140.dp && yDp <= overlayHeightDp) {
         val xDp = with(density) { (origin.x - overlayOrigin.x).toDp() }
         val room = (yDp - 60.dp).coerceAtMost(220.dp)
         val rise = room * p

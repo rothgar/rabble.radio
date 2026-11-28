@@ -197,6 +197,7 @@ dry run. Before the first real deploy:
    | `VAPID_PRIVATE_KEY` | `node scripts/gen-vapid.mjs` prints both keys. The private one is the secret; put the public one in `env.production.vars` as `VAPID_PUBLIC_KEY` in `wrangler.jsonc` and commit it. Without it web push is off and everything else works. |
    | `FEEDBACK_READ_TOKEN` | `openssl rand -hex 32`. The daily feedback intake reads rabble.rodeo only; give the QA box a second discobox secret routed to `GET rabble.radio/api/feedback` when production feedback should be triaged too. |
    | `CRASH_REPORT_SECRET` | `openssl rand -hex 32`. `POST /api/crashes` (issue #184) checks it against the `X-Rabble-App-Secret` header; until it is set the check is a no-op. The Android and iOS builds need the same value (`-PrabbleCrashSecret=` for Gradle, `RABBLE_CRASH_SECRET` for the Xcode build) or their crash reports get a 401. |
+   | `ATPROTO_APP_PROFILE_PASSWORD` | An app password (**Settings → App passwords** on Bluesky, not the account password) for the `rabble.radio` account (`docs/APP_PROFILE.md`). The popular-show watcher (issue #175, every five minutes) is a no-op until this is set — set it only on `rabble-prod`; leaving `rabble-dev`'s unset keeps a test show on rabble.rodeo from ever posting to the real account. |
 
    `wrangler secret list --env production` shows what is set.
 

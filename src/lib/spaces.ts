@@ -42,6 +42,10 @@ export interface SpaceModel {
   /** AT URI of the published `community.lexicon.calendar.event` record, null if none. */
   calendarEventUri?: string | null;
   calendarEventCid?: string | null;
+  /** Set once the popular-show watcher has posted for this show; null until then. */
+  announcedAt?: Date | null;
+  /** Failed announce-post attempts for this show. */
+  announceAttempts?: number;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -617,6 +621,19 @@ export async function tryExpireStaleSpaces(): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Popularity score used to rank rooms by how much is happening in them.
+ * A "popular" room is one with a live audience, speakers on stage, and/or
+ * lots of reactions.
+ */
+export function popularityScore(space: {
+  listenerCount: number;
+  speakerCount: number;
+  reactionCount: number;
+}): number {
+  return space.listenerCount + space.speakerCount + space.reactionCount;
 }
 
 /**

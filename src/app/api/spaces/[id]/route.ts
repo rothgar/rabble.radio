@@ -19,6 +19,7 @@ import {
   resolveSpace,
   resolveSpaceForUser,
   setSpaceLive,
+  SPACE_STATUS,
   toPublicSpace,
   updateSpace,
 } from '@/lib/spaces';
@@ -28,6 +29,7 @@ import { decoratePublicSpaces } from '@/lib/space-extras';
 import {
   CALENDAR_EVENT_STATUS,
   deleteLiveStatus,
+  publishCalendarEvent,
   publishLiveStatus,
   updateCalendarEventStatus,
 } from '@/lib/atproto';
@@ -164,6 +166,30 @@ export async function PATCH(
         logger.warn('space.patch.atproto_failed', { spaceId: updated.id, error: result.error });
       }
     }
+
+    if (
+      updated.status === SPACE_STATUS.SCHEDULED &&
+      updated.calendarEventUri &&
+      (patch.title !== undefined || patch.description !== undefined)
+    ) {
+      // Keep the calendar.event record in step with the new title or
+      // description. Best-effort, and only while still scheduled: nothing
+      // cancels the record when the show goes live, so a live/active row can
+      // still carry a calendarEventUri, and republishing #scheduled onto it
+      // would put a stale event back on the host's PDS.
+      const result = await publishCalendarEvent({
+        session: { did: user.did, handle: user.handle },
+        rkey: updated.id,
+        title: updated.title,
+        description: updated.description,
+        spaceUrl: `${defaultPublicOrigin()}/show/${updated.id}`,
+        startsAt: (updated.scheduledAt ?? updated.createdAt).toISOString(),
+      });
+      if (!result.ok) {
+        logger.warn('space.patch.calendar_event_failed', { spaceId: updated.id, error: result.error });
+      }
+    }
+
     await broadcastRoomData(roomName, {
       type: 'space_updated',
       spaceId: updated.id,

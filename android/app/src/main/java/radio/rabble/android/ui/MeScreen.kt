@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,18 +84,22 @@ fun MeScreen(
     var reload by remember { mutableStateOf(0) }
     var startingId by remember { mutableStateOf<String?>(null) }
     var startError by remember { mutableStateOf<String?>(null) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { Diagnostics.screen = "me" }
     LaunchedEffect(reload, sessionVersion) {
-        state = MeState.Loading
+        // Keep the current list on screen for a pull to refresh; only the
+        // very first load shows the spinner.
+        if (state !is MeState.Ready) state = MeState.Loading else isRefreshing = true
         state = try {
             val me = async { api.me() }
             val shows = async { api.myShows() }
             val profile = me.await() ?: throw IllegalStateException("Not signed in.")
             MeState.Ready(profile, shows.await())
         } catch (e: Exception) {
-            MeState.Failed(e.message ?: "Could not load your shows.")
+            if (state is MeState.Ready) state else MeState.Failed(e.message ?: "Could not load your shows.")
         }
+        isRefreshing = false
     }
 
     /** Reopen [showId] (or the default show when null) and jump into it. */
@@ -140,90 +148,123 @@ fun MeScreen(
         when (val s = state) {
             MeState.Loading -> Loading()
             is MeState.Failed -> ErrorPanel(s.message) { reload++ }
-            is MeState.Ready -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 320.dp),
-                    modifier = Modifier.fillMaxSize().widthIn(max = ContentMaxWidth),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        ProfileHeader(
-                            me = s.me,
-                            starting = startingId == "",
-                            error = startError,
-                            onStart = { start(null) },
-                        )
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+            is MeState.Ready -> MeContent(s, isRefreshing, { reload++ }, padding, onOpenShow, startingId, startError, ::start, ::share, onLogout)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MeContent(
+    s: MeState.Ready,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    padding: PaddingValues,
+    onOpenShow: (String) -> Unit,
+    startingId: String?,
+    startError: String?,
+    onStart: (String?) -> Unit,
+    onShare: (Show) -> Unit,
+    onLogout: () -> Unit,
+) {
+    val pullState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        state = pullState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                color = RabbleColors.Accent,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 320.dp),
+            modifier = Modifier.fillMaxSize().widthIn(max = ContentMaxWidth),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                ProfileHeader(
+                    me = s.me,
+                    starting = startingId == "",
+                    error = startError,
+                    onStart = { onStart(null) },
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(
+                    "SHOWS YOU HOST · ${s.shows.hosted.size}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RabbleColors.TextSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (s.shows.hosted.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Card {
                         Text(
-                            "SHOWS YOU HOST · ${s.shows.hosted.size}",
-                            style = MaterialTheme.typography.labelSmall,
+                            "You haven't hosted a show yet. Start one and it gets its own page you can share.",
                             color = RabbleColors.TextSecondary,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if (s.shows.hosted.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Card {
-                                Text(
-                                    "You haven't hosted a show yet. Start one and it gets its own page you can share.",
-                                    color = RabbleColors.TextSecondary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
-                    items(s.shows.hosted, key = { "hosted-" + it.id }) { show ->
-                        HostedShowCard(
-                            show = show,
-                            starting = startingId == show.id,
-                            onOpen = { onOpenShow(show.id) },
-                            onStart = { start(show.id) },
-                            onShare = { share(show) },
-                        )
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                }
+            }
+            items(s.shows.hosted, key = { "hosted-" + it.id }) { show ->
+                HostedShowCard(
+                    show = show,
+                    starting = startingId == show.id,
+                    onOpen = { onOpenShow(show.id) },
+                    onStart = { onStart(show.id) },
+                    onShare = { onShare(show) },
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(
+                    "SHOWS YOU JOINED · ${s.shows.joined.size}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RabbleColors.TextSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (s.shows.joined.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Card {
                         Text(
-                            "SHOWS YOU JOINED · ${s.shows.joined.size}",
-                            style = MaterialTheme.typography.labelSmall,
+                            "Shows you listen to or speak on will show up here.",
                             color = RabbleColors.TextSecondary,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if (s.shows.joined.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Card {
-                                Text(
-                                    "Shows you listen to or speak on will show up here.",
-                                    color = RabbleColors.TextSecondary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
-                    items(s.shows.joined, key = { "joined-" + it.sessionId }) { joined ->
-                        JoinedShowCard(joined) { onOpenShow(joined.showId) }
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                            Text("Log out", color = RabbleColors.Live)
-                        }
-                    }
-                    if (BuildConfig.DEBUG) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            OutlinedButton(
-                                onClick = { throw RuntimeException("Debug: forced crash from Me screen") },
-                                modifier = Modifier.fillMaxWidth().height(44.dp),
-                            ) {
-                                Text("Debug: force a crash", color = RabbleColors.TextTertiary)
-                            }
-                        }
+                }
+            }
+            items(s.shows.joined, key = { "joined-" + it.sessionId }) { joined ->
+                JoinedShowCard(joined) { onOpenShow(joined.showId) }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                    Text("Log out", color = RabbleColors.Live)
+                }
+            }
+            if (BuildConfig.DEBUG) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    OutlinedButton(
+                        onClick = { throw RuntimeException("Debug: forced crash from Me screen") },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                    ) {
+                        Text("Debug: force a crash", color = RabbleColors.TextTertiary)
                     }
                 }
             }
         }
+    }
     }
 }
 

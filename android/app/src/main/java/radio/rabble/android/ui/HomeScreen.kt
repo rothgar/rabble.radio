@@ -29,6 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,12 +92,13 @@ fun HomeScreen(
     var reload by remember { mutableStateOf(0) }
     var starting by remember { mutableStateOf(false) }
     var startError by remember { mutableStateOf<String?>(null) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { Diagnostics.screen = "home" }
     LaunchedEffect(reload, sessionVersion) {
         // Keep the current list on screen while it refreshes (after sign-in,
-        // say); only the very first load shows the spinner.
-        if (state !is HomeState.Ready) state = HomeState.Loading
+        // or a pull to refresh); only the very first load shows the spinner.
+        if (state !is HomeState.Ready) state = HomeState.Loading else isRefreshing = true
         // Profile, hosted shows and listing are independent requests; fetch them together.
         val meDeferred = async { if (session.hasSession()) runCatching { api.me() }.getOrNull() else null }
         val myShowsDeferred = async { if (session.hasSession()) runCatching { api.myShows() }.getOrNull() else null }
@@ -105,6 +109,7 @@ fun HomeScreen(
         }
         me = meDeferred.await()
         hostedShows = myShowsDeferred.await()?.hosted ?: emptyList()
+        isRefreshing = false
     }
 
     fun startShow(showId: String? = null) {
@@ -156,6 +161,8 @@ fun HomeScreen(
                 starting = starting,
                 startError = startError,
                 padding = padding,
+                isRefreshing = isRefreshing,
+                onRefresh = { reload++ },
                 onOpenShow = onOpenShow,
                 onOpenStation = onOpenStation,
                 onStartShow = ::startShow,
@@ -165,6 +172,7 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeContent(
     shows: List<Show>,
@@ -173,6 +181,8 @@ private fun HomeContent(
     starting: Boolean,
     startError: String?,
     padding: PaddingValues,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onOpenShow: (String) -> Unit,
     onOpenStation: (String) -> Unit,
     onStartShow: (String?) -> Unit,
@@ -188,7 +198,22 @@ private fun HomeContent(
 
     val wide = isWideScreen()
     val gutter = if (wide) 24.dp else 16.dp
+    val pullState = rememberPullToRefreshState()
     // One column on the cover screen, two (or more) once unfolded; headers span the row.
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        state = pullState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                color = RabbleColors.Accent,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 320.dp),
@@ -256,6 +281,7 @@ private fun HomeContent(
                 }
             }
         }
+    }
     }
     }
 }

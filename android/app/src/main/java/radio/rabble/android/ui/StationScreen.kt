@@ -21,6 +21,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,15 +48,19 @@ sealed interface StationState {
 fun StationScreen(api: RabbleApi, tag: String, onOpenShow: (String) -> Unit, onBack: () -> Unit) {
     var state by remember { mutableStateOf<StationState>(StationState.Loading) }
     var reload by remember { mutableStateOf(0) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     LaunchedEffect(tag) { radio.rabble.android.data.Diagnostics.screen = "station/$tag" }
     LaunchedEffect(tag, reload) {
-        state = StationState.Loading
+        // Keep the current list on screen for a pull to refresh; only the
+        // very first load shows the spinner.
+        if (state !is StationState.Ready) state = StationState.Loading else isRefreshing = true
         state = try {
             StationState.Ready(api.showsForStation(tag))
         } catch (e: Exception) {
-            StationState.Failed(e.message ?: "Could not load this station.")
+            if (state is StationState.Ready) state else StationState.Failed(e.message ?: "Could not load this station.")
         }
+        isRefreshing = false
     }
 
     Scaffold(
@@ -73,13 +80,21 @@ fun StationScreen(api: RabbleApi, tag: String, onOpenShow: (String) -> Unit, onB
         when (val s = state) {
             StationState.Loading -> Loading()
             is StationState.Failed -> ErrorPanel(s.message) { reload++ }
-            is StationState.Ready -> ShowList(s.shows, tag, padding, onOpenShow)
+            is StationState.Ready -> ShowList(s.shows, tag, padding, isRefreshing, { reload++ }, onOpenShow)
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ShowList(shows: List<Show>, tag: String, padding: PaddingValues, onOpen: (String) -> Unit) {
+private fun ShowList(
+    shows: List<Show>,
+    tag: String,
+    padding: PaddingValues,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onOpen: (String) -> Unit,
+) {
     if (shows.isEmpty()) {
         Column(
             Modifier.fillMaxSize().padding(padding).padding(24.dp),
@@ -92,6 +107,21 @@ private fun ShowList(shows: List<Show>, tag: String, padding: PaddingValues, onO
         return
     }
     val gutter = if (isWideScreen()) 24.dp else 16.dp
+    val pullState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        state = pullState,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                color = RabbleColors.Accent,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 320.dp),
@@ -106,5 +136,6 @@ private fun ShowList(shows: List<Show>, tag: String, padding: PaddingValues, onO
         ) {
             items(shows, key = { it.id }) { show -> ShowCard(show, onOpen) }
         }
+    }
     }
 }

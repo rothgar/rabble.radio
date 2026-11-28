@@ -575,31 +575,36 @@ code, and mistakes already made there.
   44px tall and wide (`min-h-touch`, `min-w-touch`) on every tappable
   thing."
 
-## scripts/log-triage.mjs (deploy-vs-fix skip only covers the gone-quiet case)
+## scripts/log-triage.mjs and scripts/latency-triage.mjs (deploy-vs-fix skip only covers the gone-quiet case)
 
-- The skip added for issue #230 compares a group's newest event (`g.last`)
-  to the last successful deploy, matching the owner's accepted triage-comment
-  shape verbatim: it catches a fix that has already deployed and the error
-  has gone quiet (stale pre-fix events still sitting in the scan window after
-  the deploy). That is the #176/#215 scenario the issue reports, by its own
-  timestamps: #176 closed 2026-11-27T17:44:37Z, the v0.2.0 deploy carrying
-  the fix ran 18:52:40–18:55:17Z, and the scan that re-filed it as #215 ran
-  at 21:24Z — after the deploy, re-surfacing 14:05–14:11Z events that
-  predate the issue's own close by over three hours, not anything recurring
-  during the merge-to-deploy gap. It does not catch the mirror case — a fix
-  merged and its issue closed, but production has not redeployed yet, and
-  the (expected, still-undeployed) error keeps recurring right up to the
-  scan: there `g.last` is recent and `deployedAt()` still resolves to the
-  older pre-fix deploy, so `g.last < deployTime` is false and the group is
-  filed again even though a closed issue with a merged fix already explains
-  it. That case isn't the one #176/#215 evidences, but it has the same root
-  cause (a fingerprint's closed issue outrunning its own deploy) and is
-  worth closing the same way: catching it too needs comparing `deployedAt()`
-  against the closed issue's own `closed_at` as well (skip if *either*
-  comparison says "already handled, just not live yet"), which is a
-  product-behaviour choice for the owner, not something this fix changed on
-  its own. Any further change to this skip should check both gaps, not just
-  the one #230 closed.
+- The skip added for issue #230 (`log-triage.mjs`) and carried over verbatim
+  for #232 (`latency-triage.mjs`, whose aggregate row has no event timestamp
+  of its own, so it resolves one via an extra telemetry query — `lastSlowAt`
+  — instead of reading `g.last` directly) compares a group's/service's
+  newest breaching event to the last successful deploy, matching the owner's
+  accepted triage-comment shape: it catches a fix that has already deployed
+  and the error has gone quiet (stale pre-fix events still sitting in the
+  scan window after the deploy). That is the #176/#215 scenario the issue
+  reports, by its own timestamps: #176 closed 2026-11-27T17:44:37Z, the
+  v0.2.0 deploy carrying the fix ran 18:52:40–18:55:17Z, and the scan that
+  re-filed it as #215 ran at 21:24Z — after the deploy, re-surfacing
+  14:05–14:11Z events that predate the issue's own close by over three
+  hours, not anything recurring during the merge-to-deploy gap. Neither
+  script catches the mirror case — a fix merged and its issue closed, but
+  production has not redeployed yet, and the (expected, still-undeployed)
+  breach keeps recurring right up to the scan: there the newest event/
+  invocation is recent and `deployedAt()` still resolves to the older
+  pre-fix deploy, so the "last < deployTime" comparison is false and the
+  group/service is filed again even though a closed issue with a merged fix
+  already explains it. That case isn't the one #176/#215 evidences, but it
+  has the same root cause (a fingerprint's closed issue outrunning its own
+  deploy) and is worth closing the same way in both scripts: catching it too
+  needs comparing `deployedAt()` against the closed issue's own `closed_at`
+  as well (skip if *either* comparison says "already handled, just not live
+  yet"), which is a product-behaviour choice for the owner, not something
+  either fix changed on its own. Any further change to this skip in either
+  script should check both gaps, not just the one #230/#232 closed, and
+  should keep the two scripts on one rule rather than fixing only one.
 
 ## src/app/api/spaces/[id]/route.ts (calendar-event republish on PATCH)
 

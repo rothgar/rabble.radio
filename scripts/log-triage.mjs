@@ -39,7 +39,7 @@
 // needs, so the triage worker does not have to ask the owner for dashboard
 // access. With --input the timelines come from the same file.
 
-import { formatTimeline, requestEvents, requestIdOf, requestTimeline } from './lib/workers-logs.mjs';
+import { formatTimeline, makeDeployedAt, requestEvents, requestIdOf, requestTimeline } from './lib/workers-logs.mjs';
 
 const arg = (name, dflt) =>
   (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${dflt}`).split('=').slice(1).join('=');
@@ -241,29 +241,7 @@ async function gh(path, init = {}) {
   return res.json();
 }
 
-// The deploy that last changed env's running build, or null when it can't be
-// resolved (no such workflow, no successful run, or the API call failed) —
-// callers then fail open and file as if no deploy time were known at all.
-const DEPLOY_WORKFLOW = { prod: 'deploy-production.yml', dev: 'deploy.yml' };
-const deployTimeCache = new Map();
-async function deployedAt(env) {
-  if (deployedAtArg) return Date.parse(deployedAtArg);
-  if (deployTimeCache.has(env)) return deployTimeCache.get(env);
-  const promise = (async () => {
-    const workflow = DEPLOY_WORKFLOW[env];
-    if (!workflow) return null;
-    try {
-      const runs = await gh(`/repos/${repo}/actions/workflows/${workflow}/runs?status=success&per_page=1`);
-      const run = runs.workflow_runs?.[0];
-      return run ? Date.parse(run.updated_at) : null;
-    } catch (err) {
-      console.error(`deploy time for ${env} unavailable: ${err.message}`);
-      return null;
-    }
-  })();
-  deployTimeCache.set(env, promise);
-  return promise;
-}
+const deployedAt = makeDeployedAt({ gh, repo, override: deployedAtArg });
 
 async function listLabelled(state) {
   const out = [];

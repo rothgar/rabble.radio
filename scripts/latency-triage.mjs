@@ -26,6 +26,21 @@
 // keyed by service, to a file (local use only).
 // The token needs the account permission "Workers Observability", already
 // granted for log-triage.yml, which runs this script too — no new secret.
+//
+// A service whose closed (non-wontfix) `latency` issue already explains it
+// is treated as already fixed and awaiting deployment, not filed again, when
+// its newest invocation above threshold predates the environment's last
+// successful deploy (resolved the same way as log-triage.mjs, cached per
+// scan; --deployed-at=<iso> overrides it for tests and local runs). Unlike
+// log-triage's per-event groups, a calculations-view row has no event
+// timestamp of its own, so that "newest invocation" is one extra telemetry
+// query — the events view, filtered to wallTimeMs above threshold — run only
+// for a service that actually has a closed issue to check against. A
+// service with no closed issue, or whose newest slow invocation postdates
+// the deploy, files as before — including when either time can't be
+// resolved at all.
+
+import { filter, makeDeployedAt, telemetryQuery } from './lib/workers-logs.mjs';
 
 const arg = (name, dflt) =>
   (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${dflt}`).split('=').slice(1).join('=');
@@ -37,6 +52,7 @@ const repo = arg('repo', 'rothgar/rabble.radio');
 const thresholdMs = Number(arg('threshold-ms', '5000'));
 const input = arg('input', '');
 const dump = arg('dump', '');
+const deployedAtArg = arg('deployed-at', '');
 const dryRun = has('dry-run');
 const asJson = has('json');
 const LABEL = 'latency';
@@ -130,6 +146,29 @@ const fp = (key) => {
   return h.toString(16).padStart(8, '0');
 };
 
+// The newest invocation of `service` whose wall time is already above
+// threshold, over the scan window — the analogue of log-triage's `g.last`
+// for a calculations-view row, which carries no event timestamp of its own.
+// Only called for a service with a closed issue to check against (decide()
+// below), so a quiet scan never pays this extra query.
+async function lastSlowAt(service, from, to) {
+  try {
+    const events = await telemetryQuery({
+      account: process.env.CLOUDFLARE_ACCOUNT_ID,
+      token: process.env.CLOUDFLARE_API_TOKEN,
+      service,
+      filters: [filter('$metadata.type', 'eq', 'cf-worker-event'), filter('$workers.wallTimeMs', 'gte', thresholdMs, 'number')],
+      timeframe: { from, to },
+      queryId: `latency-triage-last-${service}`,
+    });
+    const timestamps = events.map((e) => Number(e.timestamp ?? 0)).filter((t) => t > 0);
+    return timestamps.length ? Math.max(...timestamps) : null;
+  } catch (err) {
+    console.error(`last slow invocation for ${service} unavailable: ${err.message}`);
+    return null;
+  }
+}
+
 // --------------------------------------------------------------------- GitHub
 // Overridable so tests can point it at a local stub instead of the real API.
 const GH = process.env.GH_API_BASE_URL ?? 'https://api.github.com';
@@ -187,19 +226,34 @@ function body(s, from, to) {
 
 // ------------------------------------------------------------------- decide
 // What to do about each service already known to be over threshold: skip
-// (ignored for good, or commented on too recently), comment on the existing
-// issue, or file a new one. Pure given its inputs (no fetching of its own),
-// so it's the part of the triage worth testing directly — `getComments` is
-// the one piece that needs the network, injected so tests can fake it.
-async function decide(breaching, { open, closed, getComments, now = Date.now() }) {
+// (ignored for good, fixed but not deployed yet, or commented on too
+// recently), comment on the existing issue, or file a new one. Pure given
+// its inputs (no fetching of its own) — `getComments`, `lastSlowAt` and
+// `deployedAt` are the pieces that need the network, injected so tests can
+// fake them. `lastSlowAt`/`deployedAt` are only called for a service whose
+// fingerprint already has a closed (non-wontfix) issue: a service with
+// nothing to check against never pays either query.
+async function decide(breaching, { open, closed, getComments, lastSlowAt = async () => null, deployedAt = async () => null, now = Date.now() }) {
   const openByFp = new Map(open.map((i) => [fpOf(i), i]).filter(([k]) => k));
   const ignore = new Set(closed.filter((i) => i.labels.some((l) => l.name === 'wontfix')).map(fpOf).filter(Boolean));
+  const fixedBy = new Map(closed.filter((i) => !i.labels.some((l) => l.name === 'wontfix')).map((i) => [fpOf(i), i]).filter(([k]) => k));
   const decisions = [];
   for (const { s, row } of breaching) {
     const id = fp(s.service);
     if (ignore.has(id)) { decisions.push({ kind: 'skip', row, why: 'closed wontfix' }); continue; }
     const existing = openByFp.get(id);
-    if (!existing) { decisions.push({ kind: 'file', row, s }); continue; }
+    if (!existing) {
+      const fixed = fixedBy.get(id);
+      if (fixed) {
+        const [last, deployTime] = await Promise.all([lastSlowAt(s.service), deployedAt(s.env)]);
+        if (last != null && deployTime && last < deployTime) {
+          decisions.push({ kind: 'skip', row, why: `fixed by #${fixed.number}, which closed before the ${fmt(deployTime)} deploy` });
+          continue;
+        }
+      }
+      decisions.push({ kind: 'file', row, s });
+      continue;
+    }
     const comments = await getComments(existing.number);
     const last = comments.filter((c) => c.body?.includes(MARK)).map((c) => Date.parse(c.created_at)).sort((a, b) => b - a)[0] ?? Date.parse(existing.created_at);
     if (now - last < COMMENT_EVERY_MS) { decisions.push({ kind: 'skip', row, why: `#${existing.number} updated in the last 24h` }); continue; }
@@ -237,7 +291,8 @@ async function main() {
     const open = await listLabelled('open');
     const closed = await listLabelled('closed');
     const getComments = (n) => gh(`/repos/${repo}/issues/${n}/comments?per_page=100`);
-    const decisions = await decide(breaching, { open, closed, getComments });
+    const deployedAt = makeDeployedAt({ gh, repo, override: deployedAtArg });
+    const decisions = await decide(breaching, { open, closed, getComments, lastSlowAt: (service) => lastSlowAt(service, from, to), deployedAt });
     for (const d of decisions) {
       if (d.kind === 'skip') { report.skipped.push({ ...d.row, why: d.why }); continue; }
       if (d.kind === 'comment') {
@@ -271,4 +326,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await main();
 }
 
-export { decide, fp, fpOf };
+export { decide, fp, fpOf, lastSlowAt };

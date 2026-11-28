@@ -5,8 +5,8 @@
 // request-logs prints. Fixtures mimic Workers Logs events (one invocation
 // event plus the logger's JSON lines parsed into `source`).
 
-import { describe, expect, it } from 'vitest';
-import { formatTimeline, redactLine, requestTimeline } from '../../scripts/lib/workers-logs.mjs';
+import { describe, expect, it, vi } from 'vitest';
+import { formatTimeline, makeDeployedAt, redactLine, requestTimeline } from '../../scripts/lib/workers-logs.mjs';
 
 const t0 = 1_700_000_000_000;
 const invocation = (outcome: string, wallTimeMs: number) => ({
@@ -66,5 +66,51 @@ describe('requestTimeline', () => {
 describe('redactLine', () => {
   it('scrubs bearer tokens', () => {
     expect(redactLine('authorization: Bearer abc.def')).toBe('authorization: Bearer [redacted]');
+  });
+});
+
+describe('makeDeployedAt', () => {
+  it('resolves the last successful run of the env\'s deploy workflow, caching it per env', async () => {
+    const gh = vi.fn().mockResolvedValue({ workflow_runs: [{ updated_at: '2026-01-01T00:00:00Z' }] });
+    const deployedAt = makeDeployedAt({ gh, repo: 'rothgar/rabble.radio' });
+
+    expect(await deployedAt('prod')).toBe(Date.parse('2026-01-01T00:00:00Z'));
+    expect(await deployedAt('prod')).toBe(Date.parse('2026-01-01T00:00:00Z'));
+    expect(gh).toHaveBeenCalledTimes(1);
+    expect(gh).toHaveBeenCalledWith('/repos/rothgar/rabble.radio/actions/workflows/deploy-production.yml/runs?status=success&per_page=1');
+  });
+
+  it('resolves dev and prod against their own workflow, independently cached', async () => {
+    const gh = vi.fn((path: string) =>
+      Promise.resolve({ workflow_runs: [{ updated_at: path.includes('deploy.yml') ? '2026-01-02T00:00:00Z' : '2026-01-01T00:00:00Z' }] })
+    );
+    const deployedAt = makeDeployedAt({ gh, repo: 'rothgar/rabble.radio' });
+
+    expect(await deployedAt('dev')).toBe(Date.parse('2026-01-02T00:00:00Z'));
+    expect(await deployedAt('prod')).toBe(Date.parse('2026-01-01T00:00:00Z'));
+    expect(gh).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves to null, not throwing, when the Actions API call fails (fail open)', async () => {
+    const gh = vi.fn().mockRejectedValue(new Error('boom'));
+    const deployedAt = makeDeployedAt({ gh, repo: 'rothgar/rabble.radio' });
+
+    expect(await deployedAt('prod')).toBeNull();
+  });
+
+  it('resolves to null for an environment with no known deploy workflow', async () => {
+    const gh = vi.fn();
+    const deployedAt = makeDeployedAt({ gh, repo: 'rothgar/rabble.radio' });
+
+    expect(await deployedAt('staging')).toBeNull();
+    expect(gh).not.toHaveBeenCalled();
+  });
+
+  it('the --deployed-at override wins over the API and needs no gh call', async () => {
+    const gh = vi.fn();
+    const deployedAt = makeDeployedAt({ gh, repo: 'rothgar/rabble.radio', override: '2026-02-01T00:00:00Z' });
+
+    expect(await deployedAt('prod')).toBe(Date.parse('2026-02-01T00:00:00Z'));
+    expect(gh).not.toHaveBeenCalled();
   });
 });

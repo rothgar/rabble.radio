@@ -134,3 +134,38 @@ export function formatTimeline(requestId, t, { maxLines = 60 } = {}) {
       : '--- every D1 query that started also finished';
   return [head, ...body, tail].join('\n');
 }
+
+// Shared by log-triage and latency-triage so "already fixed, not yet
+// deployed" stays one rule (#230, #232): the deploy that last changed env's
+// running build, resolved from the last successful run of the workflow that
+// deploys it. `override` is --deployed-at, for tests and local runs.
+const DEPLOY_WORKFLOW = { prod: 'deploy-production.yml', dev: 'deploy.yml' };
+
+/**
+ * Build a per-scan-cached resolver of each environment's last deploy time.
+ * `gh` is the caller's own authenticated GitHub fetcher (`gh(path, init)` ->
+ * parsed JSON); `repo` is `owner/name`. Resolves to null when it can't be
+ * determined — no such workflow, no successful run yet, or the API call
+ * failed — so callers fail open and treat the fix as not yet deployed.
+ */
+export function makeDeployedAt({ gh, repo, override = '' }) {
+  const cache = new Map();
+  return async function deployedAt(env) {
+    if (override) return Date.parse(override);
+    if (cache.has(env)) return cache.get(env);
+    const promise = (async () => {
+      const workflow = DEPLOY_WORKFLOW[env];
+      if (!workflow) return null;
+      try {
+        const runs = await gh(`/repos/${repo}/actions/workflows/${workflow}/runs?status=success&per_page=1`);
+        const run = runs.workflow_runs?.[0];
+        return run ? Date.parse(run.updated_at) : null;
+      } catch (err) {
+        console.error(`deploy time for ${env} unavailable: ${err.message}`);
+        return null;
+      }
+    })();
+    cache.set(env, promise);
+    return promise;
+  };
+}

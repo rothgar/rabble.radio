@@ -15,7 +15,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decide, fp, fpOf } from '../../scripts/latency-triage.mjs';
+import { decide, fp, fpOf, lastSlowAt } from '../../scripts/latency-triage.mjs';
 
 const SCRIPT = path.resolve(__dirname, '../../scripts/latency-triage.mjs');
 
@@ -176,6 +176,86 @@ describe('decide()', () => {
     const decisions = await decide(breaching, { open: [], closed, getComments });
 
     expect(decisions).toEqual([{ kind: 'file', row, s }]);
+  });
+});
+
+// A fix merged on main is not what production runs until a `v*` tag or a
+// manual deploy-production.yml run, so a level closed by that merge looks new
+// again to the open/closed dedupe while the scan still reads pre-fix
+// invocations. Same rule scripts/log-triage.mjs applies (#230); here the
+// stats row carries no event timestamp of its own, so `lastSlowAt` stands in
+// for log-triage's `g.last`.
+describe('decide() against the deployed build, not the merged one', () => {
+  const id = fp('rabble-prod');
+  const ago = (hours: number) => Date.now() - hours * 3600 * 1000;
+  const s = { service: 'rabble-prod', env: 'prod', p95: 7000, p99: 9000, count: 900 };
+  const row = { service: 'rabble-prod', env: 'prod', p95: 7000, p99: 9000, count: 900 };
+  const breaching = [{ s, row }];
+  const closedIssue = { number: 176, body: `<!-- latency-triage:fp=${id} -->`, labels: [{ name: 'latency' }, { name: 'bug' }], created_at: new Date(ago(6)).toISOString() };
+
+  it('does not file a level whose closed issue was fixed before the last deploy', async () => {
+    const getComments = vi.fn();
+    const lastSlowAt = vi.fn().mockResolvedValue(ago(4));
+    const deployedAt = vi.fn().mockResolvedValue(ago(3));
+
+    const decisions = await decide(breaching, { open: [], closed: [closedIssue], getComments, lastSlowAt, deployedAt });
+
+    expect(decisions).toEqual([{ kind: 'skip', row, why: expect.stringMatching(/deploy/i) }]);
+    expect(getComments).not.toHaveBeenCalled();
+    expect(lastSlowAt).toHaveBeenCalledWith('rabble-prod');
+    expect(deployedAt).toHaveBeenCalledWith('prod');
+  });
+
+  it('files the same level when a slow invocation postdates the last deploy', async () => {
+    const getComments = vi.fn();
+    const lastSlowAt = vi.fn().mockResolvedValue(ago(1));
+    const deployedAt = vi.fn().mockResolvedValue(ago(3));
+
+    const decisions = await decide(breaching, { open: [], closed: [closedIssue], getComments, lastSlowAt, deployedAt });
+
+    expect(decisions).toEqual([{ kind: 'file', row, s }]);
+  });
+
+  it('files when the deploy time cannot be resolved, failing open', async () => {
+    const getComments = vi.fn();
+    const lastSlowAt = vi.fn().mockResolvedValue(ago(4));
+    const deployedAt = vi.fn().mockResolvedValue(null);
+
+    const decisions = await decide(breaching, { open: [], closed: [closedIssue], getComments, lastSlowAt, deployedAt });
+
+    expect(decisions).toEqual([{ kind: 'file', row, s }]);
+  });
+
+  it('never calls lastSlowAt or deployedAt when there is no closed issue to check against', async () => {
+    const getComments = vi.fn();
+    const lastSlowAt = vi.fn();
+    const deployedAt = vi.fn();
+
+    const decisions = await decide(breaching, { open: [], closed: [], getComments, lastSlowAt, deployedAt });
+
+    expect(decisions).toEqual([{ kind: 'file', row, s }]);
+    expect(lastSlowAt).not.toHaveBeenCalled();
+    expect(deployedAt).not.toHaveBeenCalled();
+  });
+});
+
+describe('lastSlowAt()', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it('resolves to null instead of throwing when the telemetry query fails (fail open)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' });
+
+    await expect(lastSlowAt('rabble-prod', Date.now() - 3600_000, Date.now())).resolves.toBeNull();
+  });
+
+  it('takes the newest timestamp of the matching invocations', async () => {
+    const events = [{ timestamp: 1000 }, { timestamp: 3000 }, { timestamp: 2000 }];
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({ result: { events: { events } } }) });
+
+    await expect(lastSlowAt('rabble-prod', 0, 4000)).resolves.toBe(3000);
   });
 });
 

@@ -48,8 +48,10 @@ function HostStrip({ hosts }: { hosts: TopHost[] }): ReactElement {
         const name = h.host.displayName?.trim() || `@${h.host.handle}`;
         return (
           <li key={h.host.did} className="shrink-0">
-            <Link
-              href={`/podcast/${encodeURIComponent(h.host.handle)}`}
+            <a
+              href={`https://bsky.app/profile/${encodeURIComponent(h.host.handle)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex w-28 flex-col items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center hover:border-[var(--color-accent)]"
               data-testid={`home-host-${h.host.handle}`}
             >
@@ -63,7 +65,7 @@ function HostStrip({ hosts }: { hosts: TopHost[] }): ReactElement {
               </span>
               <span className="w-full truncate text-caption font-semibold text-[var(--color-text)]">{name}</span>
               <span className="w-full truncate text-[10px] text-[var(--color-text-tertiary)]">@{h.host.handle}</span>
-            </Link>
+            </a>
           </li>
         );
       })}

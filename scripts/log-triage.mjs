@@ -23,6 +23,15 @@
 // The token needs the account permission "Workers Observability" (the API
 // names it Workers Observability Write). Run by .github/workflows/log-triage.yml.
 //
+// A group whose newest event predates the environment's last successful
+// deploy, and whose fingerprint already carries a closed (non-wontfix)
+// issue, is treated as already fixed and awaiting deployment: it is
+// reported in `skipped`, not filed again. The deploy time comes from the
+// last successful run of deploy-production.yml (prod) or deploy.yml (dev);
+// --deployed-at=<iso> overrides it, for tests and local runs. A group with
+// no closed issue, or whose newest event postdates the deploy, files as
+// before — including when the deploy time can't be resolved at all.
+//
 // Each issue (and each "still happening" comment) carries the timeline of up
 // to MAX_TIMELINES of the failing requests: every log line of that request
 // in order, with any D1 query that started and never finished flagged
@@ -41,6 +50,7 @@ const hours = Number(arg('hours', '6'));
 const repo = arg('repo', 'rothgar/rabble.radio');
 const input = arg('input', '');
 const dump = arg('dump', '');
+const deployedAtArg = arg('deployed-at', '');
 const dryRun = has('dry-run');
 const asJson = has('json');
 const LABEL = 'logs';
@@ -231,6 +241,30 @@ async function gh(path, init = {}) {
   return res.json();
 }
 
+// The deploy that last changed env's running build, or null when it can't be
+// resolved (no such workflow, no successful run, or the API call failed) —
+// callers then fail open and file as if no deploy time were known at all.
+const DEPLOY_WORKFLOW = { prod: 'deploy-production.yml', dev: 'deploy.yml' };
+const deployTimeCache = new Map();
+async function deployedAt(env) {
+  if (deployedAtArg) return Date.parse(deployedAtArg);
+  if (deployTimeCache.has(env)) return deployTimeCache.get(env);
+  const promise = (async () => {
+    const workflow = DEPLOY_WORKFLOW[env];
+    if (!workflow) return null;
+    try {
+      const runs = await gh(`/repos/${repo}/actions/workflows/${workflow}/runs?status=success&per_page=1`);
+      const run = runs.workflow_runs?.[0];
+      return run ? Date.parse(run.updated_at) : null;
+    } catch (err) {
+      console.error(`deploy time for ${env} unavailable: ${err.message}`);
+      return null;
+    }
+  })();
+  deployTimeCache.set(env, promise);
+  return promise;
+}
+
 async function listLabelled(state) {
   const out = [];
   for (let page = 1; page <= 5; page++) {
@@ -343,6 +377,7 @@ if (dryRun || groups.length === 0) {
   const closed = await listLabelled('closed');
   const openBy = new Map(open.map((i) => [fpOf(i), i]).filter(([k]) => k));
   const ignore = new Set(closed.filter((i) => i.labels.some((l) => l.name === 'wontfix')).map(fpOf).filter(Boolean));
+  const fixedBy = new Map(closed.filter((i) => !i.labels.some((l) => l.name === 'wontfix')).map((i) => [fpOf(i), i]).filter(([k]) => k));
   let filed = 0;
   for (const g of groups) {
     const id = fp(g.key);
@@ -361,6 +396,14 @@ if (dryRun || groups.length === 0) {
       });
       report.commented.push({ ...row, issue: existing.number });
       continue;
+    }
+    const fixed = fixedBy.get(id);
+    if (fixed) {
+      const deployTime = await deployedAt(g.env);
+      if (deployTime && g.last < deployTime) {
+        report.skipped.push({ ...row, why: `fixed by #${fixed.number}, which closed before the ${fmt(deployTime)} deploy` });
+        continue;
+      }
     }
     if (filed >= MAX_NEW_ISSUES) { report.skipped.push({ ...row, why: `more than ${MAX_NEW_ISSUES} new groups in one run` }); continue; }
     const timelines = await timelinesFor(g, events);

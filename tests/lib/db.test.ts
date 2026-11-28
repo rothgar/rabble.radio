@@ -4,6 +4,12 @@
 // Cloudflare request context on first use, and every query runs through a
 // `$extends` query-telemetry wrapper (issue #128) that logs its start and
 // end so a hung D1 call can be identified from logs alone.
+//
+// The client is cached per request (its ExecutionContext), not per D1
+// binding (issue #214): the binding is the same object on every request in
+// an isolate, so keying the cache by it let one request's DataLoader-merged
+// query carry another's I/O, and a request whose context ended first left
+// the second request awaiting a promise that never settled.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -65,15 +71,31 @@ describe('db proxy', () => {
     vi.clearAllMocks();
   });
 
-  it('creates one client per D1 binding and delegates model access', async () => {
+  it('creates one client per request and delegates model access', async () => {
     const DB = { name: 'd1' };
-    mockGetCloudflareContext.mockReturnValue({ env: { DB } });
+    const ctx = { name: 'ctx-a' };
+    mockGetCloudflareContext.mockReturnValue({ env: { DB }, ctx });
     const { prisma } = await import('@/lib/db');
     expect(await prisma.user.findMany()).toEqual(['row']);
     await prisma.user.findMany();
     expect(mockAdapter).toHaveBeenCalledTimes(1);
     expect(mockAdapter).toHaveBeenCalledWith(DB);
     expect(mockPrismaClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one client across calls within the same request context, and never across contexts', async () => {
+    const { prisma } = await import('@/lib/db');
+
+    const ctxA = { name: 'ctx-a' };
+    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } }, ctx: ctxA });
+    await prisma.user.findMany();
+    await prisma.user.findMany();
+    expect(mockPrismaClient).toHaveBeenCalledTimes(1);
+
+    const ctxB = { name: 'ctx-b' };
+    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } }, ctx: ctxB });
+    await prisma.user.findMany();
+    expect(mockPrismaClient).toHaveBeenCalledTimes(2);
   });
 
   it('fails clearly when the DB binding is missing', async () => {
@@ -83,7 +105,7 @@ describe('db proxy', () => {
   });
 
   it('logs a start and a done event around every query, without the query args', async () => {
-    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } } });
+    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } }, ctx: {} });
     const { prisma } = await import('@/lib/db');
     await prisma.user.findMany({ where: { did: 'did:plc:secret' } });
 
@@ -101,7 +123,7 @@ describe('db proxy', () => {
   });
 
   it('logs a failed event and rethrows when the query rejects, without the error message or stack', async () => {
-    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } } });
+    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } }, ctx: {} });
     // Prisma embeds the full call args in a validation error's own message,
     // so the message (like the args) must never reach the log.
     const boom = new Error('Invalid `prisma.user.findMany()` invocation: did:plc:secret');
@@ -131,7 +153,7 @@ describe('db proxy', () => {
   it('also logs raw queries ($queryRaw, $executeRaw), not just model methods', async () => {
     // src/lib/users.ts and src/app/api/health/route.ts call $queryRaw /
     // $executeRaw directly; a hook nested under `$allModels` would miss them.
-    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } } });
+    mockGetCloudflareContext.mockReturnValue({ env: { DB: { name: 'd1' } }, ctx: {} });
     const { prisma } = await import('@/lib/db');
     await (prisma as unknown as { $queryRaw: (args: unknown) => Promise<unknown> }).$queryRaw`SELECT 1`;
 

@@ -116,6 +116,24 @@ describe('GET /api/me/reminders', () => {
     });
   });
 
+  it('answers 503 instead of hanging when a due-reminder lookup never settles', async () => {
+    // The prod hang of #214: the Prisma client used to be shared across
+    // requests, so one request's D1 query could carry another's lookup and
+    // never settle for the request that awaited it. src/lib/db.ts now keys
+    // the client per request; this bound (src/app/api/me/reminders/route.ts)
+    // is the second layer so a future hang of any shape still answers.
+    m.takeDueReminders.mockResolvedValue([]);
+    m.takeDueHostFollows.mockReturnValue(new Promise<never[]>(() => undefined));
+    vi.useFakeTimers();
+    try {
+      const pending = meReminders(new NextRequest('http://localhost/api/me/reminders?due=1'));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).toBe(503);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('merges show-follow due shows, dropping duplicates already counted', async () => {
     m.takeDueReminders.mockResolvedValue([{ spaceId: 'sp2', title: 'Show reminder' }]);
     m.takeDueHostFollows.mockResolvedValue([{ spaceId: 'sp3', title: 'Host follow' }]);

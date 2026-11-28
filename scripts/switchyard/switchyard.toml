@@ -3,7 +3,7 @@
 # and asks for the model "switchyard"; the route below decides, per user turn,
 # whether the capable tier (Sonnet on Aperture) or the efficient tier (the
 # limit-free local qwen on Aperture) handles it, and the stage router moves
-# between them on tool-activity signals. The decision model is qwen3.6-35b-a3b,
+# between them on tool-activity signals. The decision model is qwen3.8-flash-next,
 # also on Aperture: no Claude quota is spent on deciding.
 #
 # Validate: docker compose -f scripts/switchyard/compose.yml run --rm switchyard \
@@ -22,22 +22,34 @@ base_url = "https://ai.gerbil-dragon.ts.net"
 forward_auth = true
 timeout_ms = 600000
 
+# Since 2026-11-27 Aperture serves its one local model (qwen3.8-flash-next)
+# on /v1/chat/completions only ("available via openai_chat, not
+# anthropic_messages"); Switchyard translates between the two wire formats.
+[llm_clients.aperture_chat]
+format = "openai_chat"
+# The OpenAI client appends /chat/completions, so the base includes /v1.
+base_url = "https://ai.gerbil-dragon.ts.net/v1"
+# No credential: the local model answers with this host's tailnet identity,
+# and a client that forwards an OpenAI login cannot be called on /v1/messages.
+forward_auth = false
+timeout_ms = 600000
+
 [targets.capable]
 id = "claude-sonnet-5"
 llm_client = "aperture"
 
 # The gateway rejects effort "high" for the qwen models (xhigh, medium, low).
 [targets.efficient]
-id = "qwen3.8-27b-nvfp4"
-llm_client = "aperture"
+id = "qwen3.8-flash-next"
+llm_client = "aperture_chat"
 reasoning_effort = "medium"
 
 # The judge must answer in plain text: with thinking on, qwen spends the whole
 # verdict budget thinking (the gateway passes chat_template_kwargs through to
 # vLLM on /v1/messages; `thinking: disabled` is ignored there).
 [targets.judge]
-id = "qwen3.6-35b-a3b"
-llm_client = "aperture"
+id = "qwen3.8-flash-next"
+llm_client = "aperture_chat"
 reasoning_effort = "low"
 extra_body = { chat_template_kwargs = { enable_thinking = false } }
 
@@ -53,7 +65,7 @@ type = "passthrough"
 target = "small"
 
 [routes.qwen]
-id = "qwen3.8-27b-nvfp4"
+id = "qwen3.8-flash-next"
 type = "passthrough"
 target = "efficient"
 

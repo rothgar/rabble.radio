@@ -319,9 +319,9 @@ choice in the box, which is why the watcher puts it back at the reset.
 `scripts/switchyard/` runs [NVIDIA-NeMo/Switchyard](https://github.com/NVIDIA-NeMo/Switchyard)
 as a Docker container on the factory host, in front of Aperture, for the
 triage boxes only. A box asks for the model `switchyard`; the route in
-`scripts/switchyard/switchyard.toml` has a judge (qwen3.6-35b-a3b on Aperture,
+`scripts/switchyard/switchyard.toml` has a judge (qwen3.8-flash-next on Aperture,
 limit-free) pick a tier per user turn, capable (claude-sonnet-5) or efficient
-(qwen3.8-27b-nvfp4), and Switchyard's stage router moves between the tiers on
+(the same qwen3.8-flash-next), and Switchyard's stage router moves between the tiers on
 tool-activity signals. No Claude quota is spent on deciding.
 
 ```bash

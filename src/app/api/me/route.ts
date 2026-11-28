@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/session';
+import { isAdmin } from '@/lib/admin';
 import type { PublicUser } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export async function GET(): Promise<NextResponse<PublicUser | { error: string }
     handle: user.handle,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    isAdmin: isAdmin(user),
   };
   return NextResponse.json(body, { status: 200 });
 }

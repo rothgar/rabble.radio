@@ -643,3 +643,32 @@ code, and mistakes already made there.
   every caller at it. Check for this composable before hand-rolling the
   style again; a fourth inline copy should become a bug, not a repeat of
   this note.
+
+## src/lib/db.ts (Prisma client cache key)
+
+- The client cache is keyed by the request's `ExecutionContext` (issue
+  #214), one client per `ctx`, so two requests never share one client's
+  DataLoader. That isolation is only as good as `ctx` actually being
+  one-per-request: `custom-worker.ts`'s `scheduled()` handler fires the two
+  sweep routes (`/api/spaces/expire`, `/api/spaces/recording/expire`) as
+  `for (const path of [...]) ctx.waitUntil(handler.fetch(request, env, ctx))`,
+  passing the *same* `ctx` to both `fetch` calls, so they share one cached
+  client here. It's harmless today only because both are wrapped in that
+  same `ctx.waitUntil` (neither's context tears down before the other's
+  queries settle) — not because `db.ts`'s cache key isolates them. Any
+  change that lets one sweep route's request return independent of the
+  other's DB work (or a new cron path built the same way) needs its own
+  `ctx`, or it reopens #214's cross-request DataLoader hang through the
+  scheduled handler instead of a user request.
+
+## src/app/api/me/reminders/route.ts (late-rejection logging)
+
+- A handler that attaches a bare `.catch()` to a promise it abandoned (here,
+  the `?due=1` fan-out after its 10s timeout wins the race) must follow
+  `src/lib/db.ts`'s own error-redaction rule — log the caught error's
+  `name`/`code`, never its `message` — not just log whatever the error
+  object carries. A Prisma validation error's `.message` embeds the full
+  call arguments (`src/lib/db.ts`'s `withQueryTelemetry` comment), so a
+  late-settling validation or constraint error here could otherwise leak
+  another caller's DID or filter value through this route alone, even
+  though `db.ts`'s own telemetry already keeps it out of the query logs.

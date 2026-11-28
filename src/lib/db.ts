@@ -2,7 +2,17 @@
 //
 // Prisma client bound to the Cloudflare D1 database. The D1 binding only
 // exists inside a request (or `next dev` with initOpenNextCloudflareForDev),
-// so the client is created lazily on first use and cached per binding.
+// so the client is created lazily on first use and cached per request.
+//
+// Cached per request's ExecutionContext, not per D1 binding (issue #214):
+// `env.DB` is the same object on every request in an isolate, so keying the
+// cache by it gave every request in that isolate one shared client. Prisma's
+// DataLoader merges same-tick `findUnique` calls on one model into a single
+// query, so one request's I/O could carry another's lookup; when the first
+// request's context ended before the merged query settled, the second
+// request awaited a promise that would never resolve, and the Workers
+// runtime canceled it as hung. One client per `ctx` keeps every request's
+// queries, and their DataLoader batching, within that request alone.
 //
 // Callers keep using `prisma.<model>` as before; the export is a proxy that
 // resolves the real client on each property access.
@@ -19,13 +29,13 @@ type PrismaInstance = InstanceType<typeof PrismaClient>;
 
 const clients = new WeakMap<object, PrismaInstance>();
 
-function getBinding(): D1Database {
-  const { env } = getCloudflareContext();
+function getContext(): { db: D1Database; ctx: object } {
+  const { env, ctx } = getCloudflareContext();
   const db = (env as { DB?: D1Database }).DB;
   if (!db) {
     throw new Error('D1 binding "DB" is not configured; see wrangler.jsonc.');
   }
-  return db;
+  return { db, ctx: ctx as object };
 }
 
 let queryCounter = 0;
@@ -81,15 +91,15 @@ function withQueryTelemetry(client: PrismaInstance): PrismaInstance {
 }
 
 function getClient(): PrismaInstance {
-  const db = getBinding();
-  let client = clients.get(db);
+  const { db, ctx } = getContext();
+  let client = clients.get(ctx);
   if (!client) {
     const base = new PrismaClient({
       adapter: new PrismaD1(db),
       log: ['error', 'warn'],
     });
     client = withQueryTelemetry(base);
-    clients.set(db, client);
+    clients.set(ctx, client);
   }
   return client;
 }

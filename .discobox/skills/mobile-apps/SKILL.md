@@ -32,7 +32,7 @@ down to the strings.
 
 ## Screens
 
-Routes: `home` → `station/<tag>`, `show/<id>?autoJoin`, `me`, `login`.
+Routes: `home` → `station/<tag>`, `show/<id>?autoJoin`, `me`, `login`, `admin`.
 "Start a show" lands in the room with `autoJoin` set. iOS also accepts the
 launch arguments `-showId <id> -autoJoin` so a headless simulator can open a
 room for a screenshot.
@@ -54,8 +54,14 @@ room for a screenshot.
   opens the show-details sheet (Title, "What's the show about?"). Leaving a
   live room asks "Leave the show?" with Leave / Stay.
 - **Me** (`MeScreen.kt`, `MeView.swift`): "My shows": `SHOWS YOU HOST`,
-  `SHOWS YOU JOINED` (`GET /api/me/shows`), Log out, and on iOS the
+  `SHOWS YOU JOINED` (`GET /api/me/shows`), an "Admin" button when
+  `GET /api/me` answers `isAdmin: true`, Log out, and on iOS the
   `APPEARANCE` picker (Android has the toggle on the home bar instead).
+- **Admin** (`AdminScreen.kt`, `AdminView.swift`): platform overview counts
+  and user moderation (ban/unban/kick), behind the Me screen's Admin button.
+  Mirrors `/admin` on the web, scoped to `GET /api/admin/overview` (overview
+  counts + the user list; 404 for non-admins) and the existing
+  `POST /api/admin/users`. ADMIN_DIDS only.
 - **Login**: the web app's `/login` Bluesky OAuth flow in a web view. When
   the callback sets the session cookie the view closes and the cookie is
   shared with the API client. Nothing else is native; do not build a native
@@ -65,8 +71,9 @@ room for a screenshot.
   build, base URL, room state: showId, role, connected, onAir, micOn,
   members, anonymousListeners, invitePending, recent errors).
 
-Web-only: `/stations` index page, `/hosts`, `/downloads`, admin pages,
-scheduling a show for later, recording management.
+Web-only: `/stations` index page, `/hosts`, `/downloads`, the `/admin`
+activity table and weekly series (the apps have overview counts and
+moderation only), scheduling a show for later, recording management.
 
 ## Shared flows and their wire contract
 

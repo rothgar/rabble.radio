@@ -68,3 +68,142 @@ describe('log-triage --dry-run --bodies', () => {
     expect(g.body).toContain('db.query.done d1q_1 Space.findMany 55ms');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Filing against a stubbed GitHub: the dedup rules, which --dry-run skips.
+
+const PROD = 'rabble-prod';
+const REPO = 'rothgar/rabble.radio';
+// The group #176 filed and 6a769ba fixed: it sat on main for hours before the
+// v0.2.0 production deploy, and the scan re-filed it as new work (#215).
+const INTEROP = "TypeError: Cannot read properties of undefined (reading 'interopDefault')";
+const minutesAgo = (m: number) => Date.now() - m * 60_000;
+const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+const interopFailure = (at: number, rid: string) => ({
+  timestamp: at,
+  $metadata: { type: 'cf-worker', requestId: rid, service: PROD, level: 'error', error: INTEROP, url: 'https://rabble.radio/.well-known/security.txt' },
+  $workers: { scriptName: PROD, event: { request: { url: 'https://rabble.radio/.well-known/security.txt', path: '/.well-known/security.txt' } } },
+  source: { message: INTEROP, exception: { name: 'TypeError' } },
+});
+
+/** The fingerprint the script would stamp the issue for these events. */
+function fingerprintOf(events: unknown[]) {
+  const fpDir = mkdtempSync(path.join(tmpdir(), 'log-triage-fp-'));
+  try {
+    const file = path.join(fpDir, 'events.json');
+    writeFileSync(file, JSON.stringify(events));
+    const out = execFileSync(process.execPath, [SCRIPT, `--services=${PROD}`, `--input=${file}`, '--dry-run', '--bodies', '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, CLOUDFLARE_API_TOKEN: '', CLOUDFLARE_ACCOUNT_ID: '', GH_TOKEN: '' },
+    });
+    const [group] = JSON.parse(out).groups;
+    const fp = /log-triage:fp=([0-9a-f]{8})/.exec(group.body)?.[1];
+    if (!fp) throw new Error(`fixture produced no fingerprint: ${group.title}`);
+    return fp;
+  } finally {
+    rmSync(fpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The filing path against a stubbed GitHub API. `stub` is the repository the
+ * script sees: its open and closed `logs` issues and the runs of the workflow
+ * that deployed the Worker, so the scan's idea of "what is already filed" and
+ * "what is live" both come from the fixture.
+ */
+function scan(
+  events: unknown[],
+  stub: { open?: unknown[]; closed?: unknown[]; deployRuns?: unknown[]; failRuns?: boolean },
+  extraArgs: string[] = []
+) {
+  dir = mkdtempSync(path.join(tmpdir(), 'log-triage-gh-'));
+  const input = path.join(dir, 'events.json');
+  const github = path.join(dir, 'github.json');
+  const runner = path.join(dir, 'github-stub.mjs');
+  writeFileSync(input, JSON.stringify(events));
+  writeFileSync(github, JSON.stringify({ open: stub.open ?? [], closed: stub.closed ?? [], deployRuns: stub.deployRuns ?? [], failRuns: stub.failRuns ?? false }));
+  writeFileSync(
+    runner,
+    [
+      `import { readFile } from 'node:fs/promises';`,
+      `const fixture = JSON.parse(await readFile(${JSON.stringify(github)}, 'utf8'));`,
+      `const answer = (payload) => ({ ok: true, status: 200, json: async () => payload, text: async () => JSON.stringify(payload) });`,
+      `globalThis.fetch = async (rawUrl, init = {}) => {`,
+      `  const url = new URL(rawUrl);`,
+      `  const parts = url.pathname.split('/').filter(Boolean);`,
+      `  const last = parts[parts.length - 1];`,
+      `  if (last === 'issues' && (init.method ?? 'GET').toUpperCase() === 'POST') {`,
+      `    return answer({ number: 901, html_url: 'https://github.com/' + ${JSON.stringify(REPO)} + '/issues/901' });`,
+      `  }`,
+      `  if (last === 'issues' && parts[0] === 'repos') return answer(url.searchParams.get('state') === 'closed' ? fixture.closed : fixture.open);`,
+      `  if (last === 'runs') return fixture.failRuns ? { ok: false, status: 500, text: async () => 'boom' } : answer({ workflow_runs: fixture.deployRuns });`,
+      `  if (last === 'comments') return answer([]);`,
+      `  throw new Error('stub has no route for ' + url.pathname);`,
+      `};`,
+      `await import(${JSON.stringify(SCRIPT)});`,
+    ].join('\n')
+  );
+  const out = execFileSync(process.execPath, [runner, `--services=${PROD}`, `--repo=${REPO}`, `--input=${input}`, '--json', ...extraArgs], {
+    encoding: 'utf8',
+    env: { ...process.env, CLOUDFLARE_API_TOKEN: '', CLOUDFLARE_ACCOUNT_ID: '', GH_TOKEN: 'stub-token' },
+  });
+  return JSON.parse(out);
+}
+
+const closedIssue = (fp: string) => ({
+  number: 176,
+  pull_request: null,
+  state: 'closed',
+  labels: [{ name: 'logs' }, { name: 'bug' }],
+  body: `<!-- log-triage:fp=${fp} -->\n\n## Today\n\nThe \`${PROD}\` Worker logged this exception.\n`,
+});
+
+describe('log-triage files against the deployed build, not the merged one', () => {
+  const deployAt = minutesAgo(120);
+  const deployRuns = [{ status: 'completed', conclusion: 'success', created_at: iso(deployAt), updated_at: iso(deployAt) }];
+
+  it('does not re-file a fingerprint whose closed issue was fixed before the last deploy', () => {
+    const before = [interopFailure(minutesAgo(180), 'req_a1'), interopFailure(minutesAgo(175), 'req_a2')];
+    const closed = [closedIssue(fingerprintOf(before))];
+
+    const report = scan(before, { closed, deployRuns }, ['--hours=6', `--deployed-at=${iso(deployAt)}`]);
+
+    expect(report.groups).toHaveLength(1);
+    expect(report.filed).toHaveLength(0);
+    expect(report.skipped).toHaveLength(1);
+    expect(report.skipped[0].why).toMatch(/deploy/i);
+  });
+
+  it('files the same fingerprint when an event postdates the last deploy', () => {
+    const before = [interopFailure(minutesAgo(180), 'req_a1')];
+    const events = [...before, interopFailure(minutesAgo(40), 'req_b1')];
+    const closed = [closedIssue(fingerprintOf(events))];
+
+    const report = scan(events, { closed, deployRuns }, ['--hours=6', `--deployed-at=${iso(deployAt)}`]);
+
+    expect(report.filed).toHaveLength(1);
+    expect(report.filed[0].issue).toBe(901);
+  });
+
+  it('resolves the deploy time from the Actions API when no --deployed-at override is given', () => {
+    const before = [interopFailure(minutesAgo(180), 'req_a1'), interopFailure(minutesAgo(175), 'req_a2')];
+    const closed = [closedIssue(fingerprintOf(before))];
+
+    const report = scan(before, { closed, deployRuns }, ['--hours=6']);
+
+    expect(report.filed).toHaveLength(0);
+    expect(report.skipped).toHaveLength(1);
+    expect(report.skipped[0].why).toMatch(/deploy/i);
+  });
+
+  it('fails open and files when the Actions API call errors', () => {
+    const before = [interopFailure(minutesAgo(180), 'req_a1'), interopFailure(minutesAgo(175), 'req_a2')];
+    const closed = [closedIssue(fingerprintOf(before))];
+
+    const report = scan(before, { closed, deployRuns, failRuns: true }, ['--hours=6']);
+
+    expect(report.filed).toHaveLength(1);
+    expect(report.skipped).toHaveLength(0);
+  });
+});

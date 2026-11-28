@@ -8,7 +8,7 @@
 #
 # The live room needs a LiveKit SFU. In dev mode the server accepts the fixed
 # API key `devkey` / secret `secret`, which `.env.local` (written by
-# pre-harness) points the app at. Same image tag as docker-compose.yml.
+# pre-harness) points the app at.
 
 set -euo pipefail
 

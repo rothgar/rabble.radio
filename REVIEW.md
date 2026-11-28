@@ -601,6 +601,20 @@ code, and mistakes already made there.
   its own. Any further change to this skip should check both gaps, not just
   the one #230 closed.
 
+## src/app/api/spaces/[id]/route.ts (calendar-event republish on PATCH)
+
+- Issue #221's republish of `community.lexicon.calendar.event` on a
+  still-scheduled show's `PATCH` deliberately does not call
+  `setCalendarEvent` after a successful `publishCalendarEvent`, unlike the
+  first-publish call site (`src/app/api/spaces/route.ts`): `rkey` is always
+  `space.id`, so `result.uri` never changes, and the owner's own triage
+  comment on #221 established that `calendarEventCid` is written on create
+  but never read anywhere — this republish path leaves it stale from the
+  very first edit onward, and that is accepted, not a bug. Before adding a
+  reader of `calendarEventCid`, check every write site (create, delete/cancel,
+  this republish) actually keeps it current first; right now only create and
+  delete do.
+
 ## custom-worker.ts, src/lib/downloads.ts and src/lib/music.ts (routes answered before Next.js)
 
 - A route whose shared `serve*` function branches on `method === 'HEAD'`

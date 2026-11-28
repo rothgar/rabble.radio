@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   resolveSpaceForUser: vi.fn(),
   updateSpace: vi.fn(),
   publishLiveStatus: vi.fn(async () => ({ ok: true })),
+  publishCalendarEvent: vi.fn(async () => ({ ok: true, uri: 'at://x', cid: 'cid1' })),
   broadcastRoomData: vi.fn(async () => true),
 }));
 
@@ -24,10 +25,23 @@ vi.mock('@/lib/spaces', () => ({
   setSpaceLive: vi.fn(),
   updateSpace: m.updateSpace,
   toPublicSpace: (s: Record<string, unknown>) => ({ ...s, shareableUrl: 'x' }),
+  SPACE_STATUS: {
+    SCHEDULED: 'scheduled',
+    ACTIVE: 'active',
+    LIVE: 'live',
+    ENDED: 'ended',
+    EXPIRED: 'expired',
+  },
 }));
 vi.mock('@/lib/atproto', () => ({
   publishLiveStatus: m.publishLiveStatus,
   deleteLiveStatus: vi.fn(),
+  publishCalendarEvent: m.publishCalendarEvent,
+  updateCalendarEventStatus: vi.fn(async () => ({ ok: true })),
+  CALENDAR_EVENT_STATUS: {
+    scheduled: 'community.lexicon.calendar.event#scheduled',
+    cancelled: 'community.lexicon.calendar.event#cancelled',
+  },
 }));
 vi.mock('@/lib/livekit', () => ({
   broadcastRoomData: m.broadcastRoomData,
@@ -172,5 +186,70 @@ describe('PATCH /api/spaces/[id]', () => {
     expect(m.publishLiveStatus).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Renamed', spaceUrl: 'https://rabble.invalid/show/sp1' })
     );
+  });
+
+  it('republishes the calendar event when renaming or re-describing a scheduled show', async () => {
+    m.updateSpace.mockResolvedValueOnce(
+      space({
+        title: 'Renamed',
+        description: 'New blurb',
+        status: 'scheduled',
+        scheduledAt: new Date('2026-12-01T18:00:00.000Z'),
+        calendarEventUri: 'at://did:plc:host/community.lexicon.calendar.event/sp1',
+        calendarEventCid: 'cid1',
+      })
+    );
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const res = await PATCH(patch({ title: 'Renamed', description: 'New blurb' }), ctx);
+    expect(res.status).toBe(200);
+    expect(m.publishCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: { did: 'did:plc:host', handle: 'alice.bsky.social' },
+        rkey: 'sp1',
+        title: 'Renamed',
+        description: 'New blurb',
+        spaceUrl: 'https://rabble.invalid/show/sp1',
+      })
+    );
+  });
+
+  it('leaves the calendar event alone when neither its title nor its description changed', async () => {
+    m.updateSpace.mockResolvedValueOnce(
+      space({
+        status: 'scheduled',
+        scheduledAt: new Date('2026-12-01T18:00:00.000Z'),
+        calendarEventUri: 'at://did:plc:host/community.lexicon.calendar.event/sp1',
+      })
+    );
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const res = await PATCH(patch({ tags: ['Music'] }), ctx);
+    expect(res.status).toBe(200);
+    expect(m.publishCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not publish a calendar event for a scheduled show that never had one', async () => {
+    m.updateSpace.mockResolvedValueOnce(
+      space({ status: 'scheduled', scheduledAt: new Date('2026-12-01T18:00:00.000Z') })
+    );
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const res = await PATCH(patch({ title: 'Renamed' }), ctx);
+    expect(res.status).toBe(200);
+    expect(m.publishCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not republish the calendar event for a live show that still carries a calendarEventUri', async () => {
+    m.updateSpace.mockResolvedValueOnce(
+      space({
+        title: 'Renamed',
+        status: 'live',
+        isLive: true,
+        scheduledAt: new Date('2026-12-01T18:00:00.000Z'),
+        calendarEventUri: 'at://did:plc:host/community.lexicon.calendar.event/sp1',
+      })
+    );
+    const { PATCH } = await import('@/app/api/spaces/[id]/route');
+    const res = await PATCH(patch({ title: 'Renamed' }), ctx);
+    expect(res.status).toBe(200);
+    expect(m.publishCalendarEvent).not.toHaveBeenCalled();
   });
 });
